@@ -9,6 +9,16 @@ Require Coq.FSets.FMapInterface Coq.FSets.FMapFacts.
 
 Require Import Coq.Classes.RelationClasses.
 
+Require Import Coq.Logic.Decidable.
+
+
+
+Require Coq.Arith.PeanoNat Coq.Arith.Peano_dec.
+
+Require Coq.Logic.Decidable.
+
+
+Require Coq.Structures.Orders Coq.Structures.OrdersFacts Coq.Structures.OrdersTac.
 
 Require Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Require Coq.Structures.Orders Coq.Structures.OrdersAlt Coq.Structures.OrdersFacts.
@@ -21,8 +31,6 @@ Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Import Coq.Structures.Orders Coq.Structures.OrdersAlt Coq.Structures.OrdersFacts.
 
 Require Import FunInd.
-
-Search nth.
 
 Module Card (Key Owner : DecidableType) <: DecidableType.
   Inductive Card : Type :=
@@ -81,7 +89,6 @@ Module Card (Key Owner : DecidableType) <: DecidableType.
   Defined.
 End Card.
 
-
 Module Option (E : DecidableType) <: DecidableType.
   Definition t : Type := option E.t.
 
@@ -136,6 +143,311 @@ Proof.
     now left.
   Defined.
 End Option.
+
+Module Type Lt := Typ <+ HasLt.
+Module Type HasLtDec (Import E : Lt).
+  Parameter lt_dec : forall x y : t, {lt x y} + {~ lt x y}.
+End HasLtDec.
+
+Module Type Le := Typ <+ HasLe.
+Module Type HasLeDec (Import E : Le).
+  Parameter le_dec : forall x y : t, {le x y} + {~ le x y}.
+End HasLeDec.
+
+Module Type IsPartialOrder (Import E:EqLe).
+  Declare Instance le_preorder : PreOrder le.
+  Declare Instance le_compat : Proper (eq==>eq==>iff) le.
+End IsPartialOrder.
+Module Type PartialOrder := EqualityType <+ HasLe <+ IsPartialOrder.
+
+Module Type IntervalType.
+  Include EqLtLe.
+  Include IsEq <+ IsStrOrder <+ IsPartialOrder.
+  Include HasEqDec <+ HasLtDec <+ HasLeDec.
+  Include LeIsLtEq.
+
+  Include HasBoolOrdFuns.
+  Include BoolOrdSpecs.
+End IntervalType.
+Print Module Type IntervalType.
+
+  Definition IsSome : forall A : Type, (A -> Prop) -> option A -> Prop :=
+    fun A P x =>
+      match x with
+      | Some x' => P x'
+      | _ => False
+      end.
+
+  Definition IsNone : forall A : Type, option A -> Prop :=
+    fun A x =>
+      match x with
+      | Some _ => False
+      | _ => True
+      end.
+
+Module Interval' <: IntervalType.
+  Import PeanoNat Peano_dec Compare_dec.
+
+  Arguments Nat.le_trans [n] [m] [p].
+  Arguments leb_complete [m] [n].
+
+  Inductive Interval : Type :=
+  | intro : forall left right : nat, left <= right -> Interval.
+
+  Definition t : Type := Interval.
+
+  Definition left_endpoint (self : t) : nat :=
+    let (left, right, _) := self in left.
+
+  Definition right_endpoint (self : t) : nat :=
+    let (left, right, _) := self in right.
+
+  Include HasUsualEq.
+  Include UsualIsEq.
+
+  Definition eqb (self other : t) : bool :=
+    ((left_endpoint self =? left_endpoint other) && (right_endpoint self =? right_endpoint other)) %bool.
+
+  Definition eqb_eq : forall self other : t, eqb self other = true <-> eq self other.
+  Proof.
+    intros self other.
+    unfold eqb, eq; rewrite Bool.andb_true_iff, ?PeanoNat.Nat.eqb_eq.
+    destruct self as [self_left self_right self_le], other as [other_left other_right other_le]; simpl.
+    split.
+      intros [eq_left eq_right].
+      revert self_le.
+      rewrite eq_left, eq_right; intros self_le.
+      now rewrite le_unique with (le_mn1 := self_le) (le_mn2 := other_le).
+    now inversion 1.
+  Defined.
+  Include HasEqBool2Dec.
+
+  Definition ltb (self other : t) :=
+    right_endpoint self <? left_endpoint other.
+  Definition lt (self other : t) : Prop := right_endpoint self < left_endpoint other.
+  Definition ltb_lt : forall self other, ltb self other = true <-> lt self other.
+  Proof.
+    intros self other.
+    now unfold ltb; rewrite Nat.ltb_lt.
+  Qed.
+  Definition lt_dec : forall x y : t, {lt x y} + {~ lt x y}.
+  Proof.
+    intros x y.
+    destruct (ltb x y) eqn: H; [left| right].
+      now apply ltb_lt.
+    rewrite <- ltb_lt.
+    now rewrite Bool.not_true_iff_false.
+  Defined.
+
+  Definition leb (self other : t) :=
+    ((ltb self other) || (eqb self other))%bool.
+  Definition le (self other : t) : Prop := lt self other \/ eq self other.
+  Definition leb_le : forall self other, leb self other = true <-> le self other.
+  Proof.
+    intros self other.
+    unfold leb.
+    now rewrite Bool.orb_true_iff, eqb_eq, ltb_lt.
+  Qed.
+  Definition le_dec : forall x y : t, {le x y} + {~ le x y}.
+  Proof.
+    intros x y.
+    destruct (eq_dec x y) as [x_eq_y| x_neq_y].
+      now left; right.
+    destruct (lt_dec x y) as [x_lt_y| x_nlt_y].
+      now left; left.
+    right.
+    now intros [x_eq_y| x_lt_y].
+  Defined.
+
+  Instance lt_strorder : StrictOrder lt.
+  Proof.
+    split.
+      intros [self_left self_right self_le].
+      change (~ self_right < self_left).
+      now apply Nat.nlt_ge.
+    intros [x_left x_right x_le] [y_left y_right y_le] [z_left z_right z_le].
+    unfold lt; simpl.
+    intros x_lt_y y_lt_z.
+    rewrite x_lt_y.
+    now apply Nat.le_lt_trans with y_right.
+  Qed.
+  Instance lt_compat : Proper (eq ==> eq ==> iff) lt.
+  Proof.
+    intros x₁ x₂ -> y₁ y₂ ->.
+    reflexivity.
+  Qed.
+
+  Instance le_preorder : PreOrder le :=
+    StrictOrder_PreOrder _ _ _.
+  Instance le_partialorder : PartialOrder eq le :=
+    StrictOrder_PartialOrder _ _ _.
+  Instance le_compat : Proper (eq ==> eq ==> iff) le :=
+    PartialOrder_proper le_partialorder.
+
+  Definition le_lteq : forall self other : t, le self other <-> lt self other \/ eq self other.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Definition Is : nat -> nat -> t -> Prop :=
+    fun left right interval => left_endpoint interval = left /\ right_endpoint interval = right.
+
+  Definition new (x y : nat) : option t :=
+    match x <=? y as b return (x <=? y = b -> option t) with
+    | true  => fun x_le_y => Some (intro (leb_complete x_le_y))
+    | false => fun x_nle_y => None
+    end eq_refl.
+
+  Definition new_spec_le : forall x y : nat, x <= y -> IsSome (Is x y) (new x y).
+  Proof.
+    intros x y x_le_y.
+    unfold new; simpl in *.
+    generalize (@leb_complete x y).
+    now rewrite leb_correct with (1 := x_le_y).
+  Qed.
+
+  Definition new_spec_gt : forall x y : nat, x > y -> IsNone (new x y).
+  Proof.
+    intros x y x_gt_y.
+    unfold new; simpl in *.
+    generalize (@leb_complete x y).
+    now rewrite leb_correct_conv with (1 := x_gt_y).
+  Qed.
+
+  Definition spec (self : t) : left_endpoint self <= right_endpoint self.
+  Proof.
+    now destruct self as [x y].
+  Qed.
+
+  Definition replace_left_endpoint (self : t) (x : nat) : t * option nat :=
+    match (x <=? left_endpoint self) as b return (x <=? left_endpoint self = b -> t * option nat) with
+    | true => fun x_le_left => (intro (Nat.le_trans (leb_complete x_le_left) (spec self)), Some (left_endpoint self))
+    | false => fun _ => (self, None)
+    end eq_refl.
+
+  Definition replace_left_endpoint_spec_le : forall (self : t) (x : nat), x <= left_endpoint self -> let (self_new, left_old) := (replace_left_endpoint self x) in Is x (right_endpoint self) self_new /\ IsSome (fun x => left_endpoint self = x) left_old.
+  Proof.
+    intros [self_x self_y x_le_y] x x_le_self_x.
+    unfold replace_left_endpoint; simpl in *.
+    generalize (@leb_complete x self_x).
+    now rewrite leb_correct with (1 := x_le_self_x).
+  Qed.
+
+  Definition replace_left_endpoint_spec_gt : forall (self : t) (x : nat), x > left_endpoint self -> let (self_new, left_old) := (replace_left_endpoint self x) in self_new = self /\ IsNone left_old.
+  Proof.
+    intros [self_x self_y x_le_y] x x_gt_self_x.
+    unfold replace_left_endpoint; simpl in *.
+    generalize (@leb_complete x self_x).
+    now rewrite leb_correct_conv with (1 := x_gt_self_x).
+  Qed.
+
+  Definition replace_right_endpoint (self : t) (y : nat) : t * option nat :=
+    match (right_endpoint self <=? y) as b return (right_endpoint self <=? y = b -> t * option nat) with
+    | true => fun right_le_y => (intro (Nat.le_trans (spec self) (leb_complete right_le_y)), Some (right_endpoint self))
+    | false => fun _ => (self, None)
+    end eq_refl.
+
+
+  Definition replace_right_endpoint_spec_ge : forall (self : t) (y : nat), y >= right_endpoint self -> let (self_new, right_old) := (replace_right_endpoint self y) in Is (left_endpoint self) y self_new /\ IsSome (fun y => right_endpoint self = y) right_old.
+  Proof.
+    intros [self_x self_y x_le_y] y y_ge_self_y.
+    unfold replace_right_endpoint; simpl in *.
+    generalize (@leb_complete self_y y).
+    now rewrite leb_correct with (1 := y_ge_self_y).
+  Qed.
+
+  Definition replace_right_endpoint_spec_lt : forall (self : t) (y : nat), y < right_endpoint self -> let (self_new, right_old) := (replace_right_endpoint self y) in self_new = self /\ IsNone right_old.
+  Proof.
+    intros [self_x self_y x_le_y] y y_lt_self_y.
+    unfold replace_right_endpoint; simpl in *.
+    generalize (@leb_complete self_y y).
+    now rewrite leb_correct_conv with (1 := y_lt_self_y).
+  Qed.
+
+  Definition In : nat -> t -> Prop :=
+    fun n interval => left_endpoint interval <= n <= right_endpoint interval.
+
+  Definition not_In : forall (n : nat) (interval : t), ~ In n interval <-> left_endpoint interval > n \/ n > right_endpoint interval.
+  Proof.
+    intros n interval.
+    unfold In, gt.
+    rewrite ?Nat.lt_nge.
+    split; intros H.
+      apply not_and in H.
+        assumption.
+      unfold decidable.
+      destruct (Compare_dec.le_dec (left_endpoint interval) n) as [?| ?]; [left| right]; assumption.
+    destruct H as [H| H]; easy.
+  Defined.
+
+  Definition contains (self : t) (n : nat) : bool :=
+    ((left_endpoint self <=? n) && (n <=? right_endpoint self)).
+
+  Definition contains_spec : forall (self : t) (n : nat), In n self <-> contains self n = true.
+  Proof.
+    intros self n.
+    unfold In, contains.
+    now rewrite Bool.andb_true_iff, ?Nat.leb_le.
+  Defined.
+
+  Definition intersection (self other : t) : option t.
+  Proof.
+    refine ((if (negb (ltb self other) && negb (ltb other self))%bool as b return ((negb (ltb self other) && negb (ltb other self))%bool = b -> option t) then (fun H => Some (@intro (max (left_endpoint self) (left_endpoint other)) (min (right_endpoint self) (right_endpoint other)) _)) else (fun _ => None)) eq_refl).
+    rewrite Bool.andb_true_iff, ?Bool.negb_true_iff in H.
+    rewrite <- ?Bool.not_true_iff_false in H.
+    rewrite ?ltb_lt in H.
+    unfold lt in H.
+    rewrite ?Nat.nlt_ge in H.
+    destruct H as [H₁ H₂].
+    pose (self_le := spec self).
+    pose (other_le := spec other).
+    apply Nat.max_lub; now apply Nat.min_glb.
+  Defined.
+
+  Definition intersection_spec_In : forall (self other : t) (n : nat), In n self -> In n other -> IsSome (In n) (intersection self other).
+  Proof.
+    intros self other n [self₁ self₂] [other₁ other₂].
+    assert (H₁ : max (left_endpoint self) (left_endpoint other) <= n) by now apply Nat.max_lub.
+    assert (H₂ : n <= min (right_endpoint self) (right_endpoint other)) by now apply Nat.min_glb.
+    assert ((negb (ltb self other) && negb (ltb other self))%bool = true).
+      unfold ltb.
+      rewrite <- ?Nat.leb_antisym, Bool.andb_true_iff, ?Nat.leb_le.
+      split; now transitivity n.
+    unfold intersection.
+    generalize (Bool.andb_true_iff (negb (ltb self other)) (negb (ltb other self))).
+    rewrite H.
+    intros ?.
+    unfold In; simpl.
+    now split.
+  Defined.
+
+  Definition intersection_spec_not_In : forall self other : t, (forall n : nat, ~ In n self \/ ~ In n other) -> IsNone (intersection self other).
+  Proof.
+    intros self other H.
+    assert ((negb (ltb self other) && negb (ltb other self))%bool = false).
+      destruct (ltb self other) eqn: H₁.
+        reflexivity.
+      destruct (ltb other self) eqn: H₂.
+        reflexivity.
+      unfold ltb in *.
+      rewrite Nat.ltb_ge in H₁, H₂.
+      specialize (H (max (left_endpoint self) (left_endpoint other))).
+      pose (H₃ := spec self).
+      pose (H4 := spec other).
+      assert (In (Init.Nat.max (left_endpoint self) (left_endpoint other)) self).
+        split.
+          apply Nat.le_max_l.
+        now apply Nat.max_lub.
+      assert (In (Init.Nat.max (left_endpoint self) (left_endpoint other)) other).
+        split.
+          apply Nat.le_max_r.
+      now apply Nat.max_lub.
+      now destruct H.
+    unfold intersection.
+    generalize (Bool.andb_true_iff (negb (ltb self other)) (negb (ltb other self))).
+    now rewrite H0.
+  Defined.
+End Interval'.
 
 Module test (Key : OrderedType) (Owner: DecidableType).
 
