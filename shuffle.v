@@ -11,6 +11,7 @@ Require Import Coq.Classes.RelationClasses.
 
 Require Import Coq.Logic.Decidable.
 
+Require Import Coq.Bool.Bool.
 
 
 Require Coq.Arith.PeanoNat Coq.Arith.Peano_dec.
@@ -393,14 +394,9 @@ Module Interval' <: IntervalType.
   Definition intersection (self other : t) : option t.
   Proof.
     refine ((if (negb (ltb self other) && negb (ltb other self))%bool as b return ((negb (ltb self other) && negb (ltb other self))%bool = b -> option t) then (fun H => Some (@intro (max (left_endpoint self) (left_endpoint other)) (min (right_endpoint self) (right_endpoint other)) _)) else (fun _ => None)) eq_refl).
-    rewrite Bool.andb_true_iff, ?Bool.negb_true_iff in H.
-    rewrite <- ?Bool.not_true_iff_false in H.
-    rewrite ?ltb_lt in H.
-    unfold lt in H.
-    rewrite ?Nat.nlt_ge in H.
-    destruct H as [H₁ H₂].
-    pose (self_le := spec self).
-    pose (other_le := spec other).
+    destruct self as [self_l self_r self_le], other as [other_l other_r other_le].
+    unfold ltb in H; simpl in *.
+    apply andb_true_iff in H as [H₁ H₂]; rewrite <- Nat.leb_antisym, Nat.leb_le in H₁, H₂.
     apply Nat.max_lub; now apply Nat.min_glb.
   Defined.
 
@@ -414,7 +410,9 @@ Module Interval' <: IntervalType.
       rewrite <- ?Nat.leb_antisym, Bool.andb_true_iff, ?Nat.leb_le.
       split; now transitivity n.
     unfold intersection.
-    generalize (Bool.andb_true_iff (negb (ltb self other)) (negb (ltb other self))).
+    simpl in *.
+    destruct self as [self_l self_r self_le], other as [other_l other_r other_le]; unfold ltb in *; simpl in *.
+    generalize (andb_true_iff (negb (self_r <? other_l)) (negb (other_r <? self_l))).
     rewrite H.
     intros ?.
     unfold In; simpl.
@@ -423,31 +421,77 @@ Module Interval' <: IntervalType.
 
   Definition intersection_spec_not_In : forall self other : t, (forall n : nat, ~ In n self \/ ~ In n other) -> IsNone (intersection self other).
   Proof.
-    intros self other H.
-    assert ((negb (ltb self other) && negb (ltb other self))%bool = false).
-      destruct (ltb self other) eqn: H₁.
-        reflexivity.
-      destruct (ltb other self) eqn: H₂.
-        reflexivity.
-      unfold ltb in *.
-      rewrite Nat.ltb_ge in H₁, H₂.
-      specialize (H (max (left_endpoint self) (left_endpoint other))).
-      pose (H₃ := spec self).
-      pose (H4 := spec other).
-      assert (In (Init.Nat.max (left_endpoint self) (left_endpoint other)) self).
-        split.
-          apply Nat.le_max_l.
-        now apply Nat.max_lub.
-      assert (In (Init.Nat.max (left_endpoint self) (left_endpoint other)) other).
-        split.
-          apply Nat.le_max_r.
-      now apply Nat.max_lub.
-      now destruct H.
+    intros [self_l self_r self_le] [other_l other_r other_le] H.
+    unfold intersection, ltb; simpl.
+    simpl.
+    assert ((negb (self_r <? other_l) && negb (other_r <? self_l))%bool = false).
+      unfold ltb.
+      rewrite andb_false_iff, <- ?Nat.leb_antisym, ?Nat.leb_gt.
+      destruct (le_lt_dec other_l self_r) as [H₁| H₁].
+        destruct (le_lt_dec self_l other_r) as [H₂| H₂].
+          Ltac reduce_and_try_to_solve := easy.
+          destruct (H (max self_l other_l)) as [H'| H']; contradict H'; unfold In; simpl.
+            split.
+              apply Nat.le_max_l.
+            now apply Nat.max_lub.
+          split.
+            apply Nat.le_max_r.
+          now apply Nat.max_lub.
+        now right.
+      now left.
     unfold intersection.
-    generalize (Bool.andb_true_iff (negb (ltb self other)) (negb (ltb other self))).
+    simpl.
+    generalize (Bool.andb_true_iff (negb (self_r <? other_l)) (negb (other_r <? self_l))).
     now rewrite H0.
   Defined.
 End Interval'.
+
+Module Test.
+Require Import Coq.FSets.FMaps.
+
+Module Positions (Key : OrderedTypeOrig) (M : Sfun Key).
+
+  Definition is_some (A : Type) (self : option A) : bool :=
+    if self then true else false.
+
+  Definition and (A : Type) (self other : option A) : option A :=
+    match self with
+    | Some _ => other
+    | None => None
+    end.
+
+  Definition and_then (A B : Type) (self : option A) (f : A -> option B) : option B :=
+    match self with
+    | Some x => f x
+    | None => None
+    end.
+
+  Section test.
+    Variable A : Type.
+    Variable f : A -> option Key.t.
+ 
+    Definition update (key_to_interval : M.t Interval'.t) (key : Key.t) (index : nat) : option (M.t Interval'.t) :=
+      let interval :=
+        match M.find key key_to_interval with
+        | Some interval =>
+          let (interval, old_endpoint) := Interval'.replace_right_endpoint interval index in if is_some old_endpoint then Some interval else None
+        | None => Interval'.new index index
+        end in 
+      option_map (fun interval => M.add key interval key_to_interval) interval.
+
+    Function generate (cards : list A) (index : nat) (key_to_interval : M.t Interval'.t) : option (M.t Interval'.t) :=
+       match cards with
+      | [] => Some key_to_interval
+      | head :: tail =>
+        match f head with
+        | Some key => and_then (update key_to_interval key index) (generate tail (S index))
+        | None => generate tail (S index) key_to_interval
+        end
+      end.
+
+  End test.
+End Positions.
+End Test.
 
 Module test (Key : OrderedType) (Owner: DecidableType).
 
@@ -1050,3 +1094,419 @@ Defined.
 End Talon.
 End test.
 
+Module Test2.
+Import Coq.FSets.FMaps.
+Import Coq.FSets.FMapFacts.
+
+Definition unwrap_or (A : Type) (self: option A) (default : A) : A :=
+  match self with
+  | Some x => x
+  | None => default
+  end.
+
+  Definition and_then (A B : Type) (self : option A) (f : A -> option B) : option B :=
+    match self with
+    | Some x => f x
+    | None => None
+    end.
+
+  Definition IsSome : forall A : Type, (A -> Prop) -> option A -> Prop :=
+    fun A P x =>
+      match x with
+      | Some x' => P x'
+      | _ => False
+      end.
+
+  Definition IsNone : forall A : Type, option A -> Prop :=
+    fun A x =>
+      match x with
+      | Some _ => False
+      | _ => True
+      end.
+
+  Definition Is : forall A : Type, (A -> Prop) -> Prop -> option A -> Prop :=
+    fun A P Q x =>
+      match x with
+      | Some x' => P x'
+      | None => Q
+      end.
+
+Module Coloring (Owner : DecidableType) (M : WSfun Owner).
+      Module Import MapFacts := WFacts_fun Owner M.
+
+  Inductive Opcode : Set :=
+  | Up : Opcode
+  | Down : Opcode.
+(*  | Both : Opcode.*)
+
+  Definition Correct (colors : nat) (coloring : M.t nat) : Prop :=
+    forall color : nat, color < colors <-> (exists owner : Owner.t, M.MapsTo owner color coloring).
+(*
+  Definition Correct (colors : nat) (coloring : M.t nat) : Prop :=
+    (forall (owner : Owner.t) (color : nat), M.MapsTo owner color coloring -> color < colors) /\ (forall color : nat, color < colors -> exists owner : Owner.t, M.MapsTo owner color coloring).
+*)
+  Lemma Correct_empty : Correct 0 (M.empty _).
+  Proof.
+    intros color.
+    split.
+      intros color_lt_colors.
+      contradict color_lt_colors.
+      apply PeanoNat.Nat.nlt_0_r.
+    intros [owner H].
+    contradict H.
+    apply M.empty_1.
+  Qed.
+
+  Lemma Correct_add_new : forall (colors : nat) (coloring : M.t nat), Correct colors coloring -> forall owner : Owner.t, ~ M.In owner coloring -> Correct (S colors) (M.add owner colors coloring).
+  Proof.
+    intros colors coloring Correct owner not_In.
+    split.
+      intros lt.
+      apply Lt.le_lt_or_eq in lt as [lt| b].
+        apply Lt.lt_S_n, Correct in lt as [owner' H'].
+        exists owner'.
+        Search (M.MapsTo _ _ (M.add _ _ _)).
+        apply M.add_2.
+          contradict not_In.
+          assert (M.In owner' coloring) by now exists color.
+          now apply In_iff with owner'.
+        assumption.
+      apply eq_add_S in b as ->.
+      exists owner.
+      Search M.MapsTo.
+      now apply M.add_1.
+    intros [owner' H].
+    apply add_mapsto_iff in H as [[eq <-]| [neq H]].
+      auto.
+    apply PeanoNat.Nat.lt_lt_succ_r, Correct.
+    now exists owner'.
+  Qed.
+
+  Lemma Correct_add_unused : forall (colors : nat) (coloring : M.t nat), Correct colors coloring -> forall owner : Owner.t, ~ M.In owner coloring -> forall color : nat, color < colors -> Correct colors (M.add owner color coloring).
+  Proof.
+    intros colors coloring Correct owner not_In color color_lt_colors color'.
+    split.
+      intros color'_lt_colors.
+      apply Correct in color'_lt_colors as [owner' H].
+      exists owner'.
+      assert (neq : ~ Owner.eq owner owner').
+        contradict not_In.
+        exists color'.
+        now apply MapsTo_iff with owner'.
+      now apply M.add_2.
+    intros [owner' H].
+    apply add_mapsto_iff in H as [(eq & ->)| (neq & H)].
+      assumption.
+    apply Correct; now exists owner'.
+  Qed.
+
+  Fixpoint regular (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat) : option (nat * M.t nat) :=
+    match instructions with
+    | (opcode, owner) :: tail => 
+      match opcode with
+      | Up =>
+        match unused_colors with
+        | u₀ :: x₀ => regular tail colors (M.add owner u₀ coloring) x₀
+        | [] => regular tail (S colors) (M.add owner colors coloring) []
+        end
+      | Down => and_then (M.find owner coloring) (fun color => regular tail colors coloring (color :: unused_colors))
+      end
+    | [] => Some (colors, coloring)
+    end.
+
+  Inductive Nth (A : Type) (P : A -> Prop) : list A -> nat -> Prop :=
+  | Nth_O : forall (u₀ : A) (x₀ : list A), P u₀ -> Nth P (u₀ :: x₀) O
+  | Nth_S : forall (x₀ : list A) (n : nat), Nth P x₀ n -> forall u₀ : A, Nth P (u₀ :: x₀) (S n).
+
+  Definition Correct_instruction : list (Opcode * Owner.t) -> Owner.t -> Prop.
+  Proof.
+    intros instructions owner.
+    refine (exists left right : nat, _).
+    exact (forall n : nat, n <> left /\ n <> right -> Nth (fun H => ~ Owner.eq (snd H) owner) instructions n /\ Nth (fun H => fst H = Up /\ Owner.eq (snd H) owner) instructions left /\ Nth (fun H => fst H = Down /\ Owner.eq (snd H) owner) instructions right).
+  Defined.
+
+  Definition Instruction_Rel : (Opcode * Owner.t) -> (Opcode * Owner.t) -> Prop :=
+    fun self other =>
+      let (self_opcode, self_owner) := self in
+      let (other_opcode, other_owner) := other in
+      ~ Owner.eq self_owner other_owner \/ self_opcode = Up /\ other_opcode = Down.
+
+  Definition InstructionsOk : list (Opcode * Owner.t) -> Prop :=
+    ForallOrdPairs Instruction_Rel.
+
+  Definition Forall_iff : forall (A : Type) (P : A -> Prop) (u₀ : A) (x₀ : list A), Forall P (u₀ :: x₀) <-> P u₀ /\ Forall P x₀.
+  Proof.
+    split; intros H.
+      split.
+        now apply Forall_inv with x₀.
+      now apply Forall_inv_tail with u₀.
+    destruct H as [H₁ H₂].
+    now constructor.
+  Defined.
+
+  Definition Forall_InA : forall (A : Type) (eqA : A -> A -> Prop) (P : A -> Prop), Proper (eqA ==> iff) P -> forall (u : A) (y : list A), InA eqA u y -> Forall P y -> P u.
+  Proof.
+    intros A eqA P Proper_P u y.
+    induction 1 as [v₀ y₀ u_eq_v₀| v₀ y₀ In_y₀ IHy₀]; intros P_y.
+      rewrite u_eq_v₀.
+      now apply Forall_inv with y₀.
+    now apply IHy₀, Forall_inv_tail with v₀.
+  Qed.
+
+  Definition instruction_eq : (Opcode * Owner.t) -> (Opcode * Owner.t) -> Prop :=
+    fun self other =>
+      let (self_opcode, self_owner) := self in
+      let (other_opcode, other_owner) := other in
+      self_opcode = other_opcode /\ Owner.eq self_owner other_owner.
+
+  Instance Instruction_Rel_Proper : forall instruction : Opcode * Owner.t, Proper (instruction_eq ==> iff) (Instruction_Rel instruction).
+  Proof.
+    intros [opcode₁ owner₁] [opcode₂ owner₂] [opcode₃ owner₃] [H₁ H₂].
+    simpl in *.
+    now rewrite H₁, H₂.
+  Defined.
+
+  Definition invariant (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat) : Prop := Correct colors coloring /\ (forall owner : Owner.t, M.In owner coloring -> ~ InA instruction_eq (Up, owner) instructions) /\ InstructionsOk instructions /\ Forall (fun color => exists owner : Owner.t, M.MapsTo owner color coloring) unused_colors.
+
+  Definition invariant_nil : forall (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant [] colors coloring unused_colors -> Correct colors coloring.
+  Proof.
+    intros colors coloring unused_colors (H₁ & H₂ & H₃).
+    assumption.
+  Defined.
+
+  Definition InA_cons_iff : forall (A : Type) (eqA : A -> A -> Prop) (u v₀ : A) (y₀ : list A), ~ InA eqA u (v₀ :: y₀) <-> ~ eqA u v₀ /\ ~ InA eqA u y₀.
+  Proof.
+    intros A eqA u v₀ y₀.
+    rewrite InA_cons.
+    firstorder.
+  Defined.
+
+  Definition FOP_cons_inv : forall (A : Type) (R : A -> A -> Prop) (u₀ : A) (x₀ : list A), ForallOrdPairs R (u₀ :: x₀) <-> Forall (R u₀) x₀ /\ ForallOrdPairs R x₀.
+  Proof.
+    split.
+      now inversion 1.
+    now constructor.
+  Defined.
+
+  Definition invariant_cons_up_nil : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat), invariant ((Up, owner) :: tail) colors coloring [] -> invariant tail (S colors) (M.add owner colors coloring) [].
+  Proof.
+    intros owner tail colors coloring (H₁ & H₂ & H₃ & H4).
+    split.
+      apply Correct_add_new with (1 := H₁).
+      intros In_owner_coloring.
+      apply H₂, InA_cons_iff in In_owner_coloring as [eq _].
+      contradict eq.
+      split; reflexivity.
+    split.
+      intros owner' In_owner'.
+      apply add_in_iff in In_owner' as [eq| In_owner'].
+        contradict H₃.
+        intros X.
+        apply FOP_cons_inv in X as [X _].
+        assert (Instruction_Rel (Up, owner) (Up, owner')).
+          apply Forall_InA with (2 := H₃) (3 := X).
+          apply Instruction_Rel_Proper.
+        simpl in H.
+        destruct H.
+          easy.
+        discriminate (proj2 H).
+      now apply H₂, InA_cons_iff in In_owner'.
+    split.
+      now inversion H₃.
+    constructor.
+  Defined.
+
+  Definition invariant_cons_up_cons : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (u₀ : nat) (x₀ : list nat), invariant ((Up, owner) :: tail) colors coloring (u₀ :: x₀) -> invariant tail colors (M.add owner u₀ coloring) x₀.
+  Proof.
+    intros owner tail colors coloring u₀ x₀ (H1 & H2 & H3 & H4).
+    split.
+      apply Correct_add_unused with (1 := H1).
+        intros In_owner_coloring.
+        apply H2, InA_cons_iff in In_owner_coloring as [eq _].
+        contradict eq.
+        split; reflexivity.
+      apply H1.
+      now apply Forall_inv in H4.
+    split.
+      intros owner' In_owner'.
+      apply add_in_iff in In_owner' as [eq| In_owner'].
+        contradict H3.
+        intros X.
+        apply FOP_cons_inv in X as [X _].
+        assert (Instruction_Rel (Up, owner) (Up, owner')).
+          apply Forall_InA with (2 := H3) (3 := X).
+          apply Instruction_Rel_Proper.
+        simpl in H.
+        destruct H.
+          easy.
+        discriminate (proj2 H).
+      now apply H2, InA_cons_iff in In_owner'.
+    split.
+      now apply FOP_cons_inv in H3.
+    apply Forall_inv_tail in H4.
+    apply Forall_impl with (2 := H4).
+    intros color [owner' owner'_to_color].
+    exists owner'.
+    apply M.add_2.
+      apply FOP_cons_inv in H3.
+      intros owner_eq_owner'.
+      assert (~ InA instruction_eq (Up, owner') ((Up, owner) :: tail)).
+        apply H2.
+        now exists color.
+      apply InA_cons_iff in H as [H _].
+      apply H.
+      easy.
+    assumption.
+  Defined.
+
+  Definition invariant_cons_down : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant ((Down, owner) :: tail) colors coloring unused_colors -> forall color : nat, M.MapsTo owner color coloring -> invariant tail colors coloring (color :: unused_colors).
+  Proof.
+    intros owner tail colors coloring unused_colors (H1 & H2 & H3 & H4) color MapsTo_owner_color.
+    split.
+      assumption.
+    split.
+      intros owner' In_owner'.
+      now apply H2, InA_cons_iff in In_owner'.
+    split.
+      now apply FOP_cons_inv in H3.
+    constructor.
+      now exists owner.
+    assumption.
+  Defined.
+(*
+  Definition invariant (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat) : Prop := Correct colors coloring /\ (forall owner : Owner.t, M.In owner coloring -> Forall (fun H => fst H = Down \/ ~ Owner.eq (snd H) owner) instructions) /\ Forall (fun color => exists owner : Owner.t, M.MapsTo owner color coloring) unused_colors.
+
+  Definition invariant_nil : forall (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant [] colors coloring unused_colors -> Correct colors coloring.
+  Proof.
+    intros colors coloring unused_colors (H₁ & H₂ & H₃).
+    assumption.
+  Defined.
+
+  Definition invariant_cons_up_nil : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat), invariant ((Up, owner) :: tail) colors coloring [] -> invariant tail (S colors) (M.add owner colors coloring) [].
+  Proof.
+    intros owner tail colors coloring (H₁ & H₂ & H₃).
+    split.
+      apply Correct_add_new with (1 := H₁).
+      intros In_owner_coloring.
+      apply H₂, Forall_inv in In_owner_coloring as [[=]| eq].
+      now apply eq.
+    split.
+    (*
+      intros owner'.
+      rewrite add_in_iff, H₂, Forall_iff.
+    *)
+      intros owner' In_owner'.
+      specialize (H₂ owner').
+      apply add_in_iff in In_owner' as [eq| In_owner'].
+        contradict eq.
+        admit.
+      now apply Forall_inv_tail with (Up, owner), H₂.
+    constructor.
+  Admitted.
+
+  Definition invariant_cons_up_cons : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (u₀ : nat) (x₀ : list nat), invariant ((Up, owner) :: tail) colors coloring (u₀ :: x₀) -> invariant tail colors (M.add owner u₀ coloring) x₀.
+  Proof.
+  Admitted.
+
+  Definition invariant_cons_down : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant ((Down, owner) :: tail) colors coloring unused_colors -> forall color : nat, M.MapsTo owner color coloring -> invariant tail colors coloring (color :: unused_colors).
+  Proof.
+  Admitted.
+*)
+  Definition regular_correct_invariant : forall (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant instructions colors coloring unused_colors -> Is (fun H => Correct (fst H) (snd H)) True (regular instructions colors coloring unused_colors).
+  Proof.
+    intros instructions.
+    induction instructions as [| [[|] owner] tail IHtail]; intros colors coloring unused_colors invariant; simpl.
+        exact (@invariant_nil colors coloring unused_colors invariant).
+      destruct unused_colors as [| u₀ x₀].
+        specialize (IHtail (S colors) (M.add owner colors coloring) []).
+        now apply IHtail, invariant_cons_up_nil.
+      specialize (IHtail colors (M.add owner u₀ coloring) x₀).
+      now apply IHtail, invariant_cons_up_cons.
+    destruct (M.find owner coloring) as [color|] eqn: find.
+      specialize (IHtail colors coloring (color :: unused_colors)).
+      apply M.find_2 in find.
+      apply IHtail.
+      exact (@invariant_cons_down owner tail colors coloring unused_colors invariant color find).
+    constructor.
+  Defined.
+(*
+  Definition regular_correct : forall (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), Correct colors coloring -> (forall owner : Owner.t, M.In owner coloring <-> Forall (fun H => fst H = Down \/ ~ Owner.eq (snd H) owner) instructions) -> Forall (fun color => exists owner : Owner.t, M.MapsTo owner color coloring) unused_colors -> Is (fun H => Correct (fst H) (snd H)) True (regular instructions colors coloring unused_colors).
+  Proof.
+    intros instructions.
+    induction instructions as [| [opcode owner] tail IHtail]; intros colors coloring unused_colors H₁ H₂ H₃.
+      assumption.
+    destruct opcode as [|].
+      simpl.
+      destruct unused_colors as [| u₀ x₀].
+        specialize (IHtail (S colors) (M.add owner colors coloring) []).
+        apply IHtail.
+            apply Correct_add_new.
+              assumption.
+            specialize (H₂ owner).
+            rewrite H₂.
+            intros H.
+            apply Forall_inv in H.
+            destruct H.
+              inversion H.
+            now apply H.
+          intros owner'.
+          rewrite add_in_iff.
+          rewrite H₂.
+          rewrite Forall_iff.
+          assert ((fst (Up, owner) = Down \/ ~ Owner.eq (snd (Up, owner)) owner') <-> ~ Owner.eq (snd (Up, owner)) owner') as ->.
+            firstorder.
+            inversion H.
+            firstorder.
+          simpl.
+          split.
+            intros [eq| In].
+              specialize (H₂ owner').
+              apply Forall_inv_tail with (Up, owner).
+              apply H₂.
+              rewrite <- eq.
+              admit.
+            now apply H₂, Forall_inv_tail in In.
+          intros G.
+          destruct (Owner.eq_dec owner owner') as [eq| neq]; [left| right].
+            assumption.
+          apply H₂.
+          constructor.
+            now right.
+          assumption.
+          constructor.
+        specialize (IHtail colors (M.add owner colors coloring) x₀).
+          constructor.
+          simpl.
+          assumption.
+            now left.
+          
+            
+          rewrite Forall_iff.
+          
+          Search (M.In _ (M.add _ _ _)).
+        apply 
+        simpl.
+      admit.
+    simpl in *.
+    destruct (M.find owner coloring) eqn: e; simpl.
+      apply IHtail.
+          assumption.
+        intros owner'.
+        transitivity (Forall (fun H : Opcode * Owner.t => fst H = Down \/ ~ Owner.eq (snd H) owner')
+       ((Down, owner) :: tail)).
+          apply H₂.
+        split; intros H.
+          now apply Forall_inv_tail in H.
+        now constructor; [left|].
+      constructor; [| assumption].
+      exists owner.
+      now apply M.find_2.
+    constructor.
+  Defined.
+*)
+  Definition padded (instructions : list (Opcode * Owner.t)) : option (nat * M.t nat) :=
+    regular instructions 0 (M.empty _) [].
+
+
+End Coloring.
+End Test2.
