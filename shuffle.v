@@ -1132,19 +1132,15 @@ Definition unwrap_or (A : Type) (self: option A) (default : A) : A :=
       end.
 
 Module Coloring (Owner : DecidableType) (M : WSfun Owner).
-      Module Import MapFacts := WFacts_fun Owner M.
+  Module Import MapFacts := WFacts_fun Owner M.
 
   Inductive Opcode : Set :=
   | Up : Opcode
   | Down : Opcode.
-(*  | Both : Opcode.*)
 
   Definition Correct (colors : nat) (coloring : M.t nat) : Prop :=
     forall color : nat, color < colors <-> (exists owner : Owner.t, M.MapsTo owner color coloring).
-(*
-  Definition Correct (colors : nat) (coloring : M.t nat) : Prop :=
-    (forall (owner : Owner.t) (color : nat), M.MapsTo owner color coloring -> color < colors) /\ (forall color : nat, color < colors -> exists owner : Owner.t, M.MapsTo owner color coloring).
-*)
+
   Lemma Correct_empty : Correct 0 (M.empty _).
   Proof.
     intros color.
@@ -1373,45 +1369,7 @@ Module Coloring (Owner : DecidableType) (M : WSfun Owner).
       now exists owner.
     assumption.
   Defined.
-(*
-  Definition invariant (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat) : Prop := Correct colors coloring /\ (forall owner : Owner.t, M.In owner coloring -> Forall (fun H => fst H = Down \/ ~ Owner.eq (snd H) owner) instructions) /\ Forall (fun color => exists owner : Owner.t, M.MapsTo owner color coloring) unused_colors.
 
-  Definition invariant_nil : forall (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant [] colors coloring unused_colors -> Correct colors coloring.
-  Proof.
-    intros colors coloring unused_colors (H₁ & H₂ & H₃).
-    assumption.
-  Defined.
-
-  Definition invariant_cons_up_nil : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat), invariant ((Up, owner) :: tail) colors coloring [] -> invariant tail (S colors) (M.add owner colors coloring) [].
-  Proof.
-    intros owner tail colors coloring (H₁ & H₂ & H₃).
-    split.
-      apply Correct_add_new with (1 := H₁).
-      intros In_owner_coloring.
-      apply H₂, Forall_inv in In_owner_coloring as [[=]| eq].
-      now apply eq.
-    split.
-    (*
-      intros owner'.
-      rewrite add_in_iff, H₂, Forall_iff.
-    *)
-      intros owner' In_owner'.
-      specialize (H₂ owner').
-      apply add_in_iff in In_owner' as [eq| In_owner'].
-        contradict eq.
-        admit.
-      now apply Forall_inv_tail with (Up, owner), H₂.
-    constructor.
-  Admitted.
-
-  Definition invariant_cons_up_cons : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (u₀ : nat) (x₀ : list nat), invariant ((Up, owner) :: tail) colors coloring (u₀ :: x₀) -> invariant tail colors (M.add owner u₀ coloring) x₀.
-  Proof.
-  Admitted.
-
-  Definition invariant_cons_down : forall (owner : Owner.t) (tail : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant ((Down, owner) :: tail) colors coloring unused_colors -> forall color : nat, M.MapsTo owner color coloring -> invariant tail colors coloring (color :: unused_colors).
-  Proof.
-  Admitted.
-*)
   Definition regular_correct_invariant : forall (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), invariant instructions colors coloring unused_colors -> Is (fun H => Correct (fst H) (snd H)) True (regular instructions colors coloring unused_colors).
   Proof.
     intros instructions.
@@ -1429,81 +1387,7 @@ Module Coloring (Owner : DecidableType) (M : WSfun Owner).
       exact (@invariant_cons_down owner tail colors coloring unused_colors invariant color find).
     constructor.
   Defined.
-(*
-  Definition regular_correct : forall (instructions : list (Opcode * Owner.t)) (colors : nat) (coloring : M.t nat) (unused_colors : list nat), Correct colors coloring -> (forall owner : Owner.t, M.In owner coloring <-> Forall (fun H => fst H = Down \/ ~ Owner.eq (snd H) owner) instructions) -> Forall (fun color => exists owner : Owner.t, M.MapsTo owner color coloring) unused_colors -> Is (fun H => Correct (fst H) (snd H)) True (regular instructions colors coloring unused_colors).
-  Proof.
-    intros instructions.
-    induction instructions as [| [opcode owner] tail IHtail]; intros colors coloring unused_colors H₁ H₂ H₃.
-      assumption.
-    destruct opcode as [|].
-      simpl.
-      destruct unused_colors as [| u₀ x₀].
-        specialize (IHtail (S colors) (M.add owner colors coloring) []).
-        apply IHtail.
-            apply Correct_add_new.
-              assumption.
-            specialize (H₂ owner).
-            rewrite H₂.
-            intros H.
-            apply Forall_inv in H.
-            destruct H.
-              inversion H.
-            now apply H.
-          intros owner'.
-          rewrite add_in_iff.
-          rewrite H₂.
-          rewrite Forall_iff.
-          assert ((fst (Up, owner) = Down \/ ~ Owner.eq (snd (Up, owner)) owner') <-> ~ Owner.eq (snd (Up, owner)) owner') as ->.
-            firstorder.
-            inversion H.
-            firstorder.
-          simpl.
-          split.
-            intros [eq| In].
-              specialize (H₂ owner').
-              apply Forall_inv_tail with (Up, owner).
-              apply H₂.
-              rewrite <- eq.
-              admit.
-            now apply H₂, Forall_inv_tail in In.
-          intros G.
-          destruct (Owner.eq_dec owner owner') as [eq| neq]; [left| right].
-            assumption.
-          apply H₂.
-          constructor.
-            now right.
-          assumption.
-          constructor.
-        specialize (IHtail colors (M.add owner colors coloring) x₀).
-          constructor.
-          simpl.
-          assumption.
-            now left.
-          
-            
-          rewrite Forall_iff.
-          
-          Search (M.In _ (M.add _ _ _)).
-        apply 
-        simpl.
-      admit.
-    simpl in *.
-    destruct (M.find owner coloring) eqn: e; simpl.
-      apply IHtail.
-          assumption.
-        intros owner'.
-        transitivity (Forall (fun H : Opcode * Owner.t => fst H = Down \/ ~ Owner.eq (snd H) owner')
-       ((Down, owner) :: tail)).
-          apply H₂.
-        split; intros H.
-          now apply Forall_inv_tail in H.
-        now constructor; [left|].
-      constructor; [| assumption].
-      exists owner.
-      now apply M.find_2.
-    constructor.
-  Defined.
-*)
+
   Definition padded (instructions : list (Opcode * Owner.t)) : option (nat * M.t nat) :=
     regular instructions 0 (M.empty _) [].
 
