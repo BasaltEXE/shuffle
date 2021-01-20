@@ -50,7 +50,7 @@ Module Interval <: IntervalType.
     snd self.
 
   Definition ok (self : t) : left_endpoint self <= right_endpoint self :=
-    let 'exist _ (x, y) x_le_y := self in x_le_y.
+    let 'exist _ (_, _) x_le_y := self in x_le_y.
 
   Include HasUsualEq.
   Include UsualIsEq.
