@@ -4,29 +4,41 @@ Require Import Coq.Program.Program.
 Module Coloring (Owner : DecidableType) (Map : WSfun Owner).
   Module Import Facts := WFacts_fun Owner Map.
 
-  Definition Ok (coloring : nat * Map.t nat) :=
-    forall color : nat, color < fst coloring <-> (exists owner : Owner.t, Map.MapsTo owner color (snd coloring)).
-
   Definition t : Type :=
-    {coloring : nat * Map.t nat | Ok coloring}.
+      nat * Map.t nat.
 
-  Program Definition colors (self : t) : nat :=
+  Definition colors (self : t) : nat :=
     fst self.
-  Program Definition labeling (self : t) : Map.t nat :=
+  Definition labeling (self : t) : Map.t nat :=
     snd self.
-
-  Definition ok (self : t) : Ok (colors self, labeling self) :=
-    let 'exist _ (_, _) ok := self in ok.
-
-  Program Definition find (self : t) (owner : Owner.t) : option nat :=
-    Map.find owner (labeling self).
 
   Definition MapsTo (self : t) (owner : Owner.t) (color : nat) : Prop :=
     Map.MapsTo owner color (labeling self).
   Definition Contains (self : t) (owner : Owner.t) : Prop :=
     Map.In owner (labeling self).
 
-  Program Definition empty : t :=
+    Program Definition find
+    (self : t)
+    (owner : Owner.t | Contains self owner) :
+    {color : nat | MapsTo self owner color} :=
+    match Map.find owner (labeling self) with
+    | Some color => color
+    | None => !
+    end.
+    Next Obligation.
+      rename H into Contains_owner.
+      now apply find_mapsto_iff.
+    Qed.
+    Next Obligation.
+      now apply not_find_in_iff in H.
+    Qed.
+
+  Definition Ok (coloring : nat * Map.t nat) :=
+    forall color : nat,
+      color < colors coloring <->
+      (exists owner : Owner.t, MapsTo coloring owner color).
+
+  Program Definition empty : {self' : t | Ok self'} :=
     (0, Map.empty nat).
   Next Obligation.
     intros color.
@@ -45,12 +57,15 @@ Module Coloring (Owner : DecidableType) (Map : WSfun Owner).
     now rewrite not_In_owner.
   Defined.
 
-  Program Definition add_lt (self : t) (owner : Owner.t | ~ Contains self owner) (color : nat | color < colors self) : t :=
+  Program Definition add_lt
+    (self : t | Ok self)
+    (owner : Owner.t | ~ Contains self owner)
+    (color : nat | color < colors self) :
+    {self' : t | Ok self'} :=
     (colors self, Map.add owner (`color) (labeling self)).
   Next Obligation.
-    rename H0 into not_In_owner, H into color_lt_colors.
+    rename H0 into not_In_owner, H into color_lt_colors, H1 into Ok_self.
     intros n.
-    pose (Ok_self := ok self).
     split.
       intros n_lt_colors.
       apply Ok_self in n_lt_colors as [owner' owner'_to_n].
@@ -64,11 +79,13 @@ Module Coloring (Owner : DecidableType) (Map : WSfun Owner).
     now apply Ok_self; exists owner'.
   Defined.
 
-  Program Definition add_eq (self : t) (owner : Owner.t | ~ Contains self owner) : t :=
-    (S (colors self), Map.add (` owner) (colors self) (labeling self)).
+  Program Definition add_eq
+    (self : t | Ok self)
+    (owner : Owner.t | ~ Contains self owner) :
+    {self' : t | Ok self'} :=
+    (S (colors self), Map.add owner (colors self) (labeling self)).
   Next Obligation.
-    rename H into not_In.
-    pose (Ok_self := ok self);
+    rename H into not_In, H0 into Ok_self.
     split.
       intros color_lt_S_colors.
       apply Lt.lt_n_Sm_le, PeanoNat.Nat.le_lteq in color_lt_S_colors as [color_lt_colors| ->].
