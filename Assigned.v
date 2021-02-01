@@ -3,7 +3,8 @@ Set Implicit Arguments.
 Require Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Require Import Coq.Lists.List Coq.Lists.SetoidList.
 
-Require Import Coq.Program.Program.
+Require Import Coq.Classes.RelationClasses.
+Require Import Coq.Arith.Arith.
 
 Require Coq.FSets.FMaps.
 
@@ -52,391 +53,547 @@ Section Option.
     Some a.
 End Option.
 
-Module Assigned (Owner : DecidableType).
-  Module Instruction := Instruction Opcode Owner.
+Section InA.
+  Variables
+    (A : Type)
+    (eqA : A -> A -> Prop)
+    (u v₀ : A)
+    (y₀ y : list A).
 
-  Lemma not_InA_cons : forall (A : Type) (eqA : A -> A -> Prop) (u v₀ : A) (y₀ : list A),
+  Lemma not_InA_cons :
     ~ InA eqA u (v₀ :: y₀) <->
     ~ eqA u v₀ /\ ~ InA eqA u y₀.
   Proof.
-    intros A eqA u v₀ y₀.
     rewrite InA_cons; firstorder.
   Qed.
 
-  Module Ok.
-    Notation add_Up owner instructions :=
-      ((Opcode.Up, owner) :: instructions).
+  Lemma not_InA_iff :
+  ~ InA eqA u y <->
+  Forall (fun v => ~ eqA u v) y.
+  Proof.
+    now rewrite InA_altdef, <- Forall_Exists_neg.
+  Qed.
+End InA.
 
-    Notation add_Down owner instructions :=
-      ((Opcode.Down, owner) :: instructions).
 
-    Definition InUp (owner : Owner.t) (instructions : list Instruction.t) : Prop :=
-      InA Instruction.eq (Opcode.Up, owner) instructions.
+Lemma Forall_cons_iff : forall
+  (A : Type)
+  (P : A -> Prop) 
+  (u₀ : A)
+  (x₀ : list A),
+  Forall P (u₀ :: x₀) <->
+    P u₀ /\ Forall P x₀.
+Proof.
+  intros A P u₀ x₀.
+  split.
+    intros Forall_x.
+    constructor.
+      now apply Forall_inv with x₀.
+    now apply Forall_inv_tail with u₀.
+  intros [P_u₀ Forall_x₀].
+  now constructor.
+Qed.
 
-    Definition InDown (owner : Owner.t) (instructions : list Instruction.t) : Prop :=
-      InA Instruction.eq (Opcode.Down, owner) instructions.
+Local Lemma not_In_Forall : forall
+  (A : Type)
+  (u : A)
+  (y : list A),
+  ~ List.In u y <-> Forall (fun v => u <> v) y.
+Proof.
+  induction y as [| v₀ y₀ IHy₀].
+    easy.
+  rewrite Forall_cons_iff, not_in_cons; firstorder.
+Qed.
 
-    Ltac In_aux :=
-      unfold InUp, InDown; 
-      rewrite InA_cons;
-      firstorder using Opcode.not_Up_iff_Down.
+Module Assigned (Owner : DecidableTypeBoth).
+  Module Instruction := Instruction Opcode Owner.
 
-    Lemma InUp_add_Up
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      InUp owner (add_Up owner' instructions) <->
-      Owner.eq owner owner' \/ InUp owner instructions.
-    Proof.
-      In_aux.
-    Qed.
+  Module Instructions.
+    Definition t : Type :=
+      list Instruction.t.
 
-    Lemma InUp_add_Down
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      InUp owner (add_Down owner' instructions) <->
-      InUp owner instructions.
-    Proof.
-      In_aux.
-    Qed.
+    Module Notations.
+      Notation Up owner :=
+        ((Opcode.Up, owner)).
 
-    Lemma InDown_add_Up
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      InDown owner (add_Up owner' instructions) <->
-      InDown owner instructions.
-    Proof.
-      In_aux.
-    Qed.
+      Notation Down owner :=
+        ((Opcode.Down, owner)).
 
-    Lemma InDown_add_Down
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      InDown owner (add_Down owner' instructions) <->
-      Owner.eq owner owner' \/ InDown owner instructions.
-    Proof.
-      In_aux.
-    Qed.
+      Notation In instruction instructions :=
+        (InA Instruction.eq instruction instructions).
 
-    Lemma not_InUp_add_Up
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      ~ InUp owner (add_Up owner' instructions) <->
-      ~ Owner.eq owner owner' /\ ~ InUp owner instructions.
-    Proof.
-      firstorder using InUp_add_Up.
-    Qed.
+      Notation Ahead owner instructions :=
+        (In (Up owner) instructions).
 
-    Lemma not_InUp_add_Down
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      ~ InUp owner (add_Down owner' instructions) <->
-      ~ InUp owner instructions.
-    Proof.
-      firstorder using InUp_add_Down.
-    Qed.
+      Notation Active owner instructions :=
+        (~ In (Up owner) instructions /\
+        In (Down owner) instructions).
 
-    Lemma not_InDown_add_Up
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      ~ InDown owner (add_Up owner' instructions) <->
-      ~ InDown owner instructions.
-    Proof.
-      firstorder using InDown_add_Up.
-    Qed.
-
-    Lemma not_InDown_add_Down
-      (owner owner' : Owner.t)
-      (instructions : list Instruction.t) :
-      ~ InDown owner (add_Down owner' instructions) <->
-      ~ Owner.eq owner owner' /\ ~ InDown owner instructions.
-    Proof.
-      firstorder using InDown_add_Down.
-    Qed.
-
-    Definition Active (owner : Owner.t) (instructions : list Instruction.t) : Prop :=
-      ~ InUp owner instructions /\
-      InDown owner instructions.
+      Notation Absent owner instructions :=
+        (~ In (Down owner) instructions).
+    End Notations.
+    Import Notations.
 
     Inductive Ok : list Instruction.t -> Prop :=
     | nil : Ok []
-    | cons_Up : forall (owner : Owner.t) (tail : list Instruction.t),
-      Ok tail ->
-      Active owner tail ->
-      Ok ((Opcode.Up, owner) :: tail)
-    | cons_Down : forall (owner : Owner.t) (tail : list Instruction.t),
-      Ok tail ->
-      ~ InDown owner tail -> 
-      Ok ((Opcode.Down, owner) :: tail).
+    | cons_Up : forall (op₀ : Owner.t) (x₀ : list Instruction.t),
+      Active op₀ x₀ ->
+      Ok x₀ ->
+      Ok (Up op₀ :: x₀)
+    | cons_Down : forall (op₀ : Owner.t) (x₀ : list Instruction.t),
+      Absent op₀ x₀ -> 
+      Ok x₀ ->
+      Ok (Down op₀ :: x₀).
 
-    Lemma cons_Up_iff : forall (owner : Owner.t) (tail : list Instruction.t), 
-      Ok ((Opcode.Up, owner) :: tail) <->
-        Active owner tail /\
-        Ok tail.
-    Proof.
-      intros.
-      now split; [inversion_clear 1| constructor].
-    Qed.
+    Module Orthogonal.
+      Section Orthogonal.
+        Variables
+          (v w : Owner.t)
+          (x : t).
+        
+        Lemma Up_impl_Down :
+          Ok x ->
+          Ahead v x ->
+          In (Down v) x.
+        Proof.
+          intros Ok_x.
+          induction Ok_x as [| op₀ x₀ Active_op₀ Ok_x₀ IHx₀| op₀ x₀ Absent_op₀ Ok_x₀ IHx₀];
+            intros Ahead_v; [easy| ..].
+            1 - 2:
+            apply InA_cons in Ahead_v as [(eq & v_eq_op₀)| Ahead_v];
+            [change (Owner.eq v op₀) in v_eq_op₀| now right; apply IHx₀].
+              now rewrite v_eq_op₀; right.
+            now contradict eq; apply Opcode.not_Up_iff_Down.
+        Qed.
 
-    Lemma cons_Down_iff : forall (owner : Owner.t) (tail : list Instruction.t),
-      Ok ((Opcode.Down, owner) :: tail) <->
-        ~ InDown owner tail /\
-        Ok tail.
-    Proof.
-      intros.
-      split.
-        now inversion_clear 1.
-      now constructor.
-    Qed.
+        Lemma Ahead_Active :
+          Ahead v x ->
+          Active w x ->
+          ~ Owner.eq v w.
+        Proof.
+          intros Ahead_v Active_w v_eq_w.
+          now rewrite v_eq_w in Ahead_v.
+        Qed.
 
-    Lemma InUp_impl_InDown : forall (owner : Owner.t) (instructions : list Instruction.t),
-      Ok instructions ->
-      InUp owner instructions ->
-      InDown owner instructions.
-    Proof.
-      intros owner instructions Ok_instructions.
-      induction Ok_instructions as [| owner' tail Ok_tail IHtail [not_In_Up not_In_Down]| owner' tail Ok_tail IHtail not_In_Down]; intros In_Up.
-          now apply InA_nil in In_Up.
-        constructor 2.
-        apply InA_cons in In_Up as [[_ owner_eq_owner']| In_Up].
-          change (Owner.eq owner owner') in owner_eq_owner'.
-          now rewrite owner_eq_owner'.
-        now apply IHtail.
-      apply InA_cons in In_Up as [[Up_eq_Down _]| In_Up].
-        change (Opcode.Up = Opcode.Down) in Up_eq_Down.
-        discriminate Up_eq_Down.
-      constructor 2.
-      now apply IHtail.
-    Qed.
+        Lemma Active_Absent :
+          Active v x ->
+          Absent w x ->
+          ~ Owner.eq v w.
+        Proof.
+          intros Active_v Absent_w v_eq_w.
+          now rewrite v_eq_w in Active_v.
+        Qed.
 
-    Lemma not_InDown_impl_not_InUp : forall (owner : Owner.t) (instructions : list Instruction.t),
-      Ok instructions ->
-      ~ InDown owner instructions ->
-      ~ InUp owner instructions.
-    Proof.
-      firstorder using InUp_impl_InDown.
-    Qed.
+        Lemma Ahead_Absent :
+          Ok x ->
+          Ahead v x ->
+          Absent w x ->
+          ~ Owner.eq v w.
+        Proof.
+          intros Ok_x Ahead_v Absent_v.
+          contradict Absent_v; rewrite <- Absent_v.
+          now apply Up_impl_Down.
+        Qed.
+      End Orthogonal.
 
-    Lemma Active_nil (owner : Owner.t) : ~ Active owner [].
-    Proof.
-      intros [not_InUp_owner InDown_owner].
-      apply InA_nil with (1 := InDown_owner).
-    Qed.
+      Module Hints.
+        Ltac solve_neq :=
+          match goal with
+          | |- ~ Owner.eq ?v ?w => change(complement Owner.eq v w)
+          end;
+          (idtac + symmetry);
+          match goal with
+          | |- complement Owner.eq ?v ?w =>
+            match goal with
+            | _ : Ahead v ?x, _ : Active w ?x |- _ =>
+              now apply Orthogonal.Ahead_Active with x
+            | _ : Ahead v ?x, _ : Absent w ?x |- _ =>
+              now apply Orthogonal.Ahead_Absent with x
+            | _ : Active v ?x, _ : Absent w ?x |- _ =>
+              now apply Orthogonal.Active_Absent with x
+            end
+          end.
 
-    Lemma Active_cons_Up (owner owner' : Owner.t) (instructions : list Instruction.t) :
-      Active owner ((Opcode.Up, owner') :: instructions) <->
-        ~ Owner.eq owner owner' /\ Active owner instructions.
-    Proof.
-      unfold Active, InUp, InDown.
-      rewrite not_InA_cons, InA_cons, Instruction.neq_eq_opcode by reflexivity; simpl.
-      firstorder.
-    Qed.
+        #[export]
+        Hint Extern 2 (~ (Owner.eq _ _)) => solve_neq : instructions.
+      End Hints.
+    End Orthogonal.
 
-    Lemma Active_cons_Down (owner owner' : Owner.t) (instructions : list Instruction.t) :
-      Ok ((Opcode.Down, owner') :: instructions) ->
-      Active owner ((Opcode.Down, owner') :: instructions) <->
-      Owner.eq owner owner' \/ Active owner instructions.
-    Proof.
-      intros Ok_instructions.
-      unfold Active, InUp, InDown.
-      rewrite not_InA_cons, InA_cons.
-      apply cons_Down_iff in Ok_instructions as [not_InDown_owner' Ok_instructions].
-      split.
-        intros ((_ & not_InUp_owner) & [(_ & owner_eq_owner')| InDown_owner]); [now left| right].
-        now split.
-      intros [owner_eq_owner'| (not_InDown_owner & InDown_owner)].
-        firstorder.
-          now apply Instruction.neq_opcode, Opcode.not_Up_iff_Down.
-        rewrite owner_eq_owner'.
-        now apply not_InDown_impl_not_InUp.
-      firstorder.
-      now apply Instruction.neq_opcode.
-    Qed.
+    Module Ok.
+      Section Ok.
+        Variables
+          (op₀ v : Owner.t)
+          (u₀ : Instruction.t)
+          (x₀ x : t).
 
-    Lemma InUp_Active (owner owner' : Owner.t) (instructions : list Instruction.t) :
-      Active owner instructions ->
-      InUp owner' instructions ->
-      ~ Owner.eq owner owner'. (* TODO *)
-    Proof.
-        intros (not_InUp_owner & _) InUp_owner' owner_eq_owner'.
-        unfold InUp in *. (* TODO *)
-        now rewrite <- owner_eq_owner' in InUp_owner'.
-    Qed.
+        Lemma cons_inv :
+          Ok (u₀ :: x₀) ->
+          Ok x₀.
+        Proof.
+          now inversion 1.
+        Qed.
 
-    Lemma not_InDown_Active (owner owner' : Owner.t) (instructions : list Instruction.t) :
-      Active owner instructions ->
-      ~ InDown owner' instructions ->
-      ~ Owner.eq owner owner'. (* TODO *)
-    Proof.
-        intros (not_InUp_owner & InDown_owner) not_InDown_owner' owner_eq_owner'.
-        unfold InDown in *. (* TODO *)
-        now rewrite <- owner_eq_owner' in not_InDown_owner'.
-    Qed.
-  End Ok.
-(* 
-  Definition Rel : relation Instruction.t :=
-    fun self other =>
-    Owner.eq (Instruction.operand self) (Instruction.operand other) ->
-      Instruction.opcode self = Opcode.Up /\
-      Instruction.opcode other = Opcode.Down.
+        Lemma cons_Up_inv :
+          Ok (Up op₀ :: x₀) ->
+          Active op₀ x₀.
+        Proof.
+          intros Ok_x₀.
+          now inversion_clear Ok_x₀.
+        Qed.
 
-  Definition Ok : list Instruction.t -> Prop :=
-    fun instructions => 
-    ForallOrdPairs Rel instructions /\ (forall owner : Owner.t, InA Instruction.eq (Opcode.Up, owner) instructions -> InA Instruction.eq (Opcode.Down, owner) instructions).
+        Lemma cons_Down_inv :
+          Ok (Down op₀ :: x₀) ->
+          Absent op₀ x₀.
+        Proof.
+          intros Ok_x₀.
+          now inversion_clear Ok_x₀.
+        Qed.
 
-  Definition Forall_iff : forall (A : Type) (P : A -> Prop) (u₀ : A) (x₀ : list A), Forall P (u₀ :: x₀) <-> P u₀ /\ Forall P x₀.
-  Proof.
-    intros A P u₀ x₀.
-    split.
-      intros Forall_x.
-      constructor.
-        now apply Forall_inv with x₀.
-      now apply Forall_inv_tail with u₀.
-    intros [P_u₀ Forall_x₀].
-    now constructor.
-  Defined.
+        Lemma cons_Up_iff : (* TODO *)
+          Ok (Up op₀ :: x₀) <->
+            Active op₀ x₀ /\
+            Ok x₀.
+        Proof.
+          now split; [inversion_clear 1| constructor].
+        Qed.
 
-  Definition Forall_InA : forall (A : Type) (eqA : A -> A -> Prop) (P : A -> Prop), Proper (eqA ==> iff) P -> forall (u : A) (y : list A), InA eqA u y -> Forall P y -> P u.
-  Proof.
-    intros A eqA P Proper_P u y.
-    induction 1 as [v₀ y₀ u_eq_v₀| v₀ y₀ In_y₀ IHy₀]; intros P_y.
-      rewrite u_eq_v₀.
-      now apply Forall_inv with y₀.
-    now apply IHy₀, Forall_inv_tail with v₀.
-  Qed.
+        Lemma cons_Down_iff :
+          Ok (Down op₀ :: x₀) <->
+            Absent op₀ x₀ /\
+            Ok x₀.
+        Proof.
+          now split; [inversion_clear 1| constructor].
+        Qed.
+      End Ok.
 
-  Lemma not_InA_iff : forall (A : Type) (eqA : A -> A -> Prop) (u : A) (y : list A), ~ InA eqA u y <-> Forall (fun v => ~ eqA u v) y.
-  Proof.
-    intros A eqA u y.
-    now rewrite InA_altdef, <- Forall_Exists_neg.
-  Qed.
+      Module Hints.
+        #[export]
+        Hint Constructors Ok : instructions.
+        #[export]
+        Hint Immediate cons_Up_inv : instructions.
+        #[export]
+        Hint Immediate cons_Down_inv : instructions.
+      End Hints.
+    End Ok.
 
-  Instance Instruction_Rel_Proper : forall instruction : Instruction.t, Proper (Instruction.eq ==> iff) ( Rel instruction).
-  Proof.
-    intros [opcode₁ owner₁] [opcode₂ owner₂] [opcode₃ owner₃] [H₁ H₂].
-    simpl in *.
-    simpl in *.
-    unfold Rel.
-    compute in *.
-    now rewrite H₁, H₂.
-  Defined.
+    Module Ahead.
+      Section Ahead.
+        Variables
+          (op₀ v : Owner.t)
+          (u₀ : Instruction.t)
+          (x₀ : t).
 
-  Hint Resolve InA_nil : test.
-  Hint Resolve <- InA_nil : test.
-  Hint Constructors ForallOrdPairs : test.
+        Lemma cons :
+          Ahead v x₀ ->
+          Ahead v (u₀ :: x₀).
+        Proof.
+          now right.
+        Qed.
 
-  Definition OkOk : forall instructions : list Instruction.t, Ok instructions -> Ok instructions.
-  Proof.
-    intros x Ok_x.
-    split.
-      induction Ok_x as [| x₀ Ok_x₀ IHx₀ owner not_InUp_owner In_Down_owner| x₀ Ok_x₀ IHx₀ owner not_In_Down_owner].
-          constructor.
-        constructor 2 with (2 := IHx₀).
-        eapply Forall_impl, not_InA_iff with (1 := not_InUp_owner).
-        intros [opcode' owner'] neq owner_eq_owner'.
-        now eapply Instruction.ap_left', Opcode.not_Up in neq.
-      constructor 2 with (2 := IHx₀).
-      assert (not_In_owner : Forall (fun instruction => ~ Owner.eq owner (Instruction.operand instruction)) x₀).
-        assert (not_In_Up_owner : ~ InA Instruction.eq (Opcode.Up, owner) x₀).
-          contradict not_In_Down_owner; now apply Up_impl_Down.
-        eapply Forall_impl.
-        2: {
-          apply Forall_and; apply not_InA_iff.
-            exact not_In_Up_owner.
-          exact not_In_Down_owner.
-        }
-        intros [[|] owner']; firstorder.
-      now apply Forall_impl with (2 := not_In_owner).
-    intros owner.
-    now apply Up_impl_Down.
-  Qed. *)
+        Lemma cons_Up :
+          Owner.eq op₀ v ->
+          Ahead v (Up op₀ :: x₀).
+        Proof.
+          now intros op₀_eq_v; left.
+        Qed.
 
-  Module Block.
-    Import Coq.FSets.FMaps.
+        Lemma nil_inv : ~ Ahead v [].
+        Proof.
+          intros Ahead_v.
+          apply InA_nil with (1 := Ahead_v).
+        Qed.
 
-  Module Owner' :=  Backport_DT Owner.
-  Module Regular (Map : WSfun Owner').
-    Module Import Facts := WFacts_fun Owner' Map.
+        Lemma cons_Up_inv :
+          Ahead v (Up op₀ :: x₀) ->
+          ~ Owner.eq op₀ v ->
+          Ahead v x₀.
+        Proof.
+          intros Ahead_v op₀_neq_v.
+          now apply InA_cons in Ahead_v as [(_ & op₀_eq_v)| Ahead_v];
+            [absurd (Owner.eq op₀ v)|].
+        Qed.
 
-    Module Coloring := Coloring Owner' Map.
-    Definition Ok := Ok.Ok.
+        Lemma cons_Down_inv :
+          Ahead v (Down op₀ :: x₀) ->
+          Ahead v x₀.
+        Proof.
+          intros Ahead_v.
+          now apply InA_cons in Ahead_v as [(Up_eq_Down & _)| Ahead_v];
+            [contradict Up_eq_Down; apply Opcode.not_Up_iff_Down|].
+        Qed.
 
-    Lemma not_InA_iff : forall (A : Type) (eqA : A -> A -> Prop) (u : A) (y : list A),
-      ~ InA eqA u y <->
-      Forall (fun v => ~ eqA u v) y.
-    Proof.
-      intros A eqA u y.
-      now rewrite InA_altdef, <- Forall_Exists_neg.
-    Qed.
+        Lemma nil_iff :
+          Ahead v [] <-> False.
+        Proof.
+          now split; [apply nil_inv|].
+        Qed.
 
-    Definition Forall_iff : forall (A : Type) (P : A -> Prop) (u₀ : A) (x₀ : list A), Forall P (u₀ :: x₀) <-> P u₀ /\ Forall P x₀.
-    Proof.
-      intros A P u₀ x₀.
-      split.
-        intros Forall_x.
-        constructor.
-          now apply Forall_inv with x₀.
-        now apply Forall_inv_tail with u₀.
-      intros [P_u₀ Forall_x₀].
-      now constructor.
-    Defined.
+        Lemma cons_Up_iff :
+          Ahead v (Up op₀ :: x₀) <->
+            Owner.eq op₀ v \/ Ahead v x₀.
+        Proof.
+          split.
+            now destruct (Owner.eq_dec op₀ v) as [op₀_eq_v| op₀_neq_v];
+              [left| right; apply cons_Up_inv].
+          now intros [op₀_eq_v| Ahead_v]; [left| right].
+        Qed.
 
-      Definition Coloring_Ok (instructions : list Instruction.t) (coloring : Coloring.t) : Prop :=
-        Coloring.Ok coloring /\ (forall owner : Owner.t,
-        (Ok.Active owner instructions ->
-        Coloring.Contains coloring owner) /\
-        (Ok.InUp owner instructions ->
-        ~ Coloring.Contains coloring owner)).
+        Lemma cons_Down_iff :
+          Ahead v (Down op₀ :: x₀) <->
+          Ahead v x₀.
+        Proof.
+          now split; [apply cons_Down_inv| right].
+        Qed.
+      End Ahead.
 
-    Module Color.
-      Definition Ok
-        (instructions : list Instruction.t)
-        (coloring : Coloring.t)
-        (color : nat) :
-        Prop :=
-        exists owner : Owner.t,
-          Coloring.MapsTo coloring owner color /\
-          ~ Ok.InDown owner instructions.
+      Module Hints.
+        #[export]
+        Hint Resolve cons : instructions.
+        #[export]
+        Hint Resolve cons_Up : instructions.
+
+        #[export]
+        Hint Immediate nil_inv : instructions.
+      End Hints.
+    End Ahead.
+
+    Module Active.
+      Section Active.
+        Variables
+          (op₀ v : Owner.t)
+          (x₀ : t).
+
+        Lemma cons_Up :
+          ~ Owner.eq op₀ v ->
+          Active v x₀ ->
+          Active v (Up op₀ :: x₀).
+        Proof.
+          intros op₀_neq_v Active_v.
+          split; [| now right].
+          now apply not_InA_cons; split;
+            [apply Instruction.neq_operand; contradict op₀_neq_v|].
+        Qed.
+
+        Lemma cons_Down :
+          Active v x₀ ->
+          Active v (Down op₀ :: x₀).
+        Proof.
+          intros Active_v.
+          split; [| now right].
+          now apply not_InA_cons; split;
+            [apply Instruction.neq_opcode, Opcode.not_Up_iff_Down|].
+        Qed.
+        
+        Lemma cons_Down_eq :
+          Ok (Down op₀ :: x₀) ->
+          Owner.eq op₀ v ->
+          Active v (Down op₀ :: x₀).
+        Proof.
+          intros Ok_instructions op₀_eq_v.
+          apply Ok.cons_Down_iff in Ok_instructions as (Absent_op₀ & Ok_instructions).
+          split; [| now left].
+          contradict op₀_eq_v; apply Ahead.cons_Down_inv in op₀_eq_v.
+          Orthogonal.Hints.solve_neq.
+        Qed.
+
+        Lemma nil_inv : ~ Active v [].
+        Proof.
+          intros (_ & In_Down_v).
+          apply InA_nil with (1 := In_Down_v).
+        Qed.
+
+        Lemma cons_Up_inv :
+          Active v (Up op₀ :: x₀) ->
+          Active v x₀.
+        Proof.
+          intros (not_Ahead_v & In_Down_v).
+          split.
+            now contradict not_Ahead_v; right.
+          now apply InA_cons in In_Down_v as [(Down_eq_Up & _)| In_Down_v];
+            [contradict Down_eq_Up; apply Opcode.not_Down_iff_Up|].
+        Qed.
+
+        Lemma cons_Down_inv :
+          Active v (Down op₀ :: x₀) ->
+          ~ Owner.eq op₀ v ->
+          Active v x₀.
+        Proof.
+          intros (not_Ahead_v & In_Down_v) op₀_neq_v.
+          split.
+            now contradict not_Ahead_v; right.
+          now apply InA_cons in In_Down_v as [(_ & v_eq_op₀)| In_Down_v];
+            [absurd (Owner.eq op₀ v)|].
+        Qed.
+
+        Lemma nil_iff : Active v [] <-> False.
+        Proof.
+          now split; [apply nil_inv|].
+        Qed.
+
+        Lemma cons_Up_iff :
+          Active v (Up op₀ :: x₀) <->
+            ~ Owner.eq op₀ v /\ Active v x₀.
+        Proof.
+          split.
+            intros Active_v; split.
+              assert (Ahead_op₀ : Ahead op₀ (Up op₀ :: x₀)) by now left.
+              Orthogonal.Hints.solve_neq.
+            now apply cons_Up_inv.
+          now intros (op₀_eq_v & Active_v); apply cons_Up.
+        Qed.
+
+        Lemma cons_Down_iff :
+          Ok (Down op₀ :: x₀) ->
+            Active v (Down op₀ :: x₀) <->
+              Owner.eq op₀ v \/ Active v x₀.
+        Proof.
+          intros Ok_instructions.
+          split.
+            destruct (Owner.eq_dec op₀ v) as [op₀_eq_v| op₀_neq_v];
+              [now left| right].
+            now apply cons_Down_inv.
+          now intros [op₀_eq_v| Active_v];
+            [apply cons_Down_eq| apply cons_Down].
+        Qed.
+      End Active.
       
-      Lemma add_Up_eq
-        (coloring : Coloring.t)
-        (instructions : list Instruction.t)
-        (color : nat)
-        (owner : Owner.t) :
-        Ok instructions coloring color ->
-        ~ Coloring.Contains coloring owner ->
-        Ok (Ok.add_Up owner instructions) (Coloring.add_eq coloring owner) color.
+      Module Hints.
+        #[export]
+        Hint Resolve cons_Up :  instructions.
+        #[export]
+        Hint Resolve cons_Down :  instructions.
+        #[export]
+        Hint Resolve cons_Down_eq :  instructions.
+
+        #[export]
+        Hint Immediate nil_inv : instructions.
+      End Hints.
+    End Active.
+
+    Module Absent.
+      Section Absent.
+        Variables
+          (op₀ v : Owner.t)
+          (u₀ : Instruction.t)
+          (x₀ : t).
+
+        Lemma nil : Absent v [].
+        Proof.
+          unfold not; apply InA_nil.
+        Qed.
+
+        Lemma cons_Up :
+          Absent v x₀ ->
+          Absent v (Up op₀ :: x₀).
+        Proof.
+          intros Absent_v.
+          now apply not_InA_cons; split;
+            [apply Instruction.neq_opcode, Opcode.not_Down_iff_Up|].
+        Qed.
+
+        Lemma cons_Down :
+          ~ Owner.eq op₀ v ->
+          Absent v x₀ ->
+          Absent v (Down op₀ :: x₀).
+        Proof.
+          intros op₀_neq_v Absent_v.
+          now apply not_InA_cons; split;
+            [apply Instruction.neq_operand; contradict op₀_neq_v|].
+        Qed.
+
+        Lemma cons_inv :
+          Absent v (u₀ :: x₀) ->
+          Absent v x₀.
+        Proof.
+          intros Absent_v.
+          now apply not_InA_cons in Absent_v.
+        Qed.
+
+        Lemma nil_iff : Absent v [] <-> True.
+        Proof.
+          easy.
+        Qed.
+
+        Lemma cons_Down_iff :
+          Absent v (Down op₀ :: x₀) <->
+            ~ Owner.eq op₀ v /\ Absent v x₀.
+        Proof.
+          split; intros Absent_v; [| now apply cons_Down].
+          apply not_InA_cons in Absent_v as (v_neq_op₀ & Absent_v).
+          apply Instruction.neq_eq_opcode in v_neq_op₀; [| reflexivity].
+          now split; [contradict v_neq_op₀|].
+        Qed.
+      End Absent.
+
+      Lemma cons_Up_iff : forall op₀ v x₀,
+        Absent v (Up op₀ :: x₀) <->
+        Absent v x₀.
       Proof.
-        intros (owner' & owner'_to_color & not_InDown_owner') not_In_owner.
-        unfold Ok.
-        exists owner'; split.
-          apply Map.add_2.
-            contradict not_In_owner.
-            unfold Coloring.Contains.
-            rewrite not_In_owner; now exists color.
-          assumption.
-        now apply Ok.not_InDown_add_Up.
+        split.
+          apply cons_inv.
+        now intros Absent_v; apply not_InA_cons; split;
+          [apply Instruction.neq_opcode, Opcode.not_Down_iff_Up|].
       Qed.
 
-      Lemma Color_Ok_add_Up_lt
-        (coloring : Coloring.t)
-        (instructions : list Instruction.t)
-        (color color' : nat)
-        (owner : Owner.t) :
-        Ok instructions coloring color ->
-        ~ Coloring.Contains coloring owner ->
-        Ok (Ok.add_Up owner instructions) (Coloring.add_lt coloring owner color') color.
-      Proof.
-        intros (owner' & owner'_to_color & not_InDown_owner') not_In_owner.
-        unfold Ok.
-        exists owner'; split.
-          apply Map.add_2.
-            contradict not_In_owner.
-            unfold Coloring.Contains.
-            rewrite not_In_owner; now exists color.
-          assumption.
-        now apply Ok.not_InDown_add_Up.
-      Qed.
-    End Color.
+      Module Hints.
+        #[export]
+        Hint Resolve nil : instructions.
+        #[export]
+        Hint Resolve cons_Up : instructions.
+        #[export]
+        Hint Resolve cons_Down : instructions.
+      End Hints.
+    End Absent.
+
+    Module Hints.
+      Create HintDb instructions.
+
+      Export Ok.Hints.
+      Export Orthogonal.Hints.
+      Export Ahead.Hints.
+      Export Active.Hints.
+      Export Absent.Hints.
+    End Hints.
+  End Instructions.
+
+  Import Coq.FSets.FMaps.
+
+  Module Regular (Map : WSfun Owner).
+    Module Import Facts := WFacts_fun Owner Map.
+
+    Lemma add_not_in_iff : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
+    ~ Map.In y (Map.add x e m) <-> ~ Owner.eq x y /\ ~ Map.In y m.
+    Proof.
+      intros elt m x y e.
+      rewrite add_in_iff; tauto.
+    Qed.
+  
+    Lemma add_not_in : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
+      ~ Owner.eq x y ->
+      ~ Map.In y m ->
+      ~ Map.In y (Map.add x e m).
+    Proof.
+      intros elt m x y e.
+      rewrite add_in_iff; tauto.
+    Qed.
+
+    Module Coloring := Coloring Owner Map.
+    Import Instructions.Notations.
+
+    Definition Color_Ok
+      (instructions : list Instruction.t)
+      (coloring : Coloring.t)
+      (color : nat) :
+      Prop :=
+      (forall (owner : Owner.t) (n : nat),
+        Active owner instructions ->
+        Coloring.MapsTo coloring owner n ->
+        color <> n) /\
+      (exists owner : Owner.t,
+        Coloring.MapsTo coloring owner color /\
+        Absent owner instructions).
+
+    Import Instructions.Ok.
 
     Fixpoint regular
       (instructions : list Instruction.t)
@@ -444,15 +601,15 @@ Module Assigned (Owner : DecidableType).
       (unused_colors : list nat) :
       option Coloring.t :=
       match instructions, unused_colors with
-      | (Opcode.Up, owner) :: tail, [] => regular
+      | Up owner :: tail, [] => regular
         tail
         (Coloring.add_eq coloring owner)
         []
-      | (Opcode.Up, owner) :: tail, color :: unused_colors => regular
+      | Up owner :: tail, color :: unused_colors => regular
         tail
         (Coloring.add_lt coloring owner color)
         unused_colors
-      | (Opcode.Down, owner) :: tail, unused_colors =>
+      | Down owner :: tail, unused_colors =>
           bind (Coloring.find' coloring owner) (fun color => 
           regular
             tail
@@ -461,8 +618,8 @@ Module Assigned (Owner : DecidableType).
       | [], _ => ret coloring
       end.
 
-    Module Type InvariantType.
-      Parameter P : list Instruction.t -> Coloring.t -> list nat -> option Coloring.t -> Prop.
+    Module Type AssumptionType.
+      Parameter Ok : list Instruction.t -> Coloring.t -> list nat -> Prop.
 
       Section Properties.
         Variable owner : Owner.t.
@@ -472,66 +629,40 @@ Module Assigned (Owner : DecidableType).
         Variable unused_colors : list nat.
         Variable result : option Coloring.t.
 
-        Parameter P_nil :
-          P [] coloring unused_colors (Some coloring).
+        Parameter cons_Up_eq :
+          Ok (Up owner :: instructions) coloring [] ->
+          Ok instructions (Coloring.add_eq coloring owner) [].
 
-        Parameter P_Up_eq :
-          P instructions (Coloring.add_eq coloring owner) [] result ->
-          P ((Opcode.Up, owner) :: instructions) coloring [] result.
+        Parameter cons_Up_lt :
+          Ok (Up owner :: instructions) coloring (color :: unused_colors) ->
+          Ok instructions (Coloring.add_lt coloring owner color) unused_colors.
 
-        Parameter P_Up_lt :
-          P instructions (Coloring.add_lt coloring owner color) unused_colors result ->
-          P ((Opcode.Up, owner) :: instructions) coloring (color :: unused_colors) result.
-
-        Parameter P_Down_Some :
+        Parameter cons_Down :
           Coloring.MapsTo coloring owner color ->
-          P instructions coloring (color :: unused_colors) result ->
-          P ((Opcode.Down, owner) :: instructions) coloring unused_colors result.
-
-        Parameter P_Down_None :
-          ~ Coloring.Contains coloring owner ->
-          P ((Opcode.Down, owner) :: instructions) coloring unused_colors None.
+          Ok (Down owner :: instructions) coloring unused_colors ->
+          Ok instructions coloring (color :: unused_colors).
       End Properties.
-    End InvariantType.
+    End AssumptionType.
 
-    Module InvariantFacts (Import I : InvariantType).
-      Lemma correct : forall
-        (instructions : list Instruction.t)
-        (coloring : Coloring.t)
-        (unused_colors : list nat),
-        P instructions coloring unused_colors (regular instructions coloring unused_colors).
+    Section Subsets.
+      Variables (A : Type) (P : list A -> Prop).
+
+      Inductive Subsets  : list A -> Prop :=
+      | Subsets_nil : P [] -> Subsets []
+      | Subsets_cons : forall (u₀ : A) (x₀ : list A),
+        P (u₀ :: x₀) -> Subsets x₀ -> Subsets (u₀ :: x₀).
+
+      Lemma Subsets_inv : forall x : list A,
+        Subsets x -> P x.
       Proof.
-        induction instructions as [| [[|] owner] instructions IHinstructions];
-        intros
-          coloring
-          unused_colors.
-            apply P_nil.
-          destruct unused_colors as [| color unused_colors]; simpl.
-            specialize (IHinstructions (Coloring.add_eq coloring owner) []).
-            now apply P_Up_eq.
-          specialize (IHinstructions (Coloring.add_lt coloring owner color) unused_colors).
-          now apply P_Up_lt.
-        simpl.
-        destruct (Coloring.find' coloring owner) as [color|] eqn: find; simpl.
-          specialize (IHinstructions coloring (color :: unused_colors)).
-          apply find_mapsto_iff in find.
-          now apply P_Down_Some with color.
-        apply not_find_in_iff in find.
-        now apply P_Down_None.
+        intros x Subsets_x.
+        now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
       Qed.
-    End InvariantFacts.
+    End Subsets.
+    Global Hint Constructors Subsets : regular.
 
-    Definition UnusedColors_Ok
-      (coloring : Coloring.t)
-      (instructions : list Instruction.t)
-      (unused_colors : list nat) :
-      Prop :=
-      Forall (Color.Ok instructions coloring) unused_colors.
-
-    Inductive Subsets (A : Type) (P : list A -> Prop) : list A -> Prop :=
-    | Subsets_nil : Subsets P []
-    | Subsets_cons : forall (u₀ : A) (x₀ : list A),
-      P (u₀ :: x₀) -> Subsets P x₀ -> Subsets P (u₀ :: x₀).
+    Notation ActiveTo owner color coloring instructions :=
+      (Active owner instructions /\ Coloring.MapsTo coloring owner color).
 
     Definition RealColoring
       (coloring : Coloring.t)
@@ -539,11 +670,11 @@ Module Assigned (Owner : DecidableType).
       Prop :=
       forall owner owner' : Owner.t,
         ~ Owner.eq owner owner' ->
-        Ok.Active owner instructions ->
-        Ok.Active owner' instructions ->
-        exists color color' : nat,
-          Coloring.MapsTo coloring owner color /\
-          Coloring.MapsTo coloring owner' color' /\
+        Active owner instructions ->
+        Active owner' instructions ->
+        forall color color' : nat,
+          Coloring.MapsTo coloring owner color ->
+          Coloring.MapsTo coloring owner' color' ->
           color <> color'.
 
     Inductive OptionSpec (A : Type) (P : A -> Prop) (Q : Prop) : option A -> Prop :=
@@ -552,17 +683,61 @@ Module Assigned (Owner : DecidableType).
     #[global]
     Hint Constructors OptionSpec : core.
 
-    Module Invariant <: InvariantType.
-      Definition P
+    Lemma OptionSpec_impl : forall (A : Type) (P P' : A -> Prop) (Q : Prop), (forall a : A, P a -> P' a) -> forall o, OptionSpec P Q o -> OptionSpec P' Q o.
+    Proof.
+      now intros A P P' Q P_impl_P' o [a P_a| q];
+        [left; apply P_impl_P'| right].
+    Qed.
+
+    Import Instructions.Hints.
+    Ltac my_auto :=
+      auto with relations instructions.
+    
+    Ltac Ok_intro :=
+      intros
+        (Ok_instructions &
+        Ok_coloring &
+        Synced_coloring &
+        Proper_coloring &
+        Ok_unused_colors &
+        NoDup_unused_colors).
+
+      Ltac Ok_destruct ok :=
+        destruct ok as
+          (Ok_instructions &
+          Ok_coloring &
+          Synced_coloring &
+          Proper_coloring &
+          Ok_unused_colors &
+          NoDup_unused_colors).
+
+    Definition Synced
+      (instructions : list Instruction.t) 
+      (coloring : Coloring.t) :=
+      forall owner : Owner.t,
+        (Active owner instructions ->
+        Coloring.Contains coloring owner) /\
+        (Ahead owner instructions ->
+        ~ Coloring.Contains coloring owner).
+
+    Ltac split_left :=
+      split; [| try split_left].
+
+
+    Import Instructions.Ok.Hints.
+
+    Module Assumption <: AssumptionType.
+      Definition Ok
         (instructions : list Instruction.t)
         (coloring : Coloring.t)
-        (unused_colors : list nat)
-        (result : option Coloring.t) :
+        (unused_colors : list nat) :
         Prop :=
-        Ok.Ok instructions ->
-        Coloring_Ok instructions coloring ->
-        UnusedColors_Ok coloring instructions unused_colors ->
-        OptionSpec Coloring.Ok False result.
+        Instructions.Ok instructions /\
+        Coloring.Ok coloring /\
+        Synced instructions coloring /\
+        RealColoring coloring instructions /\
+        Forall (Color_Ok instructions coloring) unused_colors /\
+        NoDup unused_colors.
 
       Section Properties.
         Variable owner : Owner.t.
@@ -570,150 +745,252 @@ Module Assigned (Owner : DecidableType).
         Variable coloring : Coloring.t.
         Variable color : nat.
         Variable unused_colors : list nat.
-        Variable result : option Coloring.t.
 
-        Ltac P_intros :=
+        Lemma cons_Up_eq :
+          Ok (Up owner :: instructions) coloring [] ->
+          Ok instructions (Coloring.add_eq coloring owner) [].
+        Proof with my_auto.
+          Ok_intro.
+          assert (not_In_owner : ~ Coloring.Contains coloring owner).
+            apply Synced_coloring...
+          unfold Ok.
+          split_left...
+                now apply Instructions.Ok.cons_inv in Ok_instructions.
+              apply Coloring.Ok.add_eq, Synced_coloring...
+            intros owner'.
+            split.
+              intros Active_owner'.
+              apply add_in_iff.
+              destruct (Owner.eq_dec owner owner') as [eq| neq];
+                [left| right; apply Synced_coloring]...
+            intros Ahead_owner.
+            apply add_not_in, Synced_coloring...
+            enough (Active owner instructions)...
+          intros x y x_neq_y Active_x Active_y m n.
+          unfold Coloring.MapsTo; simpl.
+          rewrite ?add_mapsto_iff.
           intros
-            Ok_instructions
-            [Ok_coloring Ok'_coloring]
-            Ok_unused_colors.
-
-        Lemma P_nil :
-          P [] coloring unused_colors (Some coloring).
-        Proof.
-          P_intros.
-          now constructor.
+            [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
+            [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
+                now contradict x_neq_y; transitivity owner.
+              enough (n <> Coloring.colors coloring) by firstorder.
+              now apply Nat.lt_neq, Ok_coloring; exists y.
+            now apply Nat.lt_neq, Ok_coloring; exists x.
+          apply Proper_coloring with x y...
         Qed.
 
-        Lemma P_Up_eq :
-          P instructions (Coloring.add_eq coloring owner) [] result ->
-          P ((Opcode.Up, owner) :: instructions) coloring [] result.
-        Proof.
-          intros IHP; P_intros.
-          apply Ok.cons_Up_iff in Ok_instructions as (Active_owner & Ok_instructions).
+        Lemma cons_Up_lt :
+          Ok (Up owner :: instructions) coloring (color :: unused_colors) ->
+          Ok instructions (Coloring.add_lt coloring owner color) unused_colors.
+        Proof with my_auto.
+          Ok_intro.
+          apply Forall_cons_iff in Ok_unused_colors as (Ok_color & Ok_unused_colors).
+          apply NoDup_cons_iff in NoDup_unused_colors as (not_In_color & NoDup_unused_colors).
           assert (not_In_owner : ~ Coloring.Contains coloring owner).
-            now apply Ok'_coloring; left.
-          apply IHP.
-              assumption.
-            split.
-              now apply Coloring.Ok.add_eq, Ok'_coloring; [| left].
-            intros owner'.
-            unfold Coloring.Contains; simpl.
-            rewrite add_in_iff.
-            split.
-              intros Active_owner'.
-              destruct (Owner.eq_dec owner owner') as
-                [owner_eq_owner'| owner_neq_owner'];
-                [now left| right].
-              apply Ok'_coloring, Ok.Active_cons_Up.
+            apply Synced_coloring...
+          split_left...
+                  now apply Instructions.Ok.cons_inv with (Up owner).
+                apply Coloring.Ok.add_lt, Ok_coloring...
+                destruct Ok_color as (_ & owner' & owner'_to_color & _).
+                now exists owner'.
+              intros owner'.
               split.
-                now contradict owner_neq_owner'.
-              assumption.
-            intros InUp_owner'.
-            enough (~ Owner.eq owner owner' /\ ~ Map.In owner' (Coloring.labeling coloring)) by firstorder.
-            split.
-              now apply Ok.InUp_Active with instructions.
-            now apply Ok'_coloring; right.
-          constructor.
+                intros Active_owner'.
+                apply add_in_iff.
+                destruct (Owner.eq_dec owner owner') as [eq| neq];
+                  [left| right; apply Synced_coloring]...
+              intros Ahead_owner.
+              apply add_not_in, Synced_coloring; enough (Active owner instructions)...
+            intros x y x_neq_y Active_x Active_y m n.
+            unfold Coloring.MapsTo; simpl.
+            rewrite ?add_mapsto_iff.
+            intros
+              [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
+              [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
+                  now contradict x_neq_y; transitivity owner.
+                apply Ok_color with y...
+                enough (color <> m) by firstorder.
+              apply Ok_color with x...
+            apply Proper_coloring with x y...
+          eapply Forall_impl, Forall_and with (1 := Ok_unused_colors), not_In_Forall, not_In_color.
+          intros n ((Proper_n & Synced_n) & color_neq_n).
+          split.
+            unfold Coloring.MapsTo; simpl.
+            intros owner' n' Active_owner'.
+            rewrite add_mapsto_iff.
+            intros [(owner_eq_owner' & <-)| (owner_neq_owner' & owner'_to_n)].
+              auto with arith.
+            apply Proper_n with owner'...
+          destruct Synced_n as (owner' & owner'_to_n & not_In_Down_owner').
+          assert (owner_neq_owner': ~ Owner.eq owner owner').
+            contradict not_In_Down_owner'; rewrite <- not_In_Down_owner'.
+            apply Instructions.Orthogonal.Up_impl_Down...
+          exists owner'; split...
+          apply Map.add_2...
         Qed.
-
-        Lemma P_Up_lt :
-          P instructions (Coloring.add_lt coloring owner color) unused_colors result ->
-          P ((Opcode.Up, owner) :: instructions) coloring (color :: unused_colors) result.
-        Proof.
-          intros IHP; P_intros.
-          apply Ok.cons_Up_iff in Ok_instructions as (Active_owner & Ok_instructions).
-          apply Forall_iff in Ok_unused_colors as (Ok_color & Ok_unused_colors).
-          assert (not_In_owner : ~ Coloring.Contains coloring owner).
-            now apply Ok'_coloring; left.
-          apply IHP.
-              assumption.
-            split.
-              apply Coloring.Ok.add_lt; try auto.
-              apply Ok_coloring.
-              destruct Ok_color as (owner' &  ? & ?).
-              now exists owner'.
-            intros owner'.
-            unfold Coloring.Contains; simpl.
-            rewrite add_in_iff.
-            split.
-            intros Active_owner'.
-            destruct (Owner.eq_dec owner owner') as
-              [owner_eq_owner'| owner_neq_owner'];
-              [now left| right].
-            apply Ok'_coloring, Ok.Active_cons_Up.
-              split.
-                now contradict owner_neq_owner'.
-              assumption.
-            intros InUp_owner'.
-            enough (~ Owner.eq owner owner' /\ ~ Map.In owner' (Coloring.labeling coloring)) by firstorder.
-            split.
-              now apply Ok.InUp_Active with instructions.
-            now apply Ok'_coloring; right.
-          eapply Forall_impl with (2 := Ok_unused_colors).
-          intros n (owner' & owner'_to_n & not_InDown_owner').
-          apply Ok.not_InDown_add_Up in not_InDown_owner'.
-          exists owner'; split; try assumption.
-          apply Map.add_2.
-            now apply Ok.not_InDown_Active with instructions.
-          assumption.
-        Qed.
-
-        Lemma P_Down_Some :
+        
+        Lemma cons_Down :
           Coloring.MapsTo coloring owner color ->
-          P instructions coloring (color :: unused_colors) result ->
-          P ((Opcode.Down, owner) :: instructions) coloring unused_colors result.
-        Proof.
-          intros owner_to_color IHP; P_intros.
-          apply Ok.cons_Down_iff in Ok_instructions as (not_InUp_owner & Ok_tail).
-          unfold Coloring.find'.
-          apply IHP.
-              assumption.
+          Ok (Down owner :: instructions) coloring unused_colors ->
+          Ok instructions coloring (color :: unused_colors).
+        Proof with my_auto.
+          intros owner_to_color (Ok_instructions & Ok_coloring & Synced_coloring & Real & Ok_unused_colors & NoDup_unused_colors).
+          split_left...
+                  now apply Instructions.Ok.cons_inv in Ok_instructions.
+                intros owner'.
+                split.
+                  intros Active_owner'.
+                  apply Synced_coloring...
+                intros Ahead_owner'.
+                apply Synced_coloring...
+              intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+              apply Real with x y...
+            constructor.
+              split.
+                intros owner' color' Active_owner' owner'_to_color'.
+                apply Real with owner owner'...
+                enough (Absent owner instructions)...
+              exists owner...
+            eapply Forall_impl with (2 := Ok_unused_colors).
+            intros n (H & owner' & owner'_to_color & not_InDown_owner').
             split.
-              assumption.
-            intros owner'.
-            split.
-              intros Active_owner'.
-              now apply Ok'_coloring, Ok.Active_cons_Down; [constructor| right].
-            intros InUp_owner'.
-            now apply Ok'_coloring, Ok.InUp_add_Down.
-          constructor.
-          exists owner.
-            now split.
-          eapply Forall_impl with (2 := Ok_unused_colors).
-          intros n (owner' & owner'_to_color & not_InDown_owner').
-          exists owner'; split.
-            assumption.
-          now apply Ok.not_InDown_add_Down in not_InDown_owner'.
-        Qed.
-
-        Lemma P_Down_None :
-          ~ Coloring.Contains coloring owner ->
-          P ((Opcode.Down, owner) :: instructions) coloring unused_colors None.
-        Proof.
-          intros not_In_owner; P_intros.
-          apply Ok.cons_Down_iff in Ok_instructions as (not_InUp_owner & Ok_tail).
-          contradict not_In_owner.
-          now apply Ok'_coloring, Ok.Active_cons_Down; constructor.
+              intros x m Active_x x_to_m.
+              apply H with x...
+            exists owner'...
+          constructor...
+          apply not_In_Forall, Forall_impl with (2 := Ok_unused_colors).
+          intros n [Proper_n Synced_n].
+          enough (n <> color) by auto with arith.
+          apply Proper_n with owner...
         Qed.
       End Properties.
-    End Invariant.
+    End Assumption.
 
-    Module Import InvariantFacts' := InvariantFacts Invariant.
-    Lemma regular_Ok : forall
-      (instructions : list Instruction.t )
+    Definition Synced'
+      (instructions : list Instruction.t)
+      (coloring result : Coloring.t) :=
+      (forall (owner : Owner.t) (color : nat),
+      ~ Ahead owner instructions ->
+      Coloring.MapsTo result owner color ->
+      Coloring.MapsTo coloring owner color).
+
+    Lemma Ok_regular : forall
+      (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (unused_colors : list nat),
-      Ok.Ok instructions ->
-      Coloring_Ok instructions coloring ->
-      UnusedColors_Ok coloring instructions unused_colors ->
-      OptionSpec
-        (Coloring.Ok.t)
+      Assumption.Ok instructions coloring unused_colors ->
+      OptionSpec (fun result : Coloring.t =>
+        Coloring.Ok.t result /\
+        Subsets (RealColoring result) instructions /\
+        Synced' instructions coloring result)
         False
         (regular instructions coloring unused_colors).
-    Proof.
-      apply correct.
+    Proof with my_auto.
+      induction instructions as [| [[|] owner] instructions IHinstructions];
+        intros coloring unused_colors ok.
+            Ok_destruct ok.
+          constructor; split_left...
+          constructor.
+            intros x y x_neq_y Active_x Active_y.
+            absurd (Active x [])...
+          intros owner' color' not_Ahead_owner' owner'_to_color'...
+        destruct unused_colors as [| color unused_colors].
+          pose proof (ok' := Assumption.cons_Up_eq ok).
+          specialize IHinstructions with (1 := ok').
+          apply OptionSpec_impl with (2 := IHinstructions).
+          intros result (Ok_result & Proper_result & Synced_result).
+          Ok_destruct ok'.
+          split_left...
+            constructor...
+            intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+            apply Proper_coloring with x y...
+            1 - 2:
+              now apply Instructions.Active.cons_Up_inv with owner.
+            1 - 2:
+            destruct
+              Active_x as (not_Ahead_x & _),
+              Active_y as (not_Ahead_y & _);
+            apply Synced_result...
+          intros owner' color' not_Ahead_owner' owner'_to_color'.
+          rewrite Instructions.Ahead.cons_Up_iff in not_Ahead_owner'.
+          apply Map.add_3 with owner (Coloring.colors coloring),
+            Synced_result...
+        pose proof (ok' := Assumption.cons_Up_lt ok).
+        specialize IHinstructions with (1 := ok').
+        apply OptionSpec_impl with (2 := IHinstructions).
+        intros result (Ok_result & Proper_result & Synced_result).
+        Ok_destruct ok'.
+        split_left...
+          constructor...
+          intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+          apply Proper_coloring with x y...
+          1 - 2:
+            now apply Instructions.Active.cons_Up_inv with owner.
+          1 - 2:
+          destruct
+            Active_x as (not_Ahead_x & _),
+            Active_y as (not_Ahead_y & _);
+          apply Synced_result...
+        intros owner' color' not_Ahead_owner' owner'_to_color'.
+        rewrite Instructions.Ahead.cons_Up_iff in not_Ahead_owner'.
+        apply Map.add_3 with owner color,
+          Synced_result...
+      simpl in *.
+      destruct (Coloring.find' coloring owner) as [color|] eqn: find.
+        apply find_mapsto_iff in find as owner_to_color.
+        pose proof (ok' := Assumption.cons_Down owner_to_color ok).
+        specialize IHinstructions with (1 := ok').
+        apply OptionSpec_impl with (2 := IHinstructions).
+        intros result (Ok_result & Proper_result & Synced_result).
+        split_left...
+          constructor...
+          intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+          assert (Ok_instructions' : Instructions.Ok (Down owner :: instructions)) by
+            now destruct ok.
+          Ok_destruct ok.
+          apply Proper_coloring with x y...
+          1 - 2:
+          destruct
+            Active_x as (not_Ahead_x & _),
+            Active_y as (not_Ahead_y & _);
+          apply Synced_result...
+        intros owner' color' not_Ahead_owner' owner'_to_color'.
+        rewrite Instructions.Ahead.cons_Down_iff in not_Ahead_owner'.
+        now apply Synced_result.
+      Ok_destruct ok.
+      apply not_find_in_iff in find as not_In_owner; contradict not_In_owner.
+      apply Synced_coloring...
+    Qed.
+
+    Definition color
+      (instructions : list Instruction.t) :
+      option Coloring.t :=
+      regular instructions Coloring.empty [].
+
+    Lemma Ok_color : forall
+      (instructions : list Instruction.t),
+      Instructions.Ok instructions ->
+      (forall owner : Owner.t,
+        In (Down owner) instructions -> Ahead owner instructions) ->
+      OptionSpec (fun result =>
+        Coloring.Ok.t result /\
+        Subsets (RealColoring result) instructions)
+        False
+        (color instructions).
+    Proof with my_auto.
+      intros instructions Ok_instructions Down_impl_Up.
+      eapply OptionSpec_impl, Ok_regular.
+        intros result (Ok_result & Proper_result & _)...
+      split_left...
+            apply Coloring.Ok.empty.
+          intros owner; split.
+            intros (not_Ahead_owner & In_Down_owner).
+            absurd (Ahead owner instructions)...
+          intros Ahead_owner In_owner.
+          apply empty_in_iff with (1 := In_owner).
+        intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+        exfalso; apply empty_mapsto_iff with (1 := x_to_m).
+      constructor.
     Qed.
   End Regular.
-End Block.
 End Assigned.
