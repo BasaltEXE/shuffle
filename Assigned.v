@@ -1,6 +1,8 @@
 Set Implicit Arguments.
 
 Require Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
+Require Import Coq.Structures.Orders Coq.Structures.OrdersFacts.
+
 Require Import Coq.Lists.List Coq.Lists.SetoidList.
 
 Require Import Coq.Classes.RelationClasses.
@@ -994,4 +996,215 @@ Module Assigned (Owner : DecidableTypeBoth).
       constructor.
     Qed.
   End Regular.
+
+  Module Fixed (Map : WSfun Owner).
+    Module Import Facts := WFacts_fun' Owner Map.
+
+    Module Coloring := Coloring Owner Map.
+    Import Instructions.Notations.
+
+    Module Type Ord.
+      Include EqLtLe'.
+      Include HasBoolOrdFuns'.
+      Include HasCmp.
+      Include CompareBasedOrder.
+      Include BoolOrdSpecs.
+
+      Include IsStrOrder.
+    End Ord.
+
+    Module Ord_to_OTF (O : Ord) <: OrderedTypeFull'.
+      Include O.
+      Include CompareBasedOrderFacts.
+      Include HasEqBool2Dec.
+
+      Lemma le_lteq : forall x y : t, x <= y <-> x < y \/ x == y.
+      Proof.
+        intros x y.
+        rewrite <- compare_eq_iff, <- compare_lt_iff, <- compare_le_iff.
+        destruct (compare_spec x y) as [x_eq_y| x_lt_y| x_le_y].
+            now split; [right|].
+          now split; [left|].
+        split; [contradiction| intros [H| H]; discriminate H].
+      Qed.
+    End Ord_to_OTF.
+
+    Module OrdFacts (Import O : Ord).
+      Module Export OTF := Ord_to_OTF O.
+      Module Export OTF_Facts := OrderedTypeFullFacts OTF.
+      Module Export Facts.
+        Include BoolOrderFacts O O O O O.
+      End Facts.
+    End OrdFacts.
+
+    Module IgnoreIndex (Index : Typ) (Import Data : Ord) <: Ord.
+      Definition t : Type :=
+        Index.t * Data.t.
+      
+      Definition index (self : t) : Index.t :=
+        fst self.
+      Definition data (self : t) : Data.t :=
+        snd self.
+
+      Definition eq (self other : t) : Prop :=
+        data self == data other.
+      Definition lt (self other : t) : Prop :=
+        data self < data other.
+      Definition le (self other : t) : Prop :=
+        data self <= data other.
+
+      Include EqLtLeNotation.
+
+      Definition eqb (self other : t) : bool :=
+        data self =? data other.
+      Definition ltb (self other : t) : bool :=
+        data self <? data other.
+      Definition leb (self other : t) : bool :=
+        data self <=? data other.
+
+      Include EqbNotation <+ LtbNotation <+ LebNotation.
+
+      Definition compare (self other : t) : comparison :=
+        data self ?= data other.
+
+      Include CmpNotation.
+
+      Instance eq_equiv : Equivalence eq.
+      Proof.
+        unfold eq.
+        split.
+            intros x.
+            reflexivity.
+          intros x y x_eq_y.
+          now symmetry.
+        intros x y z x_eq_y y_eq_z.
+        now transitivity (data y).
+      Qed.
+
+      Section CompareBasedOrder.
+        Variables x y : t.
+
+        Lemma compare_eq_iff : (x ?= y) = Eq <-> x == y.
+        Proof.
+          apply Data.compare_eq_iff.
+        Qed.
+
+        Lemma compare_lt_iff : (x ?= y) = Lt <-> x < y.
+        Proof.
+          apply Data.compare_lt_iff.
+        Qed.
+
+        Lemma compare_le_iff : (x ?= y) <> Gt <-> x <= y.
+        Proof.
+          apply Data.compare_le_iff.
+        Qed.
+
+        Lemma compare_antisym : (y ?= x) = CompOpp (x ?= y).
+        Proof.
+          apply Data.compare_antisym.
+        Qed.
+      End CompareBasedOrder.
+
+      Section BoolOrdSpecs.
+        Variables x y : t.
+
+        Lemma eqb_eq : x =? y = true <-> x == y.
+        Proof.
+          apply Data.eqb_eq.
+        Qed.
+
+        Lemma ltb_lt : x <? y = true <-> x < y.
+        Proof.
+          apply Data.ltb_lt.
+        Qed.
+
+        Lemma leb_le : x <=? y = true <-> x <= y.
+        Proof.
+          apply Data.leb_le.
+        Qed.
+      End BoolOrdSpecs.
+
+      Instance lt_strorder : StrictOrder lt.
+      Proof.
+        split.
+          intros x.
+          exact (irreflexivity (x := data x)).
+        intros x y z x_lt_y y_lt_z.
+        exact (transitivity (A := Data.t) x_lt_y y_lt_z).
+      Qed.
+
+      Instance lt_compat : Proper (eq ==> eq ==> iff) lt.
+      Proof.
+        intros x x' x_eq_x' y y' y_eq_y';
+        now apply Data.lt_compat.
+      Qed.
+    End IgnoreIndex.
+
+    Module Min (Import O : Ord).
+      Module Import Facts := OrdFacts O.
+
+      Definition Min (v : t) (x : list t) :=
+        List.In v x /\ Forall (fun u => v <= u) x.
+
+      Fixpoint minimum_body
+        (v : t)
+        (x : list t) :
+        t :=
+        match x with
+        | [] => v
+        | u₀ :: x₀ =>
+          if u₀ <? v then
+            minimum_body u₀ x₀
+          else
+            minimum_body v x₀
+        end.
+
+      Definition minimum
+        (x : list t) :
+        option t :=
+        match x with
+        | [] => None
+        | u₀ :: x₀ => Some (minimum_body u₀ x₀)
+        end.
+
+      Lemma minimum_body_Forall_le : forall (x : list t) (v : t),
+        minimum_body v x <= v /\
+        Forall (fun u => minimum_body v x <= u) x.
+      Proof.
+        induction x as [| u₀ x₀ IHx₀]; intros v; split.
+              reflexivity.
+            constructor.
+          simpl; destruct (ltb_spec u₀ v) as [u₀_lt_v| u₀_ge_v].
+            now transitivity u₀;
+              [apply IHx₀| apply le_lteq; left].
+            apply IHx₀.
+        simpl; destruct (ltb_spec u₀ v); constructor;
+          [..|transitivity v; [| assumption]|]; apply IHx₀.
+      Qed.
+
+      Lemma minimum_body_In : forall (x : list t) (v : t),
+        minimum_body v x = v \/
+        List.In (minimum_body v x) x.
+      Proof.
+        induction x as [| u₀ x₀ IHx₀]; intros v.
+          now left.
+        simpl; destruct (ltb_spec u₀ v) as [u₀_lt_v| u₀_ge_v].
+          now specialize IHx₀ with u₀ as [|];
+            right; [left| right].
+        now specialize IHx₀ with v as [|];
+          [left| right; right].
+      Qed.
+
+      Lemma minimum_spec : forall x : list t,
+        OptionSpec (fun v => Min v x) (x = []) (minimum x).
+      Proof.
+        destruct x as [| u₀ x₀]; constructor.
+          reflexivity.
+        split.
+          now specialize minimum_body_In with x₀ u₀ as [|];
+            [left| right].
+        constructor; apply minimum_body_Forall_le.
+      Qed.
+    End Min.
+  End Fixed.
 End Assigned.
