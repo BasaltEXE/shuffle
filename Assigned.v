@@ -75,7 +75,6 @@ Section InA.
   Qed.
 End InA.
 
-
 Lemma Forall_cons_iff : forall
   (A : Type)
   (P : A -> Prop) 
@@ -558,24 +557,56 @@ Module Assigned (Owner : DecidableTypeBoth).
 
   Import Coq.FSets.FMaps.
 
-  Module Regular (Map : WSfun Owner).
-    Module Import Facts := WFacts_fun Owner Map.
+  Inductive OptionSpec (A : Type) (P : A -> Prop) (Q : Prop) : option A -> Prop :=
+  | OptionSpec_Some : forall u : A, P u -> OptionSpec P Q (Some u)
+  | OptionSpec_None : Q -> OptionSpec P Q None.
+  #[global]
+  Hint Constructors OptionSpec : core.
+
+  Lemma OptionSpec_impl : forall (A : Type) (P P' : A -> Prop) (Q : Prop), (forall a : A, P a -> P' a) -> forall o, OptionSpec P Q o -> OptionSpec P' Q o.
+  Proof.
+    now intros A P P' Q P_impl_P' o [a P_a| q];
+      [left; apply P_impl_P'| right].
+  Qed.
+
+  Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
+    Include WFacts_fun Key Map.
 
     Lemma add_not_in_iff : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
-    ~ Map.In y (Map.add x e m) <-> ~ Owner.eq x y /\ ~ Map.In y m.
+    ~ Map.In y (Map.add x e m) <-> ~ Key.eq x y /\ ~ Map.In y m.
     Proof.
       intros elt m x y e.
       rewrite add_in_iff; tauto.
     Qed.
   
     Lemma add_not_in : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
-      ~ Owner.eq x y ->
+      ~ Key.eq x y ->
       ~ Map.In y m ->
       ~ Map.In y (Map.add x e m).
     Proof.
       intros elt m x y e.
       rewrite add_in_iff; tauto.
     Qed.
+  End WFacts_fun'.
+
+  Section Subsets.
+    Variables (A : Type) (P : list A -> Prop).
+
+    Inductive Subsets  : list A -> Prop :=
+    | Subsets_nil : P [] -> Subsets []
+    | Subsets_cons : forall (u₀ : A) (x₀ : list A),
+      P (u₀ :: x₀) -> Subsets x₀ -> Subsets (u₀ :: x₀).
+
+    Lemma Subsets_inv : forall x : list A,
+      Subsets x -> P x.
+    Proof.
+      intros x Subsets_x.
+      now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
+    Qed.
+  End Subsets.
+
+  Module Regular (Map : WSfun Owner).
+    Module Import Facts := WFacts_fun' Owner Map.
 
     Module Coloring := Coloring Owner Map.
     Import Instructions.Notations.
@@ -644,23 +675,6 @@ Module Assigned (Owner : DecidableTypeBoth).
       End Properties.
     End AssumptionType.
 
-    Section Subsets.
-      Variables (A : Type) (P : list A -> Prop).
-
-      Inductive Subsets  : list A -> Prop :=
-      | Subsets_nil : P [] -> Subsets []
-      | Subsets_cons : forall (u₀ : A) (x₀ : list A),
-        P (u₀ :: x₀) -> Subsets x₀ -> Subsets (u₀ :: x₀).
-
-      Lemma Subsets_inv : forall x : list A,
-        Subsets x -> P x.
-      Proof.
-        intros x Subsets_x.
-        now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
-      Qed.
-    End Subsets.
-    Global Hint Constructors Subsets : regular.
-
     Notation ActiveTo owner color coloring instructions :=
       (Active owner instructions /\ Coloring.MapsTo coloring owner color).
 
@@ -676,18 +690,6 @@ Module Assigned (Owner : DecidableTypeBoth).
           Coloring.MapsTo coloring owner color ->
           Coloring.MapsTo coloring owner' color' ->
           color <> color'.
-
-    Inductive OptionSpec (A : Type) (P : A -> Prop) (Q : Prop) : option A -> Prop :=
-    | OptionSpec_Some : forall u : A, P u -> OptionSpec P Q (Some u)
-    | OptionSpec_None : Q -> OptionSpec P Q None.
-    #[global]
-    Hint Constructors OptionSpec : core.
-
-    Lemma OptionSpec_impl : forall (A : Type) (P P' : A -> Prop) (Q : Prop), (forall a : A, P a -> P' a) -> forall o, OptionSpec P Q o -> OptionSpec P' Q o.
-    Proof.
-      now intros A P P' Q P_impl_P' o [a P_a| q];
-        [left; apply P_impl_P'| right].
-    Qed.
 
     Import Instructions.Hints.
     Ltac my_auto :=
@@ -722,7 +724,6 @@ Module Assigned (Owner : DecidableTypeBoth).
 
     Ltac split_left :=
       split; [| try split_left].
-
 
     Import Instructions.Ok.Hints.
 
