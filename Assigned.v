@@ -12,6 +12,8 @@ Require Coq.FSets.FMaps.
 
 Import ListNotations.
 
+Require Import Shuffle.Misc.
+Require Import Shuffle.List.
 Require Import Shuffle.Instruction.
 Require Import Shuffle.Coloring.
 
@@ -41,20 +43,6 @@ Module Opcode <: UsualDecidableType.
   Defined.
 End Opcode.
 
-Section Option.
-  Variable (A B : Type).
-
-  Definition bind (mx : option A) (f : A -> option B) : option B :=
-    match mx with
-    | Some x => f x
-    | None => None
-    end.
-  Definition then' (mx : option A) (my : option B) : option B :=
-      bind mx (fun _ => my).
-  Definition ret (a : A) : option A :=
-    Some a.
-End Option.
-
 Section InA.
   Variables
     (A : Type)
@@ -79,7 +67,7 @@ End InA.
 
 Lemma Forall_cons_iff : forall
   (A : Type)
-  (P : A -> Prop) 
+  (P : A -> Prop)
   (u₀ : A)
   (x₀ : list A),
   Forall P (u₀ :: x₀) <->
@@ -142,7 +130,7 @@ Module Assigned (Owner : DecidableTypeBoth).
       Ok x₀ ->
       Ok (Up op₀ :: x₀)
     | cons_Down : forall (op₀ : Owner.t) (x₀ : list Instruction.t),
-      Absent op₀ x₀ -> 
+      Absent op₀ x₀ ->
       Ok x₀ ->
       Ok (Down op₀ :: x₀).
 
@@ -151,7 +139,7 @@ Module Assigned (Owner : DecidableTypeBoth).
         Variables
           (v w : Owner.t)
           (x : t).
-        
+
         Lemma Up_impl_Down :
           Ok x ->
           Ahead v x ->
@@ -384,7 +372,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           now apply not_InA_cons; split;
             [apply Instruction.neq_opcode, Opcode.not_Up_iff_Down|].
         Qed.
-        
+
         Lemma cons_Down_eq :
           Ok (Down op₀ :: x₀) ->
           Owner.eq op₀ v ->
@@ -457,7 +445,7 @@ Module Assigned (Owner : DecidableTypeBoth).
             [apply cons_Down_eq| apply cons_Down].
         Qed.
       End Active.
-      
+
       Module Hints.
         #[export]
         Hint Resolve cons_Up :  instructions.
@@ -559,20 +547,17 @@ Module Assigned (Owner : DecidableTypeBoth).
 
   Import Coq.FSets.FMaps.
 
-  Inductive OptionSpec (A : Type) (P : A -> Prop) (Q : Prop) : option A -> Prop :=
-  | OptionSpec_Some : forall u : A, P u -> OptionSpec P Q (Some u)
-  | OptionSpec_None : Q -> OptionSpec P Q None.
-  #[global]
-  Hint Constructors OptionSpec : core.
-
-  Lemma OptionSpec_impl : forall (A : Type) (P P' : A -> Prop) (Q : Prop), (forall a : A, P a -> P' a) -> forall o, OptionSpec P Q o -> OptionSpec P' Q o.
-  Proof.
-    now intros A P P' Q P_impl_P' o [a P_a| q];
-      [left; apply P_impl_P'| right].
-  Qed.
-
   Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
     Include WFacts_fun Key Map.
+
+    Lemma find_spec : forall  [elt : Type] (m : Map.t elt) (x : Map.key),
+      OptionSpec (fun e : elt => Map.MapsTo x e m) (~ Map.In x m) (Map.find x m).
+    Proof.
+      intros elt m x.
+      destruct (find x m) eqn: find; constructor.
+        now apply find_mapsto_iff.
+      now apply not_find_in_iff.
+    Qed.
 
     Lemma add_not_in_iff : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
     ~ Map.In y (Map.add x e m) <-> ~ Key.eq x y /\ ~ Map.In y m.
@@ -580,7 +565,7 @@ Module Assigned (Owner : DecidableTypeBoth).
       intros elt m x y e.
       rewrite add_in_iff; tauto.
     Qed.
-  
+
     Lemma add_not_in : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
       ~ Key.eq x y ->
       ~ Map.In y m ->
@@ -643,7 +628,7 @@ Module Assigned (Owner : DecidableTypeBoth).
         (Coloring.add_lt coloring owner color)
         unused_colors
       | Down owner :: tail, unused_colors =>
-          bind (Coloring.find' coloring owner) (fun color => 
+          bind (Coloring.find' coloring owner) (fun color =>
           regular
             tail
             coloring
@@ -696,7 +681,7 @@ Module Assigned (Owner : DecidableTypeBoth).
     Import Instructions.Hints.
     Ltac my_auto :=
       auto with relations instructions.
-    
+
     Ltac Ok_intro :=
       intros
         (Ok_instructions &
@@ -716,7 +701,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           NoDup_unused_colors).
 
     Definition Synced
-      (instructions : list Instruction.t) 
+      (instructions : list Instruction.t)
       (coloring : Coloring.t) :=
       forall owner : Owner.t,
         (Active owner instructions ->
@@ -831,7 +816,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           exists owner'; split...
           apply Map.add_2...
         Qed.
-        
+
         Lemma cons_Down :
           Coloring.MapsTo coloring owner color ->
           Ok (Down owner :: instructions) coloring unused_colors ->

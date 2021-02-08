@@ -1,5 +1,7 @@
 -R . Shuffle
 
+Misc.v
+List.v
 Instruction.v
 Coloring.v
 Interval.v
