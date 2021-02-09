@@ -238,7 +238,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           now inversion_clear Ok_x₀.
         Qed.
 
-        Lemma cons_Up_iff : (* TODO *)
+        Lemma cons_Up_iff :
           Ok (Up op₀ :: x₀) <->
             Active op₀ x₀ /\
             Ok x₀.
@@ -1022,173 +1022,146 @@ Module Assigned (Owner : DecidableTypeBoth).
       End Facts.
     End OrdFacts.
 
-    Module IgnoreIndex (Index : Typ) (Import Data : Ord) <: Ord.
-      Definition t : Type :=
-        Index.t * Data.t.
-      
-      Definition index (self : t) : Index.t :=
-        fst self.
-      Definition data (self : t) : Data.t :=
-        snd self.
-
-      Definition eq (self other : t) : Prop :=
-        data self == data other.
-      Definition lt (self other : t) : Prop :=
-        data self < data other.
-      Definition le (self other : t) : Prop :=
-        data self <= data other.
-
-      Include EqLtLeNotation.
-
-      Definition eqb (self other : t) : bool :=
-        data self =? data other.
-      Definition ltb (self other : t) : bool :=
-        data self <? data other.
-      Definition leb (self other : t) : bool :=
-        data self <=? data other.
-
-      Include EqbNotation <+ LtbNotation <+ LebNotation.
-
-      Definition compare (self other : t) : comparison :=
-        data self ?= data other.
-
-      Include CmpNotation.
-
-      Instance eq_equiv : Equivalence eq.
-      Proof.
-        unfold eq.
-        split.
-            intros x.
-            reflexivity.
-          intros x y x_eq_y.
-          now symmetry.
-        intros x y z x_eq_y y_eq_z.
-        now transitivity (data y).
-      Qed.
-
-      Section CompareBasedOrder.
-        Variables x y : t.
-
-        Lemma compare_eq_iff : (x ?= y) = Eq <-> x == y.
-        Proof.
-          apply Data.compare_eq_iff.
-        Qed.
-
-        Lemma compare_lt_iff : (x ?= y) = Lt <-> x < y.
-        Proof.
-          apply Data.compare_lt_iff.
-        Qed.
-
-        Lemma compare_le_iff : (x ?= y) <> Gt <-> x <= y.
-        Proof.
-          apply Data.compare_le_iff.
-        Qed.
-
-        Lemma compare_antisym : (y ?= x) = CompOpp (x ?= y).
-        Proof.
-          apply Data.compare_antisym.
-        Qed.
-      End CompareBasedOrder.
-
-      Section BoolOrdSpecs.
-        Variables x y : t.
-
-        Lemma eqb_eq : x =? y = true <-> x == y.
-        Proof.
-          apply Data.eqb_eq.
-        Qed.
-
-        Lemma ltb_lt : x <? y = true <-> x < y.
-        Proof.
-          apply Data.ltb_lt.
-        Qed.
-
-        Lemma leb_le : x <=? y = true <-> x <= y.
-        Proof.
-          apply Data.leb_le.
-        Qed.
-      End BoolOrdSpecs.
-
-      Instance lt_strorder : StrictOrder lt.
-      Proof.
-        split.
-          intros x.
-          exact (irreflexivity (x := data x)).
-        intros x y z x_lt_y y_lt_z.
-        exact (transitivity (A := Data.t) x_lt_y y_lt_z).
-      Qed.
-
-      Instance lt_compat : Proper (eq ==> eq ==> iff) lt.
-      Proof.
-        intros x x' x_eq_x' y y' y_eq_y';
-        now apply Data.lt_compat.
-      Qed.
-    End IgnoreIndex.
+    Import Instructions.Ok.
 
     Module Min (Import O : Ord).
       Module Import Facts := OrdFacts O.
+      Module Import OTF := Ord_to_OTF O.
 
-      Definition Min (v : t) (x : list t) :=
-        List.In v x /\ Forall (fun u => v <= u) x.
+      Definition Min (x : list t) (n : nat) (v : t)  :=
+        ForNth (fun (m : nat) (w : t) =>
+          ((m < n)%nat -> v < w) /\
+          ((m > n)%nat -> v <= w)) x /\
+        Nth x n v.
+
+      Section Properties.
+        Variables
+          (u₀ : t)
+          (x₀ : list t)
+          (n : nat)
+          (v : t).
+
+        Lemma nil_inv :
+          ~ Min [] n v.
+        Proof.
+          intros (_ & n_to_v).
+          now apply Nth.nil_inv in n_to_v.
+        Qed.
+
+        Lemma nil_iff :
+          Min [] n v <-> False.
+        Proof.
+          split;
+            [apply nil_inv| easy].
+        Qed.
+
+        Lemma cons_le :
+          ForNth (fun n u => u₀ <= u) x₀ ->
+          Min (u₀ :: x₀) O u₀.
+        Proof.
+          intros u₀_le_x₀.
+          split; [| easy].
+          intros m w m_to_w.
+          split.
+            intros m_lt_O; contradict m_lt_O; apply Nat.nlt_0_r.
+          destruct m as [| m']; intros m_gt_O.
+            contradict m_gt_O; apply Nat.nlt_0_r.
+          now apply u₀_le_x₀ with m'.
+        Qed.
+
+        Lemma cons_gt :
+          u₀ > v ->
+          Min x₀ n v ->
+          Min (u₀ :: x₀) (S n) v.
+        Proof.
+          intros not_u₀_le_x₀ Min_n_v.
+          split; [| apply Min_n_v].
+          apply ForNth.cons; [split; order|].
+          intros m w m_to_w.
+          now unfold gt; rewrite <- 2!Nat.succ_lt_mono;
+            apply Min_n_v.
+        Qed.
+      End Properties.
 
       Fixpoint minimum_body
-        (v : t)
-        (x : list t) :
-        t :=
+        (x : list t)
+        (index : nat)
+        (n : nat)
+        (v : t) :
+        nat * t :=
         match x with
-        | [] => v
+        | [] => (n, v)
         | u₀ :: x₀ =>
           if u₀ <? v then
-            minimum_body u₀ x₀
+            minimum_body x₀ (S index) index u₀
           else
-            minimum_body v x₀
+            minimum_body x₀ (S index) n v
         end.
 
       Definition minimum
         (x : list t) :
-        option t :=
+        option (nat * t) :=
         match x with
         | [] => None
-        | u₀ :: x₀ => Some (minimum_body u₀ x₀)
+        | u₀ :: x₀ => Some (minimum_body x₀ 1 O u₀)
         end.
 
-      Lemma minimum_body_Forall_le : forall (x : list t) (v : t),
-        minimum_body v x <= v /\
-        Forall (fun u => minimum_body v x <= u) x.
+      Lemma minimum_body_spec : forall
+        (x : list t)
+        (index : nat)
+        (n : nat)
+        (v : t),
+        let (n', v') := minimum_body x index n v in
+        (v' <= v) /\
+        ((n' = n /\
+        v' = v /\
+        ForNth (fun (m : nat) (w : t) => v' <= w) x) \/
+        (v' < v /\
+          exists m : nat,
+            n' = index + m /\
+            Min x m v')).
       Proof.
-        induction x as [| u₀ x₀ IHx₀]; intros v; split.
-              reflexivity.
-            constructor.
-          simpl; destruct (ltb_spec u₀ v) as [u₀_lt_v| u₀_ge_v].
-            now transitivity u₀;
-              [apply IHx₀| apply le_lteq; left].
-            apply IHx₀.
-        simpl; destruct (ltb_spec u₀ v); constructor;
-          [..|transitivity v; [| assumption]|]; apply IHx₀.
-      Qed.
-
-      Lemma minimum_body_In : forall (x : list t) (v : t),
-        minimum_body v x = v \/
-        List.In (minimum_body v x) x.
-      Proof.
-        induction x as [| u₀ x₀ IHx₀]; intros v.
-          now left.
+        induction x as [| u₀ x₀ IHx₀]; intros index n v.
+          split; [| left].
+            reflexivity.
+            split; [easy|].
+            split; [easy|].
+            apply ForNth.nil.
         simpl; destruct (ltb_spec u₀ v) as [u₀_lt_v| u₀_ge_v].
-          now specialize IHx₀ with u₀ as [|];
-            right; [left| right].
-        now specialize IHx₀ with v as [|];
-          [left| right; right].
+          specialize (IHx₀ (S index) index u₀).
+          destruct (minimum_body x₀ (S index) index u₀) as [n' v'],
+            IHx₀ as [v'_le_u₀ IHx₀].
+          split; [transitivity u₀; order|].
+          destruct IHx₀ as [(-> & -> & u₀_le_x₀)| (v'_lt_u₀ & m' & IHx₀)]; right.
+            split; [easy|].
+            now exists O; split; [rewrite Nat.add_0_r| apply cons_le].
+          split; [now transitivity u₀|].
+          now exists (S m'); split;
+            [rewrite Nat.add_succ_r| apply cons_gt, IHx₀].
+        specialize (IHx₀ (S index) n v).
+        destruct (minimum_body x₀ (S index) n v) as [n' v'],
+          IHx₀ as [v'_le_u₀ IHx₀].
+        split; [easy|].
+        destruct IHx₀
+          as [(n'_eq_n & v'_eq_v & v'_le_x₀)| (v'_lt_v & m' & IHx₀)];
+          [left| right].
+          repeat split; try easy.
+          now apply ForNth.cons; [order|].
+        split; [order|].
+        now exists (S m'); split;
+          [rewrite Nat.add_succ_r| apply cons_gt; [order|]].
       Qed.
 
       Lemma minimum_spec : forall x : list t,
-        OptionSpec (fun v => Min v x) (x = []) (minimum x).
+        OptionSpec (fun min : nat * t => let (n, v) := min in Min x n v) (x = []) (minimum x).
       Proof.
         destruct x as [| u₀ x₀]; constructor.
           reflexivity.
-        split.
-          now specialize minimum_body_In with x₀ u₀ as [|];
-            [left| right].
-        constructor; apply minimum_body_Forall_le.
+        specialize minimum_body_spec with x₀ 1 O u₀ as IHx₀.
+        destruct (minimum_body x₀ 1 O u₀) as (n' & v').
+        now destruct IHx₀ as
+          [_ [(-> & -> & IHx₀)| (v'_lt_u₀ & m' & -> & IHx₀)]];
+          [apply cons_le| apply cons_gt].
       Qed.
     End Min.
   End Fixed.
