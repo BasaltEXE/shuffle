@@ -5,4 +5,5 @@ List.v
 Instruction.v
 Coloring.v
 Interval.v
-Assigned.v
+Assigned/Instructions.v
+Assigned/Dyer.v

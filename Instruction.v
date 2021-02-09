@@ -1,7 +1,7 @@
 Require Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Require Import Coq.Classes.RelationPairs.
 
-Module Instruction (Opcode Operand : DecidableType) <: DecidableType.
+Module Make (Opcode Operand : DecidableType) <: DecidableType.
   Include PairDecidableType Opcode Operand.
 
   Definition opcode (self : t) : Opcode.t :=
@@ -43,4 +43,4 @@ Module Instruction (Opcode Operand : DecidableType) <: DecidableType.
   Proof.
     firstorder.
   Defined.
-End Instruction.
+End Make.

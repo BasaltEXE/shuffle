@@ -1,10 +1,63 @@
 Set Implicit Arguments.
 
 Require Import Coq.Arith.Arith.
-Require Import Coq.Lists.List.
+Require Import Coq.Lists.SetoidList.
 Import ListNotations.
 
 Require Import Shuffle.Misc.
+
+Lemma Forall_cons_iff : forall
+  (A : Type)
+  (P : A -> Prop)
+  (u₀ : A)
+  (x₀ : list A),
+  Forall P (u₀ :: x₀) <->
+    P u₀ /\
+    Forall P x₀.
+Proof.
+  split.
+    intros Forall_x.
+    constructor.
+      now apply Forall_inv with x₀.
+    now apply Forall_inv_tail with u₀.
+  intros [P_u₀ Forall_x₀].
+  now constructor.
+Qed.
+
+Lemma not_In_Forall : forall
+  (A : Type)
+  (u : A)
+  (y : list A),
+  ~ List.In u y <->
+  Forall (fun v => u <> v) y.
+Proof.
+  induction y as [| v₀ y₀ IHy₀].
+    easy.
+  rewrite Forall_cons_iff, not_in_cons; firstorder.
+Qed.
+
+Section InA.
+  Variables
+    (A : Type)
+    (eqA : A -> A -> Prop)
+    (u v₀ : A)
+    (y₀ y : list A).
+
+  Lemma not_InA_cons :
+    ~ InA eqA u (v₀ :: y₀) <->
+      ~ eqA u v₀ /\
+      ~ InA eqA u y₀.
+  Proof.
+    rewrite InA_cons; firstorder.
+  Qed.
+
+  Lemma not_InA_iff :
+    ~ InA eqA u y <->
+    Forall (fun v => ~ eqA u v) y.
+  Proof.
+    now rewrite InA_altdef, <- Forall_Exists_neg.
+  Qed.
+End InA.
 
 Module Nth.
   Notation Nth x n v :=
