@@ -59,6 +59,30 @@ Section InA.
   Qed.
 End InA.
 
+Section Subsets.
+  Variables
+    (A : Type)
+    (P : list A -> Prop).
+
+  Inductive Subsets  : list A -> Prop :=
+  | Subsets_nil :
+    P [] ->
+    Subsets []
+  | Subsets_cons : forall (u₀ : A) (x₀ : list A),
+    P (u₀ :: x₀) ->
+    Subsets x₀ ->
+    Subsets (u₀ :: x₀).
+
+  Lemma Subsets_inv : forall
+    x : list A,
+    Subsets x ->
+    P x.
+  Proof.
+    intros x Subsets_x.
+    now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
+  Qed.
+End Subsets.
+
 Module Nth.
   Notation Nth x n v :=
     (nth_error x n = Some v).

@@ -3,90 +3,106 @@ Set Implicit Arguments.
 Require Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Require Import Coq.Structures.Orders Coq.Structures.OrdersFacts.
 
-Require Import Coq.Lists.List Coq.Lists.SetoidList.
+Require Import Coq.Lists.SetoidList.
+Import ListNotations.
 
 Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Arith.Arith.
 
 Require Coq.MSets.MSets.
-Require Coq.FSets.FMaps.
-
-Import ListNotations.
+Require Import Coq.FSets.FMaps.
 
 Require Import Shuffle.Misc.
 Require Import Shuffle.List.
 Require Shuffle.Assigned.Instructions.
 Require Import Shuffle.Coloring.
 
-Module Assigned (Owner : DecidableTypeBoth).
-  Import Coq.FSets.FMaps.
+Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
+  Include WFacts_fun Key Map.
 
-  Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
-    Include WFacts_fun Key Map.
+  Lemma find_spec : forall
+    [elt : Type]
+    (m : Map.t elt)
+    (x : Map.key),
+    OptionSpec
+      (fun e : elt => Map.MapsTo x e m)
+      (~ Map.In x m)
+      (Map.find x m).
+  Proof.
+    intros elt m x.
+    destruct (find x m) eqn: find; constructor.
+      now apply find_mapsto_iff.
+    now apply not_find_in_iff.
+  Qed.
 
-    Lemma find_spec : forall  [elt : Type] (m : Map.t elt) (x : Map.key),
-      OptionSpec (fun e : elt => Map.MapsTo x e m) (~ Map.In x m) (Map.find x m).
-    Proof.
-      intros elt m x.
-      destruct (find x m) eqn: find; constructor.
-        now apply find_mapsto_iff.
-      now apply not_find_in_iff.
-    Qed.
+  Lemma add_not_in_iff : forall
+    [elt : Type]
+    (m : Map.t elt)
+    (x y : Map.key)
+    (e : elt),
+    ~ Map.In y (Map.add x e m) <->
+      ~ Key.eq x y /\
+      ~ Map.In y m.
+  Proof.
+    intros elt m x y e.
+    rewrite add_in_iff; tauto.
+  Qed.
 
-    Lemma add_not_in_iff : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
-    ~ Map.In y (Map.add x e m) <-> ~ Key.eq x y /\ ~ Map.In y m.
-    Proof.
-      intros elt m x y e.
-      rewrite add_in_iff; tauto.
-    Qed.
+  Lemma add_not_in : forall
+    [elt : Type]
+    (m : Map.t elt)
+    (x y : Map.key)
+    (e : elt),
+    ~ Key.eq x y ->
+    ~ Map.In y m ->
+    ~ Map.In y (Map.add x e m).
+  Proof.
+    intros elt m x y e.
+    rewrite add_in_iff; tauto.
+  Qed.
+End WFacts_fun'.
 
-    Lemma add_not_in : forall [elt : Type] (m : Map.t elt) (x y : Map.key) (e : elt),
-      ~ Key.eq x y ->
-      ~ Map.In y m ->
-      ~ Map.In y (Map.add x e m).
-    Proof.
-      intros elt m x y e.
-      rewrite add_in_iff; tauto.
-    Qed.
-  End WFacts_fun'.
+Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
+  Module Coloring := Coloring Owner Map.
+  Module Import Instructions := Instructions.Make Owner.
+  Import Instructions.Notations.
 
-  Section Subsets.
-    Variables (A : Type) (P : list A -> Prop).
+  Module Import Facts := WFacts_fun' Owner Map.
 
-    Inductive Subsets  : list A -> Prop :=
-    | Subsets_nil : P [] -> Subsets []
-    | Subsets_cons : forall (u₀ : A) (x₀ : list A),
-      P (u₀ :: x₀) -> Subsets x₀ -> Subsets (u₀ :: x₀).
+  Ltac split_left :=
+    split; [| try split_left].
+  Ltac my_auto :=
+    auto with relations instructions.
 
-    Lemma Subsets_inv : forall x : list A,
-      Subsets x -> P x.
-    Proof.
-      intros x Subsets_x.
-      now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
-    Qed.
-  End Subsets.
+  Import Instructions.Ok.
+  Import Instructions.Hints.
 
-  Module Regular (Map : WSfun Owner).
-    Module Import Facts := WFacts_fun' Owner Map.
+  Definition Synced
+    (instructions : list Instruction.t)
+    (coloring : Coloring.t) :
+    Prop := forall
+      owner : Owner.t,
+      (Active owner instructions ->
+      Coloring.Contains coloring owner) /\
+      (Ahead owner instructions ->
+      ~ Coloring.Contains coloring owner).
 
-    Module Coloring := Coloring Owner Map.
-    Module Import Instructions := Instructions.Make Owner.
-    Import Instructions.Notations.
-
+  Module Regular.
     Definition Color_Ok
       (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (color : nat) :
       Prop :=
-      (forall (owner : Owner.t) (n : nat),
+      (forall
+        (owner : Owner.t)
+        (n : nat),
         Active owner instructions ->
         Coloring.MapsTo coloring owner n ->
         color <> n) /\
-      (exists owner : Owner.t,
+      (exists
+        owner : Owner.t,
         Coloring.MapsTo coloring owner color /\
         Absent owner instructions).
-
-    Import Instructions.Ok.
 
     Fixpoint regular
       (instructions : list Instruction.t)
@@ -94,16 +110,18 @@ Module Assigned (Owner : DecidableTypeBoth).
       (unused_colors : list nat) :
       option Coloring.t :=
       match instructions, unused_colors with
-      | Up owner :: tail, [] => regular
-        tail
-        (Coloring.add_eq coloring owner)
-        []
-      | Up owner :: tail, color :: unused_colors => regular
-        tail
-        (Coloring.add_lt coloring owner color)
-        unused_colors
+      | Up owner :: tail, [] =>
+        regular
+          tail
+          (Coloring.add_eq coloring owner)
+          []
+      | Up owner :: tail, color :: unused_colors =>
+        regular
+          tail
+          (Coloring.add_lt coloring owner color)
+          unused_colors
       | Down owner :: tail, unused_colors =>
-          bind (Coloring.find' coloring owner) (fun color =>
+          bind(Coloring.find' coloring owner) (fun color =>
           regular
             tail
             coloring
@@ -137,9 +155,6 @@ Module Assigned (Owner : DecidableTypeBoth).
       End Properties.
     End AssumptionType.
 
-    Notation ActiveTo owner color coloring instructions :=
-      (Active owner instructions /\ Coloring.MapsTo coloring owner color).
-
     Definition RealColoring
       (coloring : Coloring.t)
       (instructions : list Instruction.t) :
@@ -153,41 +168,14 @@ Module Assigned (Owner : DecidableTypeBoth).
           Coloring.MapsTo coloring owner' color' ->
           color <> color'.
 
-    Import Instructions.Hints.
-    Ltac my_auto :=
-      auto with relations instructions.
-
-    Ltac Ok_intro :=
-      intros
+    Ltac Ok_destruct ok :=
+      destruct ok as
         (Ok_instructions &
         Ok_coloring &
         Synced_coloring &
         Proper_coloring &
         Ok_unused_colors &
         NoDup_unused_colors).
-
-      Ltac Ok_destruct ok :=
-        destruct ok as
-          (Ok_instructions &
-          Ok_coloring &
-          Synced_coloring &
-          Proper_coloring &
-          Ok_unused_colors &
-          NoDup_unused_colors).
-
-    Definition Synced
-      (instructions : list Instruction.t)
-      (coloring : Coloring.t) :=
-      forall owner : Owner.t,
-        (Active owner instructions ->
-        Coloring.Contains coloring owner) /\
-        (Ahead owner instructions ->
-        ~ Coloring.Contains coloring owner).
-
-    Ltac split_left :=
-      split; [| try split_left].
-
-    Import Instructions.Ok.Hints.
 
     Module Assumption <: AssumptionType.
       Definition Ok
@@ -213,7 +201,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           Ok (Up owner :: instructions) coloring [] ->
           Ok instructions (Coloring.add_eq coloring owner) [].
         Proof with my_auto.
-          Ok_intro.
+          intros ok; Ok_destruct ok.
           assert (not_In_owner : ~ Coloring.Contains coloring owner).
             apply Synced_coloring...
           unfold Ok.
@@ -246,7 +234,7 @@ Module Assigned (Owner : DecidableTypeBoth).
           Ok (Up owner :: instructions) coloring (color :: unused_colors) ->
           Ok instructions (Coloring.add_lt coloring owner color) unused_colors.
         Proof with my_auto.
-          Ok_intro.
+          intros ok; Ok_destruct ok.
           apply Forall_cons_iff in Ok_unused_colors as (Ok_color & Ok_unused_colors).
           apply NoDup_cons_iff in NoDup_unused_colors as (not_In_color & NoDup_unused_colors).
           assert (not_In_owner : ~ Coloring.Contains coloring owner).
@@ -457,13 +445,7 @@ Module Assigned (Owner : DecidableTypeBoth).
     Qed.
   End Regular.
 
-  Module Fixed (Map : WSfun Owner).
-    Module Import Facts := WFacts_fun' Owner Map.
-
-    Module Coloring := Coloring Owner Map.
-    Module Import Instructions := Instructions.Make Owner.
-    Import Instructions.Notations.
-
+  Module Fixed.
     Module Type Ord.
       Include EqLtLe'.
       Include HasBoolOrdFuns'.
@@ -497,8 +479,6 @@ Module Assigned (Owner : DecidableTypeBoth).
         Include BoolOrderFacts O O O O O.
       End Facts.
     End OrdFacts.
-
-    Import Instructions.Ok.
 
     Module Min (Import O : Ord).
       Module Import Facts := OrdFacts O.
@@ -702,12 +682,6 @@ Module Assigned (Owner : DecidableTypeBoth).
             Active owner instructions /\
             Coloring.MapsTo coloring owner color) /\
         cardinal owners = count.
-
-    Ltac split_left :=
-      split; [| try split_left].
-    Ltac my_auto :=
-      auto with relations instructions.
-    Import Instructions.Hints.
 
     Module Assumptions.
       Definition Ok
@@ -940,4 +914,4 @@ Module Assigned (Owner : DecidableTypeBoth).
         Qed.
     End Assumptions.
   End Fixed.
-End Assigned.
+End Make.
