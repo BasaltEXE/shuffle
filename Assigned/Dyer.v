@@ -75,7 +75,8 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
 End WFacts_fun'.
 
 Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
-  Module Coloring := Coloring Owner Map.
+  Module Coloring := Coloring.Make Owner Map.
+
   Module Import Instructions := Instructions.Make Owner.
   Import Instructions.Notations.
 
@@ -133,7 +134,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           (Coloring.add_lt coloring owner color)
           unused_colors
       | Down owner :: tail, unused_colors =>
-          bind(Coloring.find' coloring owner) (fun color =>
+          bind(Coloring.find coloring owner) (fun color =>
           regular
             tail
             coloring
@@ -230,8 +231,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
             apply add_not_in, Synced_coloring...
             enough (Active owner instructions)...
           intros x y x_neq_y Active_x Active_y m n.
-          unfold Coloring.MapsTo; simpl.
-          rewrite ?add_mapsto_iff.
+          simpl; rewrite ?add_mapsto_iff.
           intros
             [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
             [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
@@ -265,8 +265,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
               intros Ahead_owner.
               apply add_not_in, Synced_coloring; enough (Active owner instructions)...
             intros x y x_neq_y Active_x Active_y m n.
-            unfold Coloring.MapsTo; simpl.
-            rewrite ?add_mapsto_iff.
+            simpl; rewrite ?add_mapsto_iff.
             intros
               [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
               [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
@@ -278,9 +277,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           eapply Forall_impl, Forall_and with (1 := Ok_unused_colors), not_In_Forall, not_In_color.
           intros n ((Proper_n & Synced_n) & color_neq_n).
           split.
-            unfold Coloring.MapsTo; simpl.
             intros owner' n' Active_owner'.
-            rewrite add_mapsto_iff.
+            simpl; rewrite add_mapsto_iff.
             intros [(owner_eq_owner' & <-)| (owner_neq_owner' & owner'_to_n)].
               auto with arith.
             apply Proper_n with owner'...
@@ -343,7 +341,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
       (unused_colors : list nat),
       Assumption.Ok instructions coloring unused_colors ->
       OptionSpec (fun result : Coloring.t =>
-        Coloring.Ok.t result /\
+        Coloring.Ok result /\
         Subsets (RealColoring result) instructions /\
         Synced' instructions coloring result)
         False
@@ -399,7 +397,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         apply Map.add_3 with owner color,
           Synced_result...
       simpl in *.
-      destruct (Coloring.find' coloring owner) as [color|] eqn: find.
+      destruct (Coloring.find coloring owner) as [color|] eqn: find.
         apply find_mapsto_iff in find as owner_to_color.
         pose proof (ok' := Assumption.cons_Down owner_to_color ok).
         specialize IHinstructions with (1 := ok').
@@ -436,7 +434,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
       (forall owner : Owner.t,
         In (Down owner) instructions -> Ahead owner instructions) ->
       OptionSpec (fun result =>
-        Coloring.Ok.t result /\
+        Coloring.Ok result /\
         Subsets (RealColoring result) instructions)
         False
         (color instructions).
@@ -648,7 +646,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           fixed x₀ coloring counts
           )))
       | Down op₀ :: x₀ =>
-          bind (Coloring.find' coloring op₀) (fun color =>
+          bind (Coloring.find coloring op₀) (fun color =>
           bind (nth_error counts color) (fun count =>
           bind (replace counts color (pred count)) (fun counts =>
             fixed x₀ coloring counts)))
@@ -672,7 +670,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         c <> c' ->
         ~ Owner.eq p p'.
     Proof.
-      unfold Coloring.MapsTo.
       intros p p' c c' p_to_c p'_to_c' c_neq_c'.
       contradict c_neq_c'; rewrite c_neq_c' in p_to_c.
       now apply MapsTo_fun with (1 := p_to_c).
@@ -725,14 +722,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           (Ok x₀ coloring)
           False
           (
-            bind (Coloring.find' coloring p₀) (fun color =>
+            bind (Coloring.find coloring p₀) (fun color =>
             bind (nth_error counts color) (fun count =>
             replace counts color (pred count)))
           ).
       Proof with my_auto.
         intros p₀ x₀ coloring counts ok.
         Ok_destruct ok.
-        unfold Coloring.find'; simpl.
 
         assert (Ok_x₀ : Instructions.Ok x₀) by
           now apply Instructions.Ok.cons_inv with (Down p₀).
@@ -883,7 +879,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
               (owners & owners_iff & owners_length).
 
               exists (add p₀ owners); split.
-                unfold Coloring.MapsTo in *;
                 unfold labeling in *.
                 simpl in *.
 
@@ -911,8 +906,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
             (owners & owners_iff & owners_length);
               [now rewrite H|].
             exists owners; split; [| assumption].
-            unfold Coloring.MapsTo; simpl.
-            intros p.
+            intros p; simpl.
             rewrite owners_iff.
             split; intros (Active_p & p_to_c).
               enough (~ Owner.eq p₀ p) by
