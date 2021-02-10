@@ -35,6 +35,18 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
     now apply not_find_in_iff.
   Qed.
 
+  Lemma add_eq_mapsto_iff : forall
+    [elt : Type]
+    (m : Map.t elt)
+    (x y : Map.key)
+    (e e' : elt),
+    Key.eq x y ->
+      MapsTo y e' (add x e m) <->
+      e = e'.
+  Proof.
+    intros; rewrite add_mapsto_iff; tauto.
+  Qed.
+
   Lemma add_not_in_iff : forall
     [elt : Type]
     (m : Map.t elt)
@@ -691,7 +703,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Prop :=
         Instructions.Ok instructions /\
         Coloring.Ok coloring /\
-        (Coloring.colors coloring <= length counts) /\ (* TODO *)
+        (Coloring.colors coloring <= length counts) /\
         Synced instructions coloring /\
         ForNth (Count_Ok instructions coloring) counts /\
         (forall color : nat,
@@ -721,73 +733,85 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         intros p₀ x₀ coloring counts ok.
         Ok_destruct ok.
         unfold Coloring.find'; simpl.
-        destruct (find_spec (Coloring.labeling coloring) p₀) as [c₀ p₀_to_c₀| not_In_p₀].
-        2: {
-          contradict not_In_p₀.
+
+        assert (Ok_x₀ : Instructions.Ok x₀) by
+          now apply Instructions.Ok.cons_inv with (Down p₀).
+        assert (Active_p₀_x : Active p₀ (Down p₀ :: x₀))...
+        assert (Absent_p₀_x₀ : Absent p₀ x₀)...
+
+        assert (In_p₀ : Coloring.Contains coloring p₀).
           apply Synced_coloring...
-        }
-        assert (c₀_lt_counts : c₀ < length counts).
-          now apply lt_le_trans with (Coloring.colors coloring);
-            [apply Ok_coloring; exists p₀|].
-        simpl; specialize NthError.lt_Some with (1 := c₀_lt_counts) as (v₀ & c₀_to_v₀); rewrite c₀_to_v₀.
-        simpl; specialize Replace.lt_Some with (v := pred v₀) (1 := c₀_lt_counts) as
-          (counts' & -> & _ & counts_eq_counts' & c₀_to_pred & H).
+        destruct (find_spec (Coloring.labeling coloring) p₀) as
+          [c₀ p₀_to_c₀| not_In_p₀];
+          [| contradiction]; simpl.
+
+        assert (c₀_lt_colors : c₀ < Coloring.colors coloring) by
+          now apply Ok_coloring; exists p₀.
+        assert (c₀_lt_counts : c₀ < length counts) by
+          now apply lt_le_trans with (Coloring.colors coloring).
+        specialize NthError.lt_Some with (1 := c₀_lt_counts) as
+          (v₀ & c₀_to_v₀); rewrite c₀_to_v₀; simpl.
+        unfold ForNth in Ok_counts.
+        pose proof Ok_counts as H;
+          specialize H with (1 := c₀_to_v₀) as
+          (owners₀ & owners₀_iff & owners₀_length).
+        specialize Replace.lt_Some with (x := counts) (1 := c₀_lt_counts) as
+          (counts' & -> & _ & counts_eq_counts' & c₀_to_pred_v₀ & H₀').
+        simpl.
         constructor; split_left.
-                  now apply Instructions.Ok.cons_inv in Ok_instructions.
+                  assumption.
                 assumption.
               now rewrite <- counts_eq_counts'.
             split; intros ?; apply Synced_coloring...
-          intros n v' n_to_v'.
-          assert (n_lt_counts : n < length counts).
+          intros c v' c_to_v'.
+          assert (c_lt_counts : c < length counts).
             rewrite counts_eq_counts'.
             now apply NthError.Some_lt with v'.
-          specialize NthError.lt_Some with (1 := n_lt_counts) as
-            (v & n_to_v).
+          specialize NthError.lt_Some with (1 := c_lt_counts) as
+            (v & c_to_v).
           unfold ForNth in Ok_counts.
-          specialize Ok_counts with (1 := n_to_v) as
+          specialize Ok_counts with (1 := c_to_v) as
             (owners & owners_iff & owners_length).
-          destruct (Nat.eq_dec n c₀) as [n_eq_c₀| n_neq_c₀].
+          destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
             2: {
               exists owners.
-              assert (Some v = Some v') as [= <-].
-                rewrite <- n_to_v, <- n_to_v'.
-                now apply H.
-              split_left...
-              intros p; split.
-                intros In_p.
-                apply owners_iff in In_p as (Active_p & p_to_color).
-                split; [| assumption].
-                apply Instructions.Active.cons_Down_inv with (1 := Active_p).
-                apply StronglyExtensional with coloring c₀ n; [easy..|].
-                now change (complement Logic.eq c₀ n); symmetry.
-              intros (Active_p & p_to_n); apply owners_iff.
+              assert (Some v = Some v') as [= <-] by
+                now rewrite <- c_to_v, <- c_to_v'; apply H₀'.
               split; [| assumption].
-              now apply Instructions.Active.cons_Down.
-            }
-            exists (M.remove p₀ owners); split_left...
               intros p.
-              rewrite M.remove_spec, owners_iff, n_eq_c₀, Instructions.Active.cons_Down_iff; [| assumption].
+              rewrite owners_iff, Instructions.Active.cons_Down_iff by
+                assumption.
+              enough (Coloring.MapsTo coloring p c -> ~ Owner.eq p₀ p) by tauto.
+              intros p_to_c.
+              now apply StronglyExtensional with coloring c₀ c;
+                [..| change (complement Logic.eq c₀ c)].
+            }
+            exists (M.remove p₀ owners); split.
+              intros p.
+              rewrite
+                M.remove_spec,
+                owners_iff,
+                Instructions.Active.cons_Down_iff by assumption.
+              enough ((Owner.eq p₀ p \/ Active p x₀) /\
+              ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
               assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
-              split; [tauto|].
-              intros (Active_p & p_to_c₀).
-              enough (~ Owner.eq p p₀) by tauto.
-              enough (Absent p₀ x₀)...
-            rewrite n_eq_c₀ in *.
-            assert (S (cardinal (remove p₀ owners)) = cardinal owners).
-              apply remove_cardinal_1, owners_iff...
-            assert (Some v = Some v₀) as [= ->] by
-              now transitivity (nth_error counts c₀).
-            assert (Some v' = Some (pred v₀)) as [= ->] by
-              now transitivity (nth_error counts' c₀).
-            rewrite <- owners_length.
-            change (pred (S (cardinal (remove p₀ owners))) = pred (cardinal owners)).
-            now f_equal.
+              enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
+            change (pred (S (cardinal (remove p₀ owners))) = v').
+            rewrite remove_cardinal_1, owners_length; [| apply owners_iff]...
+            enough (Some v = Some v₀ /\ Some v' = Some (pred v₀)) as
+              ([= ->] & [= ->]) by reflexivity.
+            now rewrite <- c_to_v, <- c_to_v', c₀_to_v₀, c₀_to_pred_v₀.
           intros c (colors_le_c & c_lt_counts').
-          rewrite <- (H c).
+          rewrite <- (H₀' c).
             now apply Ok_zero; rewrite counts_eq_counts'.
           change (complement Logic.eq c c₀); symmetry.
-          now apply Nat.lt_neq, lt_le_trans with (Coloring.colors coloring);
-            [apply Ok_coloring; exists p₀|].
+          now apply Nat.lt_neq, lt_le_trans with (Coloring.colors coloring).
+        Qed.
+
+        Lemma add_eq_iff : forall s x y,  E.eq x y -> (In y (add x s) <-> True).
+        Proof.
+          intros.
+          rewrite add_iff; tauto.
         Qed.
 
         Lemma cons_Up : forall p₀ x₀ coloring counts,
@@ -806,39 +830,43 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Proof with my_auto.
           intros p₀ x₀ coloring counts counts_neq_nil ok.
           Ok_destruct ok.
-          destruct (Min'.minimum_spec counts) as [[c v] Min_v| counts_eq_nil];
+           set (labeling := Coloring.labeling coloring) in *.
+          set (colors := Coloring.colors coloring) in *.
+
+          assert (Ok_x₀ : Instructions.Ok x₀) by
+            now apply Instructions.Ok.cons_inv with (Up p₀).
+          assert (Ahead_p₀_x : Ahead p₀ (Up p₀ :: x₀))...
+          assert (Active_p₀_x₀ : Active p₀ x₀)...
+
+          destruct (Min'.minimum_spec counts) as [(c₀ & v₀) (Min_v₀ & c₀_to_v₀)| counts_eq_nil];
             [| now destruct counts]; simpl.
-          set (colors := Coloring.colors coloring).
-          destruct Min_v as (Min_v & c_to_v).
-          assert (c_lt_counts : c < length counts) by
-            now apply NthError.Some_lt with v.
-          assert (c_le_colors : c <= colors).
+          rewrite c₀_to_v₀; simpl.
+
+          assert (c₀_lt_counts : c₀ < length counts) by
+            now apply NthError.Some_lt with v₀.
+          assert (c₀_le_colors : c₀ <= colors).
             apply not_gt.
-            specialize Nat.nlt_0_r with v as c_gt_colors; contradict c_gt_colors.
-            assert (colors_to_0 : Nth counts colors O)  by
-              now apply Ok_zero; split; [| transitivity c].
-            now apply Min_v with (1 := colors_to_0).
+            specialize Nat.nlt_0_r with v₀ as c₀_gt_colors; contradict c₀_gt_colors.
+            assert (colors_to_0 : Nth counts colors O) by
+              now apply Ok_zero; split; [| transitivity c₀].
+            now apply Min_v₀ with (1 := colors_to_0).
           assert (not_In_p₀ : ~ Coloring.Contains coloring p₀).
             apply Synced_coloring...
-          assert (max_r : c < colors -> Init.Nat.max (S c) colors = colors).
-            now intros c_lt_colors; apply Nat.max_r.
-          assert (max_l : c = colors -> Init.Nat.max (S c) colors = S colors).
+          assert (max_r : c₀ < colors -> Init.Nat.max (S c₀) colors = colors).
+            now intros c₀_lt_colors; apply Nat.max_r.
+          assert (max_l : c₀ = colors -> Init.Nat.max (S c₀) colors = S colors).
             now intros ->; apply Nat.max_l, Nat.le_succ_diag_r.
-          rewrite c_to_v; simpl.
-          specialize Replace.lt_Some with (v := S v) (1 := c_lt_counts) as
-            (counts' & -> & Ok_counts').
-          destruct Ok_counts' as (_ & counts_eq_counts' & c_to_S_v & H).
-          simpl.
+
+          specialize Replace.lt_Some with (v := S v₀) (1 := c₀_lt_counts) as
+            (counts' & -> & _ & counts_eq_counts' & c₀_to_S_v₀ & H); simpl.
           constructor; change
-              (Ok x₀ (max (S c) colors, Map.add p₀ c (Coloring.labeling coloring)) counts').
+              (Ok x₀ (max (S c₀) colors, Map.add p₀ c₀ labeling) counts').
           split_left.
-                    now inversion Ok_instructions.
-                  apply le_lt_or_eq in c_le_colors as
-                    [c_lt_colors| c_eq_colors].
-                    rewrite max_r by assumption.
-                    apply Coloring.Ok.add_lt...
-                  rewrite max_l, c_eq_colors by assumption.
-                  apply Coloring.Ok.add_eq...
+                    assumption.
+                  apply le_lt_or_eq in c₀_le_colors as
+                    [c₀_lt_colors| ->].
+                    rewrite max_r; [apply Coloring.Ok.add_lt|]...
+                  rewrite max_l; [apply Coloring.Ok.add_eq|]...
                 rewrite <- counts_eq_counts'.
                 now apply Nat.max_lub.
               intros p; split.
@@ -847,69 +875,68 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
                   [left| right; apply Synced_coloring]...
               intros Ahead_p.
               apply add_not_in_iff; split...
-                enough (Active p₀ x₀)...
               apply Synced_coloring...
-            intros c' v' c'_to_v'.
-            destruct (Nat.eq_dec c' c) as [c'_eq_c| c'_neq_c].
-              rewrite c'_eq_c in *.
+            intros c v c_to_v.
+            destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
               unfold ForNth in Ok_counts.
-              specialize Ok_counts with (1 := c_to_v) as
+              specialize Ok_counts with (1 := c₀_to_v₀) as
               (owners & owners_iff & owners_length).
-              exists (add p₀ owners).
-              split.
-                intro p.
-                rewrite add_iff, owners_iff.
-                split.
-                  unfold Coloring.MapsTo; simpl.
-                  intros [<-| (Active_p & p_to_c)].
-                    split.
-                      now apply Instructions.Ok.cons_Up_inv in Ok_instructions.
-                    now apply Map.add_1.
-                  assert (~ Owner.eq p₀ p).
-                    enough (Ahead p₀ (Up p₀ :: x₀))...
-                  split.
-                    now apply Instructions.Active.cons_Up_inv with p₀.
-                  now apply Map.add_2.
-                unfold Coloring.MapsTo; simpl.
-                intros (Active_p & p_to_c).
-                apply add_mapsto_iff in p_to_c as [(p₀_eq_p & _)| (p₀_neq_p & p_to_c)]; [now left| right].
-                split...
-              rewrite add_cardinal_2.
-              rewrite owners_length.
-              enough (Some (S v) = Some v') as [=] by easy.
-                now transitivity (nth_error counts' c).
-              intros In_p₀.
-              apply owners_iff in In_p₀ as (Active_p₀ & _).
-              enough (~ Owner.eq p₀ p₀) by auto.
-              enough (Ahead p₀ (Up p₀ :: x₀))...
-            rewrite <- H in c'_to_v' by assumption.
-            unfold ForNth in Ok_counts.
-            specialize Ok_counts with (1 := c'_to_v') as
-              (owners & owners_iff & owners_length).
+
+              exists (add p₀ owners); split.
+                unfold Coloring.MapsTo in *;
+                unfold labeling in *.
+                simpl in *.
+
+                intro p; destruct (Owner.eq_dec p₀ p) as
+                  [p₀_eq_p| p₀_neq_p].
+                  symmetry in p₀_eq_p.
+                  now rewrite
+                    add_eq_iff,
+                    add_eq_mapsto_iff,
+                    p₀_eq_p.
+                now rewrite
+                  add_neq_iff,
+                  owners_iff,
+                  add_neq_mapsto_iff,
+                  Instructions.Active.cons_Up_neq_iff.
+              rewrite add_cardinal_2, owners_length.
+                now enough (Some (S v₀) = Some v) as [=];
+                  [| transitivity (nth_error counts' c₀)].
+              assert (In_p₀ : Owner.eq p₀ p₀) by reflexivity;
+                contradict In_p₀.
+              enough (Active p₀ (Up p₀ :: x₀));
+                [| apply owners_iff]...
+            unfold Count_Ok, ForNth in *.
+            specialize Ok_counts with c v as
+            (owners & owners_iff & owners_length);
+              [now rewrite H|].
             exists owners; split; [| assumption].
             unfold Coloring.MapsTo; simpl.
             intros p.
             rewrite owners_iff.
-            split; intros (Active_p & p_to_c').
-              split.
-                now apply Instructions.Active.cons_Up_inv with p₀.
-              apply Map.add_2; [enough (Ahead p₀ (Up p₀ :: x₀))|]...
-            apply add_mapsto_iff in p_to_c' as [(_ & c_eq_c')| (p₀_neq_p & p_to_c')]; [now contradict c'_neq_c|].
+            split; intros (Active_p & p_to_c).
+              enough (~ Owner.eq p₀ p) by
+              now rewrite
+                <- Instructions.Active.cons_Up_neq_iff with (p₀ := p₀),
+                add_neq_mapsto_iff...
+            apply add_mapsto_iff in p_to_c as
+              [(_ & c₀_eq_c)| (p₀_neq_p & p_to_c₀)];
+              [now contradict c_neq_c₀|].
             split...
           rewrite <- counts_eq_counts'.
-          intros c' (colors'_le_c & c_lt_counts').
-          apply le_lt_or_eq in c_le_colors as
-            [c_lt_colors| c_eq_colors].
-            rewrite max_r in colors'_le_c by assumption; simpl in colors'_le_c.
-            rewrite <- (H c').
+          intros c (colors'_le_c₀ & c₀_lt_counts').
+          apply le_lt_or_eq in c₀_le_colors as
+            [c₀_lt_colors| c₀_eq_colors].
+            rewrite max_r in colors'_le_c₀ by assumption; simpl in colors'_le_c₀.
+            rewrite <- (H c).
               now apply Ok_zero.
-            enough (c <> c') by auto with arith.
+            enough (c₀ <> c) by auto with arith.
             now apply Nat.lt_neq, lt_le_trans with colors.
-          rewrite max_l in colors'_le_c by assumption; simpl in colors'_le_c.
-          rewrite <- (H c').
+          rewrite max_l in colors'_le_c₀ by assumption; simpl in colors'_le_c₀.
+          rewrite <- (H c).
             apply Ok_zero; auto with arith.
-          rewrite c_eq_colors.
-          enough (colors <> c') by auto with arith.
+          rewrite c₀_eq_colors.
+          enough (colors <> c) by auto with arith.
           now apply Nat.lt_neq.
         Qed.
     End Assumptions.
