@@ -253,6 +253,13 @@ Module Replace.
       | _, _ => None
       end.
 
+  Notation Replace
+    x
+    n
+    v
+    y :=
+    (replace x n v = Some y).
+
   Definition Ok
     (A : Type)
     (x : list A)
@@ -308,7 +315,7 @@ Module Replace.
     Qed.
 
     Lemma Some_iff :
-      replace x n v = Some y <->
+      Replace x n v y <->
       Ok x n v y.
     Proof with (auto with arith).
       unfold Ok; revert x n y.
@@ -349,7 +356,7 @@ Module Replace.
     Qed.
 
     Lemma Some_lt :
-      replace x n v = Some y ->
+      Replace x n v y ->
         Ok x n v y.
     Proof.
       apply Some_iff.
@@ -376,7 +383,7 @@ Module Replace.
     Lemma lt_Some :
       n < length x ->
       exists y : list A,
-        replace x n v = Some y /\
+        Replace x n v y /\
         Ok x n v y.
     Proof.
       intros n_lt_x.

@@ -35,6 +35,22 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
     now apply not_find_in_iff.
   Qed.
 
+  Lemma find_In_Some : forall
+    [elt : Type]
+    (m : Map.t elt)
+    (x : Map.key),
+    Map.In x m ->
+    exists e : elt,
+      Map.find x m = Some e /\
+      Map.MapsTo x e m.
+  Proof.
+    intros elt m x m_in_x.
+    destruct (find x m) as [e|] eqn: find.
+      exists e.
+      now split; [| apply find_mapsto_iff].
+    now contradict find; apply in_find_iff.
+  Qed.
+
   Lemma add_eq_mapsto_iff : forall
     [elt : Type]
     (m : Map.t elt)
@@ -494,11 +510,36 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
       Module Import Facts := OrdFacts O.
       Module Import OTF := Ord_to_OTF O.
 
-      Definition Min (x : list t) (n : nat) (v : t)  :=
+      Definition Min
+        (x : list t)
+        (n : nat)
+        (v : t) :
+        Prop :=
         ForNth (fun (m : nat) (w : t) =>
           ((m < n)%nat -> v < w) /\
           ((m > n)%nat -> v <= w)) x /\
         Nth x n v.
+
+      Lemma Min_fun : forall x m v n w,
+        Min x m v ->
+        Min x n w ->
+        m = n /\ v = w.
+      Proof.
+        intros x m v n w (Min_m_v & m_to_v) (Min_n_w & n_to_w).
+        unfold ForNth in *.
+        specialize Min_m_v with (1 := n_to_w).
+        specialize Min_n_w with (1 := m_to_v).
+        destruct (lt_eq_lt_dec m n) as
+          [[m_lt_n| ->]| m_gt_n].
+            enough (w < w) by order.
+            enough (w < v /\ v <= w) as (w_lt_v & v_le_w) by order.
+            now split; [apply Min_n_w| apply Min_m_v].
+          enough (Some v = Some w) as [= v_eq_w] by easy.
+          now transitivity (nth_error x n).
+        enough (v < v) by order.
+        enough (v < w /\ w <= v) as (v_lt_w & w_le_v) by order.
+        now split; [apply Min_m_v| apply Min_n_w].
+      Qed.
 
       Section Properties.
         Variables
@@ -572,6 +613,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         | u₀ :: x₀ => Some (minimum_body x₀ 1 O u₀)
         end.
 
+      Notation Minimum
+        x
+        n
+        v :=
+        (minimum x = Some (n, v)).
+
       Lemma minimum_body_spec : forall
         (x : list t)
         (index : nat)
@@ -629,38 +676,170 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           [_ [(-> & -> & IHx₀)| (v'_lt_u₀ & m' & -> & IHx₀)]];
           [apply cons_le| apply cons_gt].
       Qed.
+
+      Section Properties.
+        Variables
+          (x : list t)
+          (n : nat)
+          (v : t).
+
+        Lemma None_iff :
+          minimum x = None <->
+          x = [].
+        Proof.
+          clear n v.
+          destruct (minimum_spec x) as [(n, v) (_ & n_to_v)| x_eq_nil];
+            [destruct x as [| u₀ x₀]|]; try easy.
+          now apply Nth.nil_inv in n_to_v.
+        Qed.
+
+        Lemma None_eq :
+          minimum x = None ->
+          x = [].
+        Proof.
+          apply None_iff.
+        Qed.
+
+        Lemma eq_None :
+          x = [] ->
+          minimum x = None.
+        Proof.
+          apply None_iff.
+        Qed.
+
+        Lemma Some_iff :
+          Minimum x n v <->
+          Min x n v.
+        Proof.
+          destruct (minimum_spec x) as [(n', v') Min_n'_v'| ->].
+            split.
+              now intros [= -> ->].
+            intros Min_n_v.
+            enough (n = n' /\ v = v') as (-> & ->) by easy.
+            now apply Min_fun with x.
+          unfold Min.
+          now rewrite Nth.nil_iff.
+        Qed.
+
+        Lemma neq_Some :
+          x <> [] ->
+          exists
+            (c : nat)
+            (v : t),
+            Minimum x c v /\
+            Min x c v.
+        Proof.
+          clear n v.
+          now destruct (minimum_spec x) as [(n & v) Min_n_v| ?];
+            intros x_neq_nil;
+            [exists n, v|].
+        Qed.
+
+        Lemma Some_neq :
+          Minimum x n v ->
+          Min x n v.
+        Proof.
+          apply Some_iff.
+        Qed.
+      End Properties.
     End Min.
     Module Min' := Min Nat.
 
-    Fixpoint fixed
+    Module Pred.
+      Definition pred_error
+        (n : nat) :
+        option nat :=
+        match n with
+        | O => None
+        | S n' => Some n'
+        end.
+
+      Notation Pred n m :=
+        (pred_error n = Some m).
+
+      Notation Ok n m :=
+        (n = S m)
+        (only parsing).
+
+      Section Properties.
+        Variables
+          (m n : nat).
+
+        Lemma None_iff :
+          pred_error n = None <->
+          n = 0.
+        Proof.
+          now destruct n as [| n'].
+        Qed.
+
+        Lemma eq_None :
+          n = 0 ->
+          pred_error n = None.
+        Proof.
+          apply None_iff.
+        Qed.
+
+        Lemma None_eq :
+          pred_error n = None ->
+          n = 0.
+        Proof.
+          apply None_iff.
+        Qed.
+
+        Lemma Some_iff :
+          Pred n m <->
+          Ok n m.
+        Proof.
+          now destruct n as [| n'];
+            [| split; intros [= ->]].
+        Qed.
+
+        Lemma Some_neq :
+          Pred n m ->
+          Ok n m.
+        Proof.
+          apply Some_iff.
+        Qed.
+
+        Lemma neq_Some :
+          n <> 0 ->
+          exists m : nat,
+            Pred n m /\
+            Ok n m.
+        Proof.
+          now destruct n as [| n'];
+            [| exists n'].
+        Qed.
+      End Properties.
+    End Pred.
+    Import Pred(pred_error, Pred).
+
+    Notation add_S
+      self
+      p₀
+      c₀ :=
+      (max (S c₀) (Coloring.colors self), Map.add p₀ c₀%nat (Coloring.labeling self)).
+
+    Fixpoint fixed_body
       (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (counts : list nat) :
       option Coloring.t :=
       match instructions with
-      | Up op₀ :: x₀ =>
+      | Up p₀ :: x₀ =>
         bind (Min'.minimum counts) (fun min => let (color, count) := min in
-        bind (nth_error counts color) (fun count =>
-        bind (replace counts color (S count)) (fun counts' => let coloring :=
-            (max (S color) (Coloring.colors coloring), Map.add op₀ color (Coloring.labeling coloring)) in
-          fixed x₀ coloring counts
-          )))
-      | Down op₀ :: x₀ =>
-          bind (Coloring.find coloring op₀) (fun color =>
+        bind (replace counts color (S count)) (fun counts' =>
+          let coloring := add_S coloring p₀ color in
+          fixed_body x₀ coloring counts'
+          ))
+      | Down p₀ :: x₀ =>
+          bind (Coloring.find coloring p₀) (fun color =>
           bind (nth_error counts color) (fun count =>
-          bind (replace counts color (pred count)) (fun counts =>
-            fixed x₀ coloring counts)))
+          bind (pred_error count) (fun count' =>
+          bind (replace counts color count') (fun counts' =>
+            fixed_body x₀ coloring counts'))))
       | [] => ret coloring
       end.
-
-    Definition Synced
-      (instructions : list Instruction.t)
-      (coloring : Coloring.t) :=
-      forall owner : Owner.t,
-        (Active owner instructions ->
-        Coloring.Contains coloring owner) /\
-        (Ahead owner instructions ->
-        ~ Coloring.Contains coloring owner).
 
     Lemma StronglyExtensional
       (coloring : Coloring.t) :
@@ -675,24 +854,39 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
       now apply MapsTo_fun with (1 := p_to_c).
     Qed.
 
-    Module Import M := MSetWeakList.Make Owner.
-    Module Import M_Facts := MSetFacts.Facts M.
-    Module Import M_Properties := MSetProperties.WProperties M.
-
-    Definition Count_Ok
-      (instructions : Instructions.t)
-      (coloring : Coloring.t)
-      (color : nat)
-      (count : nat) :
-      Prop :=
-      exists owners : M.t,
-        (forall owner : Owner.t,
-          M.In owner owners <->
-            Active owner instructions /\
-            Coloring.MapsTo coloring owner color) /\
-        cardinal owners = count.
-
     Module Assumptions.
+      Import MSets.
+
+      Module M := MSetWeakList.Make Owner.
+      Module Import M_Facts := MSetFacts.Facts M.
+      Module Import M_Properties := MSetProperties.WProperties M.
+
+      Lemma add_eq_iff : forall
+        (s : M.t)
+        (x y : Owner.t),
+        Owner.eq x y ->
+          M.In y (M.add x s) <->
+          True.
+      Proof.
+        intros.
+        rewrite add_iff; tauto.
+      Qed.
+
+      Module Count.
+        Definition Ok
+          (instructions : Instructions.t)
+          (coloring : Coloring.t)
+          (color : nat)
+          (count : nat) :
+          Prop :=
+          exists owners : M.t,
+            (forall owner : Owner.t,
+              M.In owner owners <->
+                Active owner instructions /\
+                Coloring.MapsTo coloring owner color) /\
+            M.cardinal owners = count.
+      End Count.
+
       Definition Ok
         (instructions : Instructions.t)
         (coloring : Coloring.t)
@@ -700,32 +894,40 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Prop :=
         Instructions.Ok instructions /\
         Coloring.Ok coloring /\
-        (Coloring.colors coloring <= length counts) /\
+        (Coloring.colors coloring <= length counts /\ length counts <> O) /\
         Synced instructions coloring /\
-        ForNth (Count_Ok instructions coloring) counts /\
+        ForNth (Count.Ok instructions coloring) counts /\
         (forall color : nat,
           Coloring.colors coloring <= color < length counts ->
           Nth counts color 0).
 
       Ltac Ok_destruct ok :=
-          destruct ok as
-            (Ok_instructions &
-            Ok_coloring &
-            Ok_length &
-            Synced_coloring &
-            Ok_counts &
-            Ok_zero).
+        destruct ok as
+          (Ok_instructions &
+          Ok_coloring &
+          (Ok_length & length_neq_O) &
+          Synced_coloring &
+          Ok_counts &
+          Ok_zero).
 
-      Lemma cons_Down : forall p₀ x₀ coloring counts,
+      Lemma cons_Down : forall
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t)
+        (coloring : Coloring.t)
+        (counts : list nat),
         Ok (Down p₀ :: x₀) coloring counts ->
-        OptionSpec
-          (Ok x₀ coloring)
-          False
-          (
-            bind (Coloring.find coloring p₀) (fun color =>
-            bind (nth_error counts color) (fun count =>
-            replace counts color (pred count)))
-          ).
+        exists
+          (c₀ : nat)
+          (v₀ : nat)
+          (v₀' : nat)
+          (counts' : list nat),
+          Coloring.MapsTo coloring p₀ c₀ /\
+          Nth counts c₀ v₀ /\
+          Pred v₀ v₀' /\
+          Pred.Ok v₀ v₀' /\
+          List.Replace.Replace counts c₀ v₀' counts' /\
+          Replace.Ok counts c₀ v₀' counts' /\
+          Ok x₀ coloring counts'.
       Proof with my_auto.
         intros p₀ x₀ coloring counts ok.
         Ok_destruct ok.
@@ -737,31 +939,47 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
 
         assert (In_p₀ : Coloring.Contains coloring p₀).
           apply Synced_coloring...
-        destruct (find_spec (Coloring.labeling coloring) p₀) as
-          [c₀ p₀_to_c₀| not_In_p₀];
-          [| contradiction]; simpl.
+        specialize find_In_Some with (1 := In_p₀) as (c₀ & _ & p₀_to_c₀);
+          exists c₀.
 
         assert (c₀_lt_colors : c₀ < Coloring.colors coloring) by
           now apply Ok_coloring; exists p₀.
         assert (c₀_lt_counts : c₀ < length counts) by
           now apply lt_le_trans with (Coloring.colors coloring).
         specialize NthError.lt_Some with (1 := c₀_lt_counts) as
-          (v₀ & c₀_to_v₀); rewrite c₀_to_v₀; simpl.
+          (v₀ & c₀_to_v₀);
+          exists v₀.
+
         unfold ForNth in Ok_counts.
         pose proof Ok_counts as H;
           specialize H with (1 := c₀_to_v₀) as
           (owners₀ & owners₀_iff & owners₀_length).
-        specialize Replace.lt_Some with (x := counts) (1 := c₀_lt_counts) as
-          (counts' & -> & _ & counts_eq_counts' & c₀_to_pred_v₀ & H₀').
-        simpl.
-        constructor; split_left.
-                  assumption.
-                assumption.
-              now rewrite <- counts_eq_counts'.
+        assert (p₀_in_owners₀ : M.In p₀ owners₀) by
+          now apply owners₀_iff.
+
+        assert (v₀_neq_O : v₀ <> O).
+          rewrite <- owners₀_length, <- cardinal_Empty.
+          now contradict p₀_in_owners₀.
+        specialize Pred.neq_Some with (1 := v₀_neq_O) as
+          (v₀' & pred_v₀_v₀' & Ok_v₀_v₀');
+          exists v₀'.
+
+        specialize Replace.lt_Some with (x := counts) (1 := c₀_lt_counts) (v := v₀') as
+          (counts' & replace_counts' & Ok_counts');
+          exists counts'.
+
+        destruct Ok_counts' as (_ & length_counts' & c₀_to_v₀' & H).
+
+        split_left; try assumption.
+                now split_left.
+
+              now rewrite <- length_counts'.
+
             split; intros ?; apply Synced_coloring...
+
           intros c v' c_to_v'.
           assert (c_lt_counts : c < length counts).
-            rewrite counts_eq_counts'.
+            rewrite length_counts'.
             now apply NthError.Some_lt with v'.
           specialize NthError.lt_Some with (1 := c_lt_counts) as
             (v & c_to_v).
@@ -772,7 +990,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
             2: {
               exists owners.
               assert (Some v = Some v') as [= <-] by
-                now rewrite <- c_to_v, <- c_to_v'; apply H₀'.
+                now rewrite <- c_to_v, <- c_to_v'; apply H.
               split; [| assumption].
               intros p.
               rewrite owners_iff, Instructions.Active.cons_Down_iff by
@@ -792,41 +1010,39 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
               ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
               assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
               enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
-            change (pred (S (cardinal (remove p₀ owners))) = v').
+            change (pred (S (M.cardinal (M.remove p₀ owners))) = v').
             rewrite remove_cardinal_1, owners_length; [| apply owners_iff]...
             enough (Some v = Some v₀ /\ Some v' = Some (pred v₀)) as
               ([= ->] & [= ->]) by reflexivity.
-            now rewrite <- c_to_v, <- c_to_v', c₀_to_v₀, c₀_to_pred_v₀.
+            now rewrite <- c_to_v, <- c_to_v', c₀_to_v₀, c₀_to_v₀', Ok_v₀_v₀'.
+
           intros c (colors_le_c & c_lt_counts').
-          rewrite <- (H₀' c).
-            now apply Ok_zero; rewrite counts_eq_counts'.
+          rewrite <- (H c).
+            now apply Ok_zero; rewrite length_counts'.
           change (complement Logic.eq c c₀); symmetry.
           now apply Nat.lt_neq, lt_le_trans with (Coloring.colors coloring).
         Qed.
 
-        Lemma add_eq_iff : forall s x y,  E.eq x y -> (In y (add x s) <-> True).
-        Proof.
-          intros.
-          rewrite add_iff; tauto.
-        Qed.
-
-        Lemma cons_Up : forall p₀ x₀ coloring counts,
-          counts <> [] ->
+        Lemma cons_Up : forall
+          (p₀ : Owner.t)
+          (x₀ : Instructions.t)
+          (coloring : Coloring.t)
+          (counts : list nat),
           Ok (Up p₀ :: x₀) coloring counts ->
-          OptionSpec
-            (fun H => Ok x₀ (fst H) (snd H))
-            False
-            (
-              bind (Min'.minimum counts) (fun min => let (color, count) := min in
-              bind (nth_error counts color) (fun count =>
-              bind (replace counts color (S count)) (fun counts' => let coloring' :=
-                  (max (S color) (Coloring.colors coloring), Map.add p₀ color (Coloring.labeling coloring)) in
-                Some (coloring', counts'))))
-            ).
+          exists
+            (c₀ : nat)
+            (v₀ : nat)
+            (counts' : list nat),
+            let coloring' := (max (S c₀) (Coloring.colors coloring), Map.add p₀ c₀ (Coloring.labeling coloring)) in
+            Min'.Minimum counts c₀ v₀ /\
+            Min'.Min counts c₀ v₀ /\
+            List.Replace.Replace counts c₀ (S v₀) counts' /\
+            Replace.Ok counts c₀ (S v₀) counts' /\
+            Ok x₀ coloring' counts'.
         Proof with my_auto.
-          intros p₀ x₀ coloring counts counts_neq_nil ok.
+          intros p₀ x₀ coloring counts ok.
           Ok_destruct ok.
-           set (labeling := Coloring.labeling coloring) in *.
+          set (labeling := Coloring.labeling coloring) in *.
           set (colors := Coloring.colors coloring) in *.
 
           assert (Ok_x₀ : Instructions.Ok x₀) by
@@ -834,9 +1050,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           assert (Ahead_p₀_x : Ahead p₀ (Up p₀ :: x₀))...
           assert (Active_p₀_x₀ : Active p₀ x₀)...
 
-          destruct (Min'.minimum_spec counts) as [(c₀ & v₀) (Min_v₀ & c₀_to_v₀)| counts_eq_nil];
-            [| now destruct counts]; simpl.
-          rewrite c₀_to_v₀; simpl.
+          assert (counts_neq_nil : counts <> []) by
+            now rewrite <- length_zero_iff_nil.
+
+          specialize Min'.neq_Some with (1 := counts_neq_nil) as
+            (c₀ & v₀ & Minimum_c₀_v₀ & Min_v₀ & c₀_to_v₀);
+            exists c₀, v₀.
 
           assert (c₀_lt_counts : c₀ < length counts) by
             now apply NthError.Some_lt with v₀.
@@ -854,31 +1073,30 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
             now intros ->; apply Nat.max_l, Nat.le_succ_diag_r.
 
           specialize Replace.lt_Some with (v := S v₀) (1 := c₀_lt_counts) as
-            (counts' & -> & _ & counts_eq_counts' & c₀_to_S_v₀ & H); simpl.
-          constructor; change
-              (Ok x₀ (max (S c₀) colors, Map.add p₀ c₀ labeling) counts').
-          split_left.
-                    assumption.
+            (counts' & -> & _ & length_counts' & c₀_to_S_v₀ & H);
+            exists counts'.
+          split_left; try easy.
                   apply le_lt_or_eq in c₀_le_colors as
                     [c₀_lt_colors| ->].
                     rewrite max_r; [apply Coloring.Ok.add_lt|]...
                   rewrite max_l; [apply Coloring.Ok.add_eq|]...
-                rewrite <- counts_eq_counts'.
-                now apply Nat.max_lub.
+                now rewrite <- length_counts'; split; [apply Nat.max_lub|].
+
               intros p; split.
-                intros Active_x₀; apply add_in_iff.
-                destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
-                  [left| right; apply Synced_coloring]...
+              intros Active_x₀; apply add_in_iff.
+              destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
+                [left| right; apply Synced_coloring]...
               intros Ahead_p.
               apply add_not_in_iff; split...
               apply Synced_coloring...
+
             intros c v c_to_v.
             destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
               unfold ForNth in Ok_counts.
               specialize Ok_counts with (1 := c₀_to_v₀) as
               (owners & owners_iff & owners_length).
 
-              exists (add p₀ owners); split.
+              exists (M.add p₀ owners); split.
                 unfold labeling in *.
                 simpl in *.
 
@@ -901,7 +1119,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
                 contradict In_p₀.
               enough (Active p₀ (Up p₀ :: x₀));
                 [| apply owners_iff]...
-            unfold Count_Ok, ForNth in *.
+            unfold Count.Ok, ForNth in *.
             specialize Ok_counts with c v as
             (owners & owners_iff & owners_length);
               [now rewrite H|].
@@ -917,7 +1135,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
               [(_ & c₀_eq_c)| (p₀_neq_p & p_to_c₀)];
               [now contradict c_neq_c₀|].
             split...
-          rewrite <- counts_eq_counts'.
+
+          rewrite <- length_counts'.
           intros c (colors'_le_c₀ & c₀_lt_counts').
           apply le_lt_or_eq in c₀_le_colors as
             [c₀_lt_colors| c₀_eq_colors].
@@ -934,5 +1153,86 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           now apply Nat.lt_neq.
         Qed.
     End Assumptions.
+
+    Module Type Proposition.
+      Parameter t :
+        Instructions.t ->
+        Coloring.t ->
+        list nat ->
+        option Coloring.t ->
+        Prop.
+    End Proposition.
+
+    Module Type BaseCase (P : Proposition).
+      Section Basis.
+        Variables
+          (coloring : Coloring.t)
+          (counts : list nat).
+
+        Parameter nil :
+          Assumptions.Ok [] coloring counts ->
+          P.t [] coloring counts (Some coloring).
+      End Basis.
+    End BaseCase.
+
+    Module Type InductionSteps (P : Proposition).
+      Section Steps.
+        Variables
+          (p₀ : Owner.t)
+          (x₀ : Instructions.t)
+          (coloring : Coloring.t)
+          (counts counts' : list nat)
+          (c₀ v₀ v₀' : nat)
+          (result : option Coloring.t).
+
+        Parameter cons_Up :
+          Assumptions.Ok (Up p₀ :: x₀) coloring counts ->
+          Min'.Min counts c₀ v₀ ->
+          List.Replace.Ok counts c₀ (S v₀) counts' ->
+          P.t x₀ (add_S coloring p₀ c₀) counts' result ->
+          P.t (Up p₀ :: x₀) coloring counts result.
+
+        Parameter cons_Down :
+          Assumptions.Ok (Down p₀ :: x₀) coloring counts ->
+          Pred.Ok v₀ v₀' ->
+          List.Replace.Ok counts c₀ v₀' counts' ->
+          P.t x₀ coloring counts' result ->
+          P.t (Down p₀ :: x₀) coloring counts result.
+      End Steps.
+    End InductionSteps.
+
+    Module InductionPrinciple (P : Proposition) (B : BaseCase P) (S : InductionSteps P).
+      Lemma ind :
+        forall
+          (instructions : Instructions.t)
+          (coloring : Coloring.t)
+          (counts : list nat),
+          Assumptions.Ok
+            instructions
+            coloring
+            counts ->
+          P.t
+            instructions
+            coloring
+            counts
+            (fixed_body instructions coloring counts).
+      Proof.
+        induction instructions as [| ([|] & p₀) x₀ IHx₀];
+          intros coloring counts ok.
+            now apply B.nil.
+          simpl; unfold bind.
+          specialize Assumptions.cons_Up with (1 := ok) as
+            (c₀ & v₀ & counts' & -> & Ok_c₀_v₀ & -> & Ok_counts' & ok').
+          specialize IHx₀ with (1 := ok').
+          now apply S.cons_Up with counts' c₀ v₀.
+        simpl; unfold bind.
+        specialize (Assumptions.cons_Down) with (1 := ok) as
+          (c₀ & v₀ & v₀' & counts' & p₀_to_c₀ & H).
+        rewrite Map.find_1 with (1 := p₀_to_c₀).
+        destruct H as (-> & -> & ? & -> & Ok_counts' & ok').
+        specialize IHx₀ with (1 := ok').
+        now apply S.cons_Down with counts' c₀ v₀ v₀'.
+      Qed.
+    End InductionPrinciple.
   End Fixed.
 End Make.
