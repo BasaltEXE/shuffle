@@ -133,54 +133,63 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Coloring.MapsTo coloring owner color /\
         Absent owner instructions).
 
-    Fixpoint regular
+    Fixpoint regular_body
       (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (unused_colors : list nat) :
       option Coloring.t :=
       match instructions, unused_colors with
       | Up owner :: tail, [] =>
-        regular
+        regular_body
           tail
           (Coloring.add_eq coloring owner)
           []
       | Up owner :: tail, color :: unused_colors =>
-        regular
+        regular_body
           tail
           (Coloring.add_lt coloring owner color)
           unused_colors
       | Down owner :: tail, unused_colors =>
           bind(Coloring.find coloring owner) (fun color =>
-          regular
+          regular_body
             tail
             coloring
             (color :: unused_colors))
       | [], _ => ret coloring
       end.
 
+    Definition regular
+      (instructions : list Instruction.t) :
+      option Coloring.t :=
+      regular_body
+        instructions
+        Coloring.empty
+        [].
+
     Module Type AssumptionType.
       Parameter Ok : list Instruction.t -> Coloring.t -> list nat -> Prop.
 
       Section Properties.
-        Variable owner : Owner.t.
-        Variable instructions : list Instruction.t.
+        Variable p₀ : Owner.t.
+        Variable x₀ : list Instruction.t.
         Variable coloring : Coloring.t.
         Variable color : nat.
         Variable unused_colors : list nat.
         Variable result : option Coloring.t.
 
         Parameter cons_Up_eq :
-          Ok (Up owner :: instructions) coloring [] ->
-          Ok instructions (Coloring.add_eq coloring owner) [].
+          Ok (Up p₀ :: x₀) coloring [] ->
+          Ok x₀ (Coloring.add_eq coloring p₀) [].
 
         Parameter cons_Up_lt :
-          Ok (Up owner :: instructions) coloring (color :: unused_colors) ->
-          Ok instructions (Coloring.add_lt coloring owner color) unused_colors.
+          Ok (Up p₀ :: x₀) coloring (color :: unused_colors) ->
+          Ok x₀ (Coloring.add_lt coloring p₀ color) unused_colors.
 
         Parameter cons_Down :
-          Coloring.MapsTo coloring owner color ->
-          Ok (Down owner :: instructions) coloring unused_colors ->
-          Ok instructions coloring (color :: unused_colors).
+          Ok (Down p₀ :: x₀) coloring unused_colors ->
+          exists color : nat,
+            Coloring.MapsTo coloring p₀ color /\
+            Ok x₀ coloring (color :: unused_colors).
       End Properties.
     End AssumptionType.
 
@@ -220,38 +229,38 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         NoDup unused_colors.
 
       Section Properties.
-        Variable owner : Owner.t.
-        Variable instructions : list Instruction.t.
+        Variable p₀ : Owner.t.
+        Variable x₀ : list Instruction.t.
         Variable coloring : Coloring.t.
         Variable color : nat.
         Variable unused_colors : list nat.
 
         Lemma cons_Up_eq :
-          Ok (Up owner :: instructions) coloring [] ->
-          Ok instructions (Coloring.add_eq coloring owner) [].
+          Ok (Up p₀ :: x₀) coloring [] ->
+          Ok x₀ (Coloring.add_eq coloring p₀) [].
         Proof with my_auto.
           intros ok; Ok_destruct ok.
-          assert (not_In_owner : ~ Coloring.Contains coloring owner).
+          assert (not_In_p₀ : ~ Coloring.Contains coloring p₀).
             apply Synced_coloring...
           unfold Ok.
           split_left...
                 now apply Instructions.Ok.cons_inv in Ok_instructions.
               apply Coloring.Ok.add_eq, Synced_coloring...
-            intros owner'.
+            intros p.
             split.
-              intros Active_owner'.
+              intros Active_p.
               apply add_in_iff.
-              destruct (Owner.eq_dec owner owner') as [eq| neq];
+              destruct (Owner.eq_dec p₀ p) as [eq| neq];
                 [left| right; apply Synced_coloring]...
-            intros Ahead_owner.
+            intros Ahead_p₀.
             apply add_not_in, Synced_coloring...
-            enough (Active owner instructions)...
+            enough (Active p₀ x₀)...
           intros x y x_neq_y Active_x Active_y m n.
           simpl; rewrite ?add_mapsto_iff.
           intros
-            [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
-            [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
-                now contradict x_neq_y; transitivity owner.
+            [(p₀_eq_x & <-)| (p₀_neq_x & x_to_m)]
+            [(p₀_eq_y & <-)| (p₀_neq_y & y_to_m)].
+                now contradict x_neq_y; transitivity p₀.
               enough (n <> Coloring.colors coloring) by firstorder.
               now apply Nat.lt_neq, Ok_coloring; exists y.
             now apply Nat.lt_neq, Ok_coloring; exists x.
@@ -259,33 +268,33 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Qed.
 
         Lemma cons_Up_lt :
-          Ok (Up owner :: instructions) coloring (color :: unused_colors) ->
-          Ok instructions (Coloring.add_lt coloring owner color) unused_colors.
+          Ok (Up p₀ :: x₀) coloring (color :: unused_colors) ->
+          Ok x₀ (Coloring.add_lt coloring p₀ color) unused_colors.
         Proof with my_auto.
           intros ok; Ok_destruct ok.
           apply Forall_cons_iff in Ok_unused_colors as (Ok_color & Ok_unused_colors).
           apply NoDup_cons_iff in NoDup_unused_colors as (not_In_color & NoDup_unused_colors).
-          assert (not_In_owner : ~ Coloring.Contains coloring owner).
+          assert (not_In_p₀ : ~ Coloring.Contains coloring p₀).
             apply Synced_coloring...
           split_left...
-                  now apply Instructions.Ok.cons_inv with (Up owner).
+                  now apply Instructions.Ok.cons_inv with (Up p₀).
                 apply Coloring.Ok.add_lt, Ok_coloring...
-                destruct Ok_color as (_ & owner' & owner'_to_color & _).
-                now exists owner'.
-              intros owner'.
+                destruct Ok_color as (_ & p & p_to_color & _).
+                now exists p.
+              intros p.
               split.
-                intros Active_owner'.
+                intros Active_p.
                 apply add_in_iff.
-                destruct (Owner.eq_dec owner owner') as [eq| neq];
+                destruct (Owner.eq_dec p₀ p) as [eq| neq];
                   [left| right; apply Synced_coloring]...
-              intros Ahead_owner.
-              apply add_not_in, Synced_coloring; enough (Active owner instructions)...
+              intros Ahead_p₀.
+              apply add_not_in, Synced_coloring; enough (Active p₀ x₀)...
             intros x y x_neq_y Active_x Active_y m n.
             simpl; rewrite ?add_mapsto_iff.
             intros
-              [(owner_eq_x & <-)| (owner_neq_x & x_to_m)]
-              [(owner_eq_y & <-)| (owner_neq_y & y_to_m)].
-                  now contradict x_neq_y; transitivity owner.
+              [(p₀_eq_x & <-)| (p₀_neq_x & x_to_m)]
+              [(p₀_eq_y & <-)| (p₀_neq_y & y_to_m)].
+                  now contradict x_neq_y; transitivity p₀.
                 apply Ok_color with y...
                 enough (color <> m) by firstorder.
               apply Ok_color with x...
@@ -293,55 +302,139 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           eapply Forall_impl, Forall_and with (1 := Ok_unused_colors), not_In_Forall, not_In_color.
           intros n ((Proper_n & Synced_n) & color_neq_n).
           split.
-            intros owner' n' Active_owner'.
+            intros p n' Active_p.
             simpl; rewrite add_mapsto_iff.
-            intros [(owner_eq_owner' & <-)| (owner_neq_owner' & owner'_to_n)].
+            intros [(p₀_eq_p & <-)| (p₀_neq_p & p_to_n)].
               auto with arith.
-            apply Proper_n with owner'...
-          destruct Synced_n as (owner' & owner'_to_n & not_In_Down_owner').
-          assert (owner_neq_owner': ~ Owner.eq owner owner').
-            contradict not_In_Down_owner'; rewrite <- not_In_Down_owner'.
+            apply Proper_n with p...
+          destruct Synced_n as (p & p_to_n & not_In_Down_p).
+          assert (p₀_neq_p: ~ Owner.eq p₀ p).
+            contradict not_In_Down_p; rewrite <- not_In_Down_p.
             apply Instructions.Orthogonal.Up_impl_Down...
-          exists owner'; split...
+          exists p; split...
           apply Map.add_2...
         Qed.
 
         Lemma cons_Down :
-          Coloring.MapsTo coloring owner color ->
-          Ok (Down owner :: instructions) coloring unused_colors ->
-          Ok instructions coloring (color :: unused_colors).
+          Ok (Down p₀ :: x₀) coloring unused_colors ->
+          exists color : nat,
+            Coloring.MapsTo coloring p₀ color /\
+            Ok x₀ coloring (color :: unused_colors).
         Proof with my_auto.
-          intros owner_to_color (Ok_instructions & Ok_coloring & Synced_coloring & Real & Ok_unused_colors & NoDup_unused_colors).
+          clear color; intros (Ok_x₀ & Ok_coloring & Synced_coloring & Real & Ok_unused_colors & NoDup_unused_colors).
+          assert (In_p₀ : Coloring.Contains coloring p₀).
+            apply Synced_coloring...
+          specialize find_In_Some with (1 := In_p₀) as
+            (color & _ & p₀_to_color);
+            exists color.
           split_left...
-                  now apply Instructions.Ok.cons_inv in Ok_instructions.
-                intros owner'.
+                  now apply Instructions.Ok.cons_inv in Ok_x₀.
+                intros p.
                 split.
-                  intros Active_owner'.
+                  intros Active_p.
                   apply Synced_coloring...
-                intros Ahead_owner'.
+                intros Ahead_p.
                 apply Synced_coloring...
               intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
               apply Real with x y...
             constructor.
               split.
-                intros owner' color' Active_owner' owner'_to_color'.
-                apply Real with owner owner'...
-                enough (Absent owner instructions)...
-              exists owner...
+                intros p color' Active_p p_to_color'.
+                apply Real with p₀ p...
+                enough (Absent p₀ x₀)...
+              exists p₀...
             eapply Forall_impl with (2 := Ok_unused_colors).
-            intros n (H & owner' & owner'_to_color & not_InDown_owner').
+            intros n (H & p & p_to_color & not_InDown_p).
             split.
               intros x m Active_x x_to_m.
               apply H with x...
-            exists owner'...
+            exists p...
           constructor...
           apply not_In_Forall, Forall_impl with (2 := Ok_unused_colors).
           intros n [Proper_n Synced_n].
           enough (n <> color) by auto with arith.
-          apply Proper_n with owner...
+          apply Proper_n with p₀...
         Qed.
       End Properties.
     End Assumption.
+
+    Module Type Proposition.
+      Parameter t :
+        Instructions.t ->
+        Coloring.t ->
+        list nat ->
+        option Coloring.t ->
+        Prop.
+    End Proposition.
+
+    Module Type BaseCase (P : Proposition).
+      Section Basis.
+        Variables
+          (coloring : Coloring.t)
+          (unused_colors : list nat).
+
+        Parameter nil :
+          Assumption.Ok [] coloring unused_colors ->
+          P.t [] coloring unused_colors (Some coloring).
+      End Basis.
+    End BaseCase.
+
+    Module Type InductionSteps (P : Proposition).
+      Section Steps.
+        Variables
+          (p₀ : Owner.t)
+          (x₀ : Instructions.t)
+          (coloring : Coloring.t)
+          (color : nat)
+          (unused_colors : list nat)
+          (result : option Coloring.t).
+
+        Parameter cons_Up_eq :
+          Assumption.Ok (Up p₀ :: x₀) coloring [] ->
+          P.t x₀ (Coloring.add_eq coloring p₀) [] result ->
+          P.t (Up p₀ :: x₀) coloring [] result.
+
+        Parameter cons_Up_lt :
+          Assumption.Ok (Up p₀ :: x₀) coloring (color :: unused_colors) ->
+          P.t x₀ (Coloring.add_lt coloring p₀ color) unused_colors result ->
+          P.t (Up p₀ :: x₀) coloring (color :: unused_colors) result.
+
+        Parameter cons_Down :
+          Coloring.MapsTo coloring p₀ color ->
+          Assumption.Ok (Down p₀ :: x₀) coloring unused_colors ->
+          P.t x₀ coloring (color :: unused_colors) result ->
+          P.t (Down p₀ :: x₀) coloring unused_colors result.
+      End Steps.
+    End InductionSteps.
+
+    Module InductionPrinciple (P : Proposition) (B : BaseCase P) (S : InductionSteps P).
+      Lemma ind :
+        forall
+          (instructions : Instructions.t)
+          (coloring : Coloring.t)
+          (unused_colors : list nat),
+          Assumption.Ok
+            instructions
+            coloring
+            unused_colors ->
+          P.t
+            instructions
+            coloring
+            unused_colors
+            (regular_body instructions coloring unused_colors).
+      Proof.
+        induction instructions as [| ([|] & p₀) x₀ IHx₀];
+          intros coloring unused_colors ok.
+            now apply B.nil.
+          destruct unused_colors as [| color unused_colors].
+            now apply S.cons_Up_eq, IHx₀, Assumption.cons_Up_eq.
+          now apply S.cons_Up_lt, IHx₀, Assumption.cons_Up_lt.
+        specialize Assumption.cons_Down with (1 := ok) as
+          (color & p₀_to_color & ok').
+        simpl; rewrite Map.find_1 with (1 := p₀_to_color); simpl.
+        now apply S.cons_Down with color, IHx₀.
+      Qed.
+    End InductionPrinciple.
 
     Definition Synced'
       (instructions : list Instruction.t)
@@ -351,7 +444,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
       Coloring.MapsTo result owner color ->
       Coloring.MapsTo coloring owner color).
 
-    Lemma Ok_regular : forall
+    Lemma regular_body_spec : forall
       (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (unused_colors : list nat),
@@ -361,7 +454,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Subsets (RealColoring result) instructions /\
         Synced' instructions coloring result)
         False
-        (regular instructions coloring unused_colors).
+        (regular_body instructions coloring unused_colors).
     Proof with my_auto.
       induction instructions as [| [[|] owner] instructions IHinstructions];
         intros coloring unused_colors ok.
@@ -413,38 +506,30 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         apply Map.add_3 with owner color,
           Synced_result...
       simpl in *.
-      destruct (Coloring.find coloring owner) as [color|] eqn: find.
-        apply find_mapsto_iff in find as owner_to_color.
-        pose proof (ok' := Assumption.cons_Down owner_to_color ok).
-        specialize IHinstructions with (1 := ok').
-        apply OptionSpec_impl with (2 := IHinstructions).
-        intros result (Ok_result & Proper_result & Synced_result).
-        split_left...
-          constructor...
-          intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
-          assert (Ok_instructions' : Instructions.Ok (Down owner :: instructions)) by
-            now destruct ok.
-          Ok_destruct ok.
-          apply Proper_coloring with x y...
-          1 - 2:
-          destruct
-            Active_x as (not_Ahead_x & _),
-            Active_y as (not_Ahead_y & _);
-          apply Synced_result...
-        intros owner' color' not_Ahead_owner' owner'_to_color'.
-        rewrite Instructions.Ahead.cons_Down_iff in not_Ahead_owner'.
-        now apply Synced_result.
-      Ok_destruct ok.
-      apply not_find_in_iff in find as not_In_owner; contradict not_In_owner.
-      apply Synced_coloring...
+      specialize Assumption.cons_Down with (1 := ok) as
+        (color & owner_to_color & ok').
+      rewrite Map.find_1 with (1 := owner_to_color).
+      specialize IHinstructions with (1 := ok').
+      apply OptionSpec_impl with (2 := IHinstructions).
+      intros result (Ok_result & Proper_result & Synced_result).
+      split_left...
+        constructor...
+        intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
+        assert (Ok_instructions' : Instructions.Ok (Down owner :: instructions)) by
+          now destruct ok.
+        Ok_destruct ok.
+        apply Proper_coloring with x y...
+        1 - 2:
+        destruct
+          Active_x as (not_Ahead_x & _),
+          Active_y as (not_Ahead_y & _);
+        apply Synced_result...
+      intros owner' color' not_Ahead_owner' owner'_to_color'.
+      rewrite Instructions.Ahead.cons_Down_iff in not_Ahead_owner'.
+      now apply Synced_result.
     Qed.
 
-    Definition color
-      (instructions : list Instruction.t) :
-      option Coloring.t :=
-      regular instructions Coloring.empty [].
-
-    Lemma Ok_color : forall
+    Lemma regular_spec : forall
       (instructions : list Instruction.t),
       Instructions.Ok instructions ->
       (forall owner : Owner.t,
@@ -453,10 +538,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
         Coloring.Ok result /\
         Subsets (RealColoring result) instructions)
         False
-        (color instructions).
+        (regular instructions).
     Proof with my_auto.
       intros instructions Ok_instructions Down_impl_Up.
-      eapply OptionSpec_impl, Ok_regular.
+      eapply OptionSpec_impl, regular_body_spec.
         intros result (Ok_result & Proper_result & _)...
       split_left...
             apply Coloring.Ok.empty.
