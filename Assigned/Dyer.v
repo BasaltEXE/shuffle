@@ -10,15 +10,15 @@ Require Import Coq.Classes.RelationClasses.
 Require Import Coq.Arith.Arith.
 
 Require Coq.MSets.MSets.
-Require Import Coq.FSets.FMaps.
+Require Coq.FSets.FMaps.
 
 Require Import Shuffle.Misc.
 Require Import Shuffle.List.
 Require Shuffle.Assigned.Instructions.
 Require Import Shuffle.Coloring.
 
-Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
-  Include WFacts_fun Key Map.
+Module WFacts_fun' (Key : DecidableTypeOrig) (Map : FMapInterface.WSfun Key).
+  Include FMapFacts.WFacts_fun Key Map. (* TODO *)
 
   Lemma find_spec : forall
     [elt : Type]
@@ -30,7 +30,7 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
       (Map.find x m).
   Proof.
     intros elt m x.
-    destruct (find x m) eqn: find; constructor.
+    destruct (Map.find x m) eqn: find; constructor.
       now apply find_mapsto_iff.
     now apply not_find_in_iff.
   Qed.
@@ -45,7 +45,7 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
       Map.MapsTo x e m.
   Proof.
     intros elt m x m_in_x.
-    destruct (find x m) as [e|] eqn: find.
+    destruct (Map.find x m) as [e|] eqn: find.
       exists e.
       now split; [| apply find_mapsto_iff].
     now contradict find; apply in_find_iff.
@@ -57,7 +57,7 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
     (x y : Map.key)
     (e e' : elt),
     Key.eq x y ->
-      MapsTo y e' (add x e m) <->
+      Map.MapsTo y e' (Map.add x e m) <->
       e = e'.
   Proof.
     intros; rewrite add_mapsto_iff; tauto.
@@ -90,7 +90,7 @@ Module WFacts_fun' (Key : DecidableType) (Import Map : WSfun Key).
   Qed.
 End WFacts_fun'.
 
-Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
+Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Coloring := Coloring.Make Owner Map.
 
   Module Import Instructions := Instructions.Make Owner.
@@ -1285,6 +1285,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : WSfun Owner).
           P.t (Down p₀ :: x₀) coloring counts result.
       End Steps.
     End InductionSteps.
+
+    Module Type Steps := Proposition <+ BaseCase <+ InductionSteps. (* TODO *)
 
     Module InductionPrinciple (P : Proposition) (B : BaseCase P) (S : InductionSteps P).
       Lemma ind :
