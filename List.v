@@ -59,29 +59,53 @@ Section InA.
   Qed.
 End InA.
 
-Section Subsets.
-  Variables
-    (A : Type)
-    (P : list A -> Prop).
+Module Tails.
+  Section Tails.
+    Variables
+      (A : Type)
+      (P : list A -> Prop).
 
-  Inductive Subsets  : list A -> Prop :=
-  | Subsets_nil :
-    P [] ->
-    Subsets []
-  | Subsets_cons : forall (u₀ : A) (x₀ : list A),
-    P (u₀ :: x₀) ->
-    Subsets x₀ ->
-    Subsets (u₀ :: x₀).
+    Inductive Forall : list A -> Prop :=
+    | Forall_nil :
+      P [] ->
+      Forall []
+    | Forall_cons : forall (u₀ : A) (x₀ : list A),
+      P (u₀ :: x₀) ->
+      Forall x₀ ->
+      Forall (u₀ :: x₀).
 
-  Lemma Subsets_inv : forall
-    x : list A,
-    Subsets x ->
-    P x.
-  Proof.
-    intros x Subsets_x.
-    now destruct Subsets_x as [P_x| u₀ x₀ P_x _].
-  Qed.
-End Subsets.
+    Lemma Forall_inv : forall
+      x : list A,
+      Forall x ->
+      P x.
+    Proof.
+      intros x Forall_x.
+      now destruct Forall_x as [P_x| u₀ x₀ P_x _].
+    Qed.
+
+    Inductive Exists : list A -> Prop :=
+    | Exists_x :
+      forall
+        x : list A,
+        P x -> Exists x
+    | Exists_cons :
+      forall
+        (u₀ : A)
+        (x₀ : list A),
+        Exists x₀ -> Exists (u₀ :: x₀).
+
+    Lemma Exists_nil :
+      forall
+        x : list A,
+        P [] ->
+        Exists x.
+    Proof.
+      induction x as [| u₀ x₀ IHx₀]; intros P_nil.
+        now constructor.
+      now constructor 2; apply IHx₀.
+    Qed.
+  End Tails.
+End Tails.
 
 Module Nth.
   Notation Nth x n v :=

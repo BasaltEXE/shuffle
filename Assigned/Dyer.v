@@ -451,7 +451,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Assumption.Ok instructions coloring unused_colors ->
       OptionSpec (fun result : Coloring.t =>
         Coloring.Ok result /\
-        Subsets (RealColoring result) instructions /\
+        Tails.Forall (RealColoring result) instructions /\
         Synced' instructions coloring result)
         False
         (regular_body instructions coloring unused_colors).
@@ -532,11 +532,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Lemma regular_spec : forall
       (instructions : list Instruction.t),
       Instructions.Ok instructions ->
-      (forall owner : Owner.t,
-        In (Down owner) instructions -> Ahead owner instructions) ->
+      Instructions.Closed instructions ->
       OptionSpec (fun result =>
         Coloring.Ok result /\
-        Subsets (RealColoring result) instructions)
+        Tails.Forall (RealColoring result) instructions)
         False
         (regular instructions).
     Proof with my_auto.

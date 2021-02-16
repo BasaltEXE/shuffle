@@ -59,16 +59,33 @@ Module Make (Operand : DecidableTypeBoth).
   End Notations.
   Import Notations.
 
-  Inductive Ok : list Instruction.t -> Prop :=
+  Inductive Ok : t -> Prop :=
   | nil : Ok []
-  | cons_Up : forall (p₀ : Operand.t) (x₀ : list Instruction.t),
+  | cons_Up : forall (p₀ : Operand.t) (x₀ : t),
     Active p₀ x₀ ->
     Ok x₀ ->
     Ok (Up p₀ :: x₀)
-  | cons_Down : forall (p₀ : Operand.t) (x₀ : list Instruction.t),
+  | cons_Down : forall (p₀ : Operand.t) (x₀ : t),
     Absent p₀ x₀ ->
     Ok x₀ ->
     Ok (Down p₀ :: x₀).
+
+  Definition Closed
+    (x : t) :
+    Prop :=
+      forall p : Operand.t,
+      In (Down p) x -> Ahead p x.
+
+  Lemma Closed_not_Active :
+    forall
+      (p : Operand.t)
+      (x : t),
+      Closed x ->
+      ~ Active p x.
+  Proof.
+    intros p x Closed_x (not_Ahead_p & H).
+    now contradict not_Ahead_p; apply Closed_x.
+  Qed.
 
   Module Orthogonal.
     Section Orthogonal.
