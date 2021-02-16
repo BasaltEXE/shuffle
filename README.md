@@ -34,4 +34,10 @@ Aus der Färbung lassen sich nun die Anweisungen generieren.
 
 ##  Verifikation
 
-Der Beweis der Korrektheit des Algorithmus für gültige Färbungen ist [hier](../main/Assigned/Dyer.v#L532) einsehbar.
+Sei `Player` der Typ der Spieler.
+Den im letzten Abschnitt beschriebenen Intervallgraph kann man als Liste `x` von Tupel [`Opcode * Player`](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Instructions.v#L9-L11) mit den Eigenschaften [`Instructions.Ok x`](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Instructions.v#L62-L71) und [`Instructions.Closed x`](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Instructions.v#L73-L77) darstellen.
+Für einen Spieler `p` repräsentiert das Tupel `(Up, p)` und `(Down, p)` die Position seiner ersten bzw. letzten Karte im zu mischenden Kartenstapel.
+
+Eine reguläre [Färbung](../01475aea5b02484677b4a155bd20f311382716f1/Coloring.v#L7-L8) muss [dicht](../01475aea5b02484677b4a155bd20f311382716f1/Coloring.v#L56-L61) und für alle [Suffixe](../01475aea5b02484677b4a155bd20f311382716f1/List.v#L62-L108) von `x` [gültig](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L196-L207) sein.
+
+Der Beweis der Korrektheit des [Algorithmus](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L161-L167) für reguläre Färbungen ist [hier](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L532-L555) einsehbar.
