@@ -223,6 +223,13 @@ Module Make (Operand : DecidableTypeBoth).
       #[export]
       Hint Immediate cons_Down_inv : instructions.
     End Hints.
+
+    Add Parametric Morphism : Ok with signature
+      (Tail (A := Instruction.t)) ++> impl as Ok_morphism.
+    Proof.
+      intros x y (u₀ & x₀) Ok_x.
+      now apply Ok.cons_inv with u₀.
+    Qed.
   End Ok.
 
   Module Ahead.

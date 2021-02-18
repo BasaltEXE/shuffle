@@ -308,8 +308,7 @@ Module Skip.
     (forall
       x,
       Skip y x ->
-      P x)
-    (only parsing).
+      P x).
 
   Module Forall.
     Section Forall.
@@ -343,8 +342,7 @@ Module Skip.
     (exists
       x,
         Skip y x /\
-        P x)
-    (only parsing).
+        P x).
 
   Module Exists.
     Section Exists.

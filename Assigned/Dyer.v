@@ -6,11 +6,16 @@ Require Import Coq.Structures.Orders Coq.Structures.OrdersFacts.
 Require Import Coq.Lists.SetoidList.
 Import ListNotations.
 
+Require Import Coq.Relations.Relation_Operators.
 Require Import Coq.Classes.RelationClasses.
+
 Require Import Coq.Arith.Arith.
 
 Require Coq.MSets.MSets.
 Require Coq.FSets.FMaps.
+
+Require Import Coq.Classes.Morphisms Coq.Classes.Morphisms_Prop.
+Require Import Setoid.
 
 Require Import Shuffle.Misc.
 Require Import Shuffle.List.
@@ -555,6 +560,487 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Qed.
   End Regular.
 
+  Module Pred.
+    Definition pred_error
+      (n : nat) :
+      option nat :=
+      match n with
+      | O => None
+      | S n' => Some n'
+      end.
+
+    Notation Pred n m :=
+      (pred_error n = Some m).
+
+    Notation Ok n m :=
+      (n = S m)
+      (only parsing).
+
+    Section Properties.
+      Variables
+        (m n : nat).
+
+      Lemma None_iff :
+        pred_error n = None <->
+        n = 0.
+      Proof.
+        now destruct n as [| n'].
+      Qed.
+
+      Lemma eq_None :
+        n = 0 ->
+        pred_error n = None.
+      Proof.
+        apply None_iff.
+      Qed.
+
+      Lemma None_eq :
+        pred_error n = None ->
+        n = 0.
+      Proof.
+        apply None_iff.
+      Qed.
+
+      Lemma Some_iff :
+        Pred n m <->
+        Ok n m.
+      Proof.
+        now destruct n as [| n'];
+          [| split; intros [= ->]].
+      Qed.
+
+      Lemma Some_neq :
+        Pred n m ->
+        Ok n m.
+      Proof.
+        apply Some_iff.
+      Qed.
+
+      Lemma neq_Some :
+        n <> 0 ->
+        exists m : nat,
+          Pred n m /\
+          Ok n m.
+      Proof.
+        now destruct n as [| n'];
+          [| exists n'].
+      Qed.
+    End Properties.
+
+    Lemma pred_error_spec :
+      forall n : nat,
+        OptionSpec
+          (fun m : nat => Ok n m)
+          (n = 0)
+          (pred_error n).
+    Proof.
+      intros n.
+      now destruct n as [| n'] eqn: Pred;
+        constructor.
+    Qed.
+  End Pred.
+  Import Pred(pred_error, pred_error_spec, Pred).
+
+  Module Active (M : MSetInterface.WSetsOn Owner).
+    Module M_Facts := MSetFacts.WFactsOn Owner M.
+    Module M_Properties := MSetProperties.WPropertiesOn Owner M.
+
+    Notation Ok x s :=
+      (forall
+        p : Owner.t,
+        M.In p s <-> Active p x).
+
+    Fixpoint active
+      (x : Instructions.t) :
+      M.t :=
+      match x with
+      | [] =>
+        M.empty
+      | Up p₀ :: x₀ =>
+        M.remove p₀ (active x₀)
+      | Down p₀ :: x₀ =>
+        M.add p₀ (active x₀)
+      end.
+
+    Notation count x :=
+      (M.cardinal (active x)).
+
+    Section Active.
+      Variables
+        x : Instructions.t.
+
+      Lemma active_spec :
+        Instructions.Ok x ->
+        Ok x (active x).
+      Proof.
+        induction 1 as [| u₀ x₀ Active_u₀_x₀ Ok_x₀ IHx₀|
+        u₀ x₀ Absent_u₀_x₀ Ok_x₀ IHx₀]; intros p.
+            now rewrite M_Facts.empty_iff.
+          simpl; rewrite M.remove_spec, Instructions.Active.cons_Up_iff, IHx₀.
+          now enough (Owner.eq p u₀ <-> Owner.eq u₀ p) as ->.
+        simpl; rewrite M.add_spec, Instructions.Active.cons_Down_iff, IHx₀ by
+          now constructor.
+        now enough (Owner.eq p u₀ <-> Owner.eq u₀ p) as ->.
+      Qed.
+
+      Lemma active_closed :
+        Instructions.Ok x ->
+        Instructions.Closed x ->
+        M.Empty (active x).
+      Proof.
+        intros Ok_x Closed_x p.
+        rewrite active_spec by assumption.
+        now apply Instructions.Closed_not_Active.
+      Qed.
+
+      Lemma count_closed :
+        Instructions.Ok x ->
+        Instructions.Closed x ->
+        count x = O.
+      Proof.
+        intros Ok_x Closed_x.
+        now apply M_Properties.cardinal_Empty, active_closed.
+      Qed.
+    End Active.
+
+    Section Count.
+      Variables
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t).
+
+      Lemma count_Up :
+        Instructions.Ok (Up p₀ :: x₀) ->
+        S (count (Up p₀ :: x₀)) = count x₀.
+      Proof.
+        intros Ok_x.
+        apply Instructions.Ok.cons_Up_iff in Ok_x
+          as (Active_p₀ & Ok_x₀).
+        now apply M_Properties.remove_cardinal_1, active_spec.
+      Qed.
+
+      Lemma count_Down :
+        Instructions.Ok (Down p₀ :: x₀) ->
+        count (Down p₀ :: x₀) = S (count x₀).
+      Proof with my_auto.
+        intros Ok_x.
+        apply Instructions.Ok.cons_Down_iff in Ok_x
+          as (Absent_p₀ & Ok_x₀).
+        apply M_Properties.add_cardinal_2.
+        rewrite active_spec by assumption.
+        assert (p₀_eq_p₀ : Owner.eq p₀ p₀) by reflexivity.
+        contradict p₀_eq_p₀...
+      Qed.
+    End Count.
+  End Active.
+
+  Module Counter.
+    Module Opcode := Instructions.Opcode.
+
+    Module M := MSetWeakList.Make Owner.
+    Module Active := Active M.
+
+    Fixpoint counter_body
+      (x : Instructions.t)
+      (active : nat)
+      (colors : nat) :
+      option nat :=
+      match x with
+      | [] =>
+        Some colors
+      | Up p₀ :: x₀ =>
+        counter_body
+          x₀
+          (S active)
+          (max (S active) colors)
+      | Down p₀ :: x₀ =>
+        bind (pred_error active) (fun active' : nat =>
+          counter_body
+            x₀
+            active'
+            colors)
+      end.
+
+    Definition counter
+      (x : Instructions.t) :
+      option nat :=
+      counter_body x O O.
+
+    Module State.
+      Definition t :
+        Type :=
+        Instructions.t *
+        nat *
+        nat.
+
+      Definition instructions
+        (self : t) :
+        Instructions.t :=
+        let '(instructions, _, _) := self in
+        instructions.
+
+      Definition active
+        (self : t) :
+        nat :=
+        let '(_, active, _) := self in
+        active.
+
+      Definition colors
+        (self : t) :
+        nat :=
+        let '(_, _, colors) := self in
+        colors.
+
+      Definition Ok
+        (state : t) :
+        Prop :=
+        (Instructions.Ok (instructions state) /\
+        active state = Active.count (instructions state) /\
+        active state <= colors state).
+    End State.
+
+    Inductive Max (active colors : nat) : nat -> Prop :=
+    | Max_ge :
+      active >= colors ->
+      Max active colors (S active)
+    | Max_lt :
+      active < colors ->
+      Max active colors colors.
+
+    Lemma max_spec :
+      forall
+        active colors : nat,
+        Max active colors (max (S active) colors).
+    Proof.
+      intros active colors.
+      destruct (le_gt_dec colors active) as
+        [active_ge_colers| active_lt_colors].
+        now rewrite Nat.max_l; [constructor| apply le_S].
+      now rewrite Nat.max_r; [constructor|].
+    Qed.
+
+    Inductive Counter :
+      relation State.t :=
+    | Counter_Up :
+      forall
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t)
+        (active colors colors' : nat),
+        Max active colors colors' ->
+        Counter
+          (x₀, S active, colors')
+          (Up p₀ :: x₀, active, colors)
+    | Counter_Down :
+      forall
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t)
+        (active colors : nat),
+        Counter
+          (x₀, active, colors)
+          (Down p₀ :: x₀, S active, colors).
+
+    Add Parametric Morphism : State.instructions with signature
+      Counter --> Tail (A := Instruction.t) as instructions_morphism.
+    Proof.
+      intros v₀ v₁ Counter_v₁_v₀.
+      induction Counter_v₁_v₀ as
+        [p₀ x₀ active₀ colors₀ colors₁ Ok_colors₁| p₀ x₀ active₀ colors₀];
+        constructor.
+    Qed.
+
+    Add Parametric Morphism : (fun state => State.colors state) with signature
+      Counter --> le as colors_morphism.
+    Proof with auto with arith.
+      intros v₀ v₁ Counter_v₁_v₀.
+      induction Counter_v₁_v₀ as
+        [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀];
+        simpl;
+        [destruct Max_colors₁|]...
+    Qed.
+
+    Add Parametric Morphism : State.Ok with signature
+      Counter --> impl as Ok_morphism.
+    Proof with auto with arith instructions.
+      intros v₀ v₁
+        [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀]
+        (Ok_instructions₀ & Ok_active₀ & Ok_colors₀).
+        apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
+          (Active_p₀_x₀ & Ok_x₀).
+        split_left...
+          simpl in *; rewrite <- Active.count_Up with p₀ x₀...
+        destruct Max_colors₁...
+      apply Instructions.Ok.cons_Down_iff in Ok_instructions₀ as
+          (Absent_p₀_x₀ & Ok_x₀).
+      split_left...
+      simpl in *; rewrite
+        <- Nat.succ_inj_wd,
+        <- Active.count_Down with (p₀ := p₀)...
+    Qed.
+
+    Definition Graph :=
+      clos_refl_trans_n1 _ Counter.
+
+    Lemma counter_body_spec :
+      forall
+        (instructions : Instructions.t)
+        (active : nat)
+        (colors : nat),
+        OptionSpec
+          (fun colors' : nat =>
+            exists
+              active' : nat ,
+              Graph
+                ([], active', colors')
+                (instructions, active, colors))
+          (exists
+            (p₀' : Owner.t)
+            (x₀' : Instructions.t)
+            (colors' : nat),
+            Graph
+              (Down p₀' :: x₀', O, colors')
+              (instructions, active, colors))
+          (counter_body instructions active colors).
+    Proof.
+      induction instructions as [| [[|] p₀] x₀ IHx₀]; intros active colors.
+          constructor; exists active; constructor.
+        specialize IHx₀ with (S active) (max (S active) colors).
+        specialize max_spec with active colors as Max_active_colors.
+        assert (H : Counter (x₀, S active, Init.Nat.max (S active) colors) (Up p₀ :: x₀, active, colors)) by
+          now constructor.
+        apply OptionSpec_map with (3 := IHx₀).
+          intros colors' (active' & graph).
+          now exists active';
+            constructor 2 with (x₀, S active, Init.Nat.max (S active) colors).
+        intros (p₀' & x₀' & colors' & graph).
+        now exists p₀', x₀', colors';
+          constructor 2 with (x₀, S active, max (S active) colors).
+      simpl.
+      destruct active as [| pred_active].
+        constructor.
+        exists p₀, x₀, colors; constructor.
+      specialize IHx₀ with pred_active colors.
+      assert (H : Counter (x₀, pred_active, colors) (Down p₀ :: x₀, S pred_active, colors)) by
+        now constructor.
+      apply OptionSpec_map with (3 := IHx₀).
+        intros colors' (active' & graph).
+        now exists active';
+          constructor 2 with (x₀, pred_active, colors).
+      intros (p₀' & x₀' & colors' & graph).
+      now exists p₀', x₀', colors';
+        constructor 2 with (x₀, pred_active, colors).
+    Qed.
+
+    Lemma Graph_invariant :
+      forall
+        state' state : State.t,
+        Graph state' state ->
+        State.Ok state ->
+          State.Ok state' /\
+          (State.instructions state' = [] ->
+          (State.colors state <= State.colors state' /\
+          Skip.Forall
+            (fun instructions : Instructions.t =>
+            Active.count instructions <= State.colors state')
+            (State.instructions state)) /\
+          (State.colors state' = State.colors state \/
+          Skip.Exists
+            (fun instructions : Instructions.t =>
+            Active.count instructions = State.colors state')
+            (State.instructions state))).
+    Proof with auto with arith.
+      intros u v.
+      induction 1 as [| v₁ v₀ Counter_v₁_v₀ R_u_v₁ IHv₁];
+        intros Ok_v₀.
+        split; [| intros ->]...
+        split;
+          [split; [| apply Skip.Forall.nil]| left]...
+      assert (Ok_v₁ : State.Ok v₁) by
+        now rewrite Counter_v₁_v₀.
+      split; [apply IHv₁| intros instructions'_eq_nil]...
+      specialize IHv₁ with (1 := Ok_v₁) as (_ & IHv₁);
+        specialize IHv₁ with (1 := instructions'_eq_nil)
+        as ((colors_v₁_le_u & active_v₁_le_u) & IHv₁).
+      destruct
+        Ok_v₀ as (Ok_instructions₀ & Ok_active₀ & Ok_colors₀),
+        Ok_v₁ as (Ok_instructions₁ & Ok_active₁ & Ok_colors₁).
+      split.
+        split.
+          now rewrite <- Counter_v₁_v₀.
+        intros instructions.
+        assert (
+          exists w z,
+            State.instructions v₀ = w :: z /\
+            State.instructions v₁ = z)
+          as (w & z & H₀ & H₁).
+          enough (Tail (State.instructions v₀) (State.instructions v₁))
+            as (w & z)
+            by now exists w, z.
+          now apply instructions_morphism.
+        rewrite H₀, H₁ in *; intros Skip_v₀_instructions.
+        apply Skip.cons_iff in Skip_v₀_instructions as [->| Suffix_tail].
+          rewrite <- Ok_active₀.
+          transitivity (State.colors v₀); [assumption|].
+          now transitivity (State.colors v₁);
+            [rewrite Counter_v₁_v₀|].
+        now apply active_v₁_le_u.
+      destruct IHv₁ as
+        [u_eq_v₁| (instructions & Skip_instructions_v₁ & u_eq_instructions)];
+        [| right].
+        enough (State.colors v₁ = State.colors v₀ \/ State.colors v₁ = State.active v₁)
+          as [<-| H];
+          [left| right|]...
+          now exists (State.instructions v₁); split;
+            [rewrite Counter_v₁_v₀| rewrite H, Ok_active₁ in u_eq_v₁].
+        destruct Counter_v₁_v₀ as
+          [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀];
+          simpl in *;
+          [destruct Max_colors₁|]...
+      now exists instructions; split;
+        [rewrite <- Counter_v₁_v₀|].
+    Qed.
+
+    Lemma counter_spec :
+      forall
+        instructions : Instructions.t,
+        Instructions.Ok instructions ->
+        Instructions.Closed instructions ->
+        OptionSpec
+          (fun colors' : nat =>
+            Skip.Forall
+              (fun instructions' : Instructions.t =>
+              Active.count instructions' <= colors')
+              instructions /\
+            Skip.Exists
+              (fun instructions' : Instructions.t =>
+              Active.count instructions' = colors')
+              instructions)
+          False
+          (counter instructions).
+    Proof with auto with arith.
+      intros x Ok_x Closed_x.
+      assert (Ok_state : State.Ok (x, 0, 0)).
+        split_left;
+          [| symmetry; apply Active.count_closed|]...
+      specialize counter_body_spec with x 0 0 as spec.
+      apply OptionSpec_map with (3 := spec).
+        intros colors' (active' & graph).
+        specialize Graph_invariant with (1 := graph) (2 := Ok_state) as
+          (_ & H).
+        specialize H with (1 := eq_refl) as (H_Forall & H_Exists).
+        split; [apply H_Forall|].
+        destruct H_Exists as
+          [H_Exists| H_Exists];
+          simpl in *...
+        exists x; split; [reflexivity| rewrite Active.count_closed]...
+      intros (p₀ & x₀ & colors & graph).
+      absurd (State.Ok (Down p₀ :: x₀, 0, colors)).
+        intros (Ok_instructions' & Ok_active' & _);
+          contradict Ok_active'.
+        change (O <> Active.count (Down p₀ :: x₀)).
+        rewrite Active.count_Down with p₀ x₀...
+      apply Graph_invariant with (1 := graph) (2 := Ok_state).
+    Qed.
+  End Counter.
+
   Module Fixed.
     Module Type Ord.
       Include EqLtLe'.
@@ -828,75 +1314,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       End Properties.
     End Min.
     Module Min' := Min Nat.
-
-    Module Pred.
-      Definition pred_error
-        (n : nat) :
-        option nat :=
-        match n with
-        | O => None
-        | S n' => Some n'
-        end.
-
-      Notation Pred n m :=
-        (pred_error n = Some m).
-
-      Notation Ok n m :=
-        (n = S m)
-        (only parsing).
-
-      Section Properties.
-        Variables
-          (m n : nat).
-
-        Lemma None_iff :
-          pred_error n = None <->
-          n = 0.
-        Proof.
-          now destruct n as [| n'].
-        Qed.
-
-        Lemma eq_None :
-          n = 0 ->
-          pred_error n = None.
-        Proof.
-          apply None_iff.
-        Qed.
-
-        Lemma None_eq :
-          pred_error n = None ->
-          n = 0.
-        Proof.
-          apply None_iff.
-        Qed.
-
-        Lemma Some_iff :
-          Pred n m <->
-          Ok n m.
-        Proof.
-          now destruct n as [| n'];
-            [| split; intros [= ->]].
-        Qed.
-
-        Lemma Some_neq :
-          Pred n m ->
-          Ok n m.
-        Proof.
-          apply Some_iff.
-        Qed.
-
-        Lemma neq_Some :
-          n <> 0 ->
-          exists m : nat,
-            Pred n m /\
-            Ok n m.
-        Proof.
-          now destruct n as [| n'];
-            [| exists n'].
-        Qed.
-      End Properties.
-    End Pred.
-    Import Pred(pred_error, Pred).
 
     Notation add_S
       self
