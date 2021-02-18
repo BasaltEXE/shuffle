@@ -39,5 +39,7 @@ Den im letzten Abschnitt beschriebenen Intervallgraph kann man als Liste `x` von
 Für einen Spieler `p` repräsentiert das Tupel `(Up, p)` und `(Down, p)` die Position seiner ersten bzw. letzten Karte im zu mischenden Kartenstapel.
 
 Eine reguläre [Färbung](../01475aea5b02484677b4a155bd20f311382716f1/Coloring.v#L7-L8) muss [dicht](../01475aea5b02484677b4a155bd20f311382716f1/Coloring.v#L56-L61) und für alle [Suffixe](../01475aea5b02484677b4a155bd20f311382716f1/List.v#L62-L108) von `x` [gültig](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L196-L207) sein.
-
 Der Beweis der Korrektheit des [Algorithmus](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L161-L167) für reguläre Färbungen ist [hier](../01475aea5b02484677b4a155bd20f311382716f1/Assigned/Dyer.v#L532-L555) einsehbar.
+
+Mit [`counter`](../f0654a32f6812f38780a46c8ef060b6aea72edd2/Assigned/Dyer.v#L763-L766) berechnen wir effizient die chromatische Zahl des Intervallgraphen.
+Das Lemma [`counter_spec`](../f0654a32f6812f38780a46c8ef060b6aea72edd2/Assigned/Dyer.v#L1001-L1041) beinhaltet die Spezifikation und Verifikation von `counter`.
