@@ -1,6 +1,10 @@
 Set Implicit Arguments.
 
 Require Import Coq.Arith.Arith.
+
+Require Import Coq.Relations.Relation_Operators Coq.Relations.Operators_Properties.
+Require Import Coq.Classes.RelationClasses.
+
 Require Import Coq.Lists.SetoidList.
 Import ListNotations.
 
@@ -59,53 +63,317 @@ Section InA.
   Qed.
 End InA.
 
-Module Tails.
-  Section Tails.
+Module Tail.
+  Section Tail.
     Variables
-      (A : Type)
-      (P : list A -> Prop).
+      (A : Type).
 
-    Inductive Forall : list A -> Prop :=
-    | Forall_nil :
-      P [] ->
-      Forall []
-    | Forall_cons : forall (u₀ : A) (x₀ : list A),
-      P (u₀ :: x₀) ->
-      Forall x₀ ->
-      Forall (u₀ :: x₀).
+    Inductive Tail : list A -> list A -> Prop :=
+    | intro :
+      forall
+        (u : A)
+        (x : list A),
+        Tail (u :: x) x.
 
-    Lemma Forall_inv : forall
-      x : list A,
-      Forall x ->
-      P x.
+    #[global]
+    Instance asymmetric :
+      Asymmetric Tail.
     Proof.
-      intros x Forall_x.
-      now destruct Forall_x as [P_x| u₀ x₀ P_x _].
+      intros x y Tail_x_y Tail_y_x.
+      induction Tail_x_y as (u₀ & x₀).
+      inversion Tail_y_x as (u₁).
+      now enough ([] = [u₀; u₁]);
+        [| apply app_inv_tail with x].
     Qed.
 
-    Inductive Exists : list A -> Prop :=
-    | Exists_x :
-      forall
-        x : list A,
-        P x -> Exists x
-    | Exists_cons :
-      forall
-        (u₀ : A)
-        (x₀ : list A),
-        Exists x₀ -> Exists (u₀ :: x₀).
+    #[global]
+    Instance irreflexive :
+      Irreflexive Tail.
+    Proof.
+      intros x Tail_x_x.
+      now apply asymmetric with (1 := Tail_x_x).
+    Qed.
 
-    Lemma Exists_nil :
-      forall
-        x : list A,
+    Variables
+      (v₀ : A)
+      (y₀ y x : list A).
+
+    Lemma inv :
+      Tail y y₀ ->
+      exists
+        v₀ : A,
+        y = v₀ :: y₀.
+    Proof.
+      inversion_clear 1.
+      now exists u.
+    Qed.
+
+    Lemma iff :
+      Tail y y₀ <->
+      (exists
+        v₀ : A,
+        y = v₀ :: y₀).
+    Proof.
+      now clear v₀; split;
+        [apply inv| intros (v₀' & ->)].
+    Qed.
+
+    Lemma nil_inv :
+      ~ Tail [] x.
+    Proof.
+      easy.
+    Qed.
+
+    Lemma nil_iff :
+      Tail [] x <->
+      False.
+    Proof.
+      now split.
+    Qed.
+
+    Lemma cons_inv :
+      Tail (v₀ :: y₀) x ->
+      y₀ = x.
+    Proof.
+      now inversion_clear 1.
+    Qed.
+
+    Lemma cons_iff :
+      Tail (v₀ :: y₀) x <->
+      y₀ = x.
+    Proof.
+      now split;
+        [apply cons_inv| intros <-].
+    Qed.
+  End Tail.
+
+  Add Parametric Relation (A : Type) : (list A) (Tail (A := A))
+    as Tail_rel.
+End Tail.
+Export Tail(Tail).
+
+Module Skip.
+  Section Skip.
+    Variables
+      (A : Type).
+
+    Definition Skip :
+      relation (list A) :=
+      clos_refl_trans_1n (list A) (@Tail A).
+
+    #[global]
+    Instance Tail_subrelation :
+      subrelation (@Tail A) Skip.
+    Proof.
+      intros y x.
+      apply clos_rt1n_step.
+    Qed.
+
+    #[global]
+    Instance reflexive :
+      Reflexive Skip.
+    Proof.
+      intros x.
+      apply rt1n_refl.
+    Qed.
+
+    #[global]
+    Instance transitive :
+      Transitive Skip.
+    Proof.
+      intros x y z.
+      unfold Skip.
+      rewrite <- 3!clos_rt_rt1n_iff.
+      now constructor 3 with y.
+    Qed.
+
+    #[global]
+    Instance preorder :
+      PreOrder Skip.
+    Proof.
+      split;
+        auto with typeclass_instances.
+    Qed.
+
+    Section Properties.
+      Variables
+        (v₀ : A)
+        (y₀ x : list A).
+
+      Lemma nil_inv :
+        Skip [] x ->
+        x = [].
+      Proof.
+        destruct 1 as [| y z Tail_x_y _]; [reflexivity|].
+        contradict Tail_x_y; apply Tail.nil_inv.
+      Qed.
+
+      Lemma nil_iff :
+        Skip [] x <->
+        x = [].
+      Proof.
+        split;
+          [apply nil_inv| intros ->; constructor].
+      Qed.
+
+      Lemma cons_inv :
+        Skip (v₀ :: y₀) x ->
+          x = v₀ :: y₀ \/
+          Skip y₀ x.
+      Proof.
+        now inversion_clear 1;
+          [left| right];
+          [| apply Tail.cons_inv in H0 as ->].
+      Qed.
+
+      Lemma cons_iff :
+        Skip (v₀ :: y₀) x <->
+          x = v₀ :: y₀ \/
+          Skip y₀ x.
+      Proof.
+        split.
+          apply cons_inv.
+        now intros [->| Skip_y₀_x];
+          [constructor| constructor 2 with y₀].
+      Qed.
+
+      Variables
+        z : list A.
+
+      Lemma inv :
+        Skip x z ->
+        (exists
+          y : list A,
+          x = y ++ z).
+      Proof.
+        clear y₀; induction 1 as [| x x₀ z Tail_x_x₀ Skip_x₀_z (y₀ & IHx₀_z)].
+          now exists [].
+        destruct Tail_x_x₀ as (u₀ & x₀).
+        now exists (u₀ :: y₀); rewrite IHx₀_z.
+      Qed.
+
+      Lemma iff :
+        Skip x z <->
+        (exists
+          y : list A,
+          x = y ++ z).
+      Proof.
+        clear v₀ y₀; split.
+          apply inv.
+        intros [y H].
+        revert dependent x.
+        induction y as [| v₀ y₀ IHy₀].
+          now intros ? ->.
+        intros [| u₀ x₀] [= _ ->].
+        constructor 2 with (y₀ ++ z).
+          constructor.
+        now apply IHy₀.
+      Qed.
+    End Properties.
+
+    #[global]
+    Instance antisymmetric :
+      Antisymmetric (list A) eq Skip.
+    Proof.
+      intros x y Skip_x_y Skip_y_x.
+      apply iff in
+        Skip_x_y as (y' & H),
+        Skip_y_x as (x' & G).
+      enough (x' = [] /\ y' = []) as (-> & ->) by easy.
+      enough (x' ++ y' = []) by
+        now apply app_eq_nil.
+      enough ([] ++ y = (x' ++ y') ++ y) by
+        now symmetry; apply app_inv_tail with y.
+      now rewrite <- app_assoc, <- H.
+    Qed.
+
+    #[global]
+    Instance partial_order :
+      PartialOrder eq Skip.
+    Proof.
+      intros x y.
+      split.
+        now intros ->.
+      intros (Skip_x_y & Skip_y_x).
+      now apply antisymmetric.
+    Qed.
+  End Skip.
+
+  Add Parametric Relation (A : Type) : (list A) (Skip (A := A))
+    reflexivity proved by (reflexive (A:=A))
+    transitivity proved by (transitive (A:=A))
+    as Skip_rel.
+
+  Notation Forall P y :=
+    (forall
+      x,
+      Skip y x ->
+      P x)
+    (only parsing).
+
+  Module Forall.
+    Section Forall.
+      Variables
+        (A : Type)
+        (P : list A -> Prop)
+        (v₀ : A)
+        (y₀ : list A).
+
+      Lemma nil :
         P [] ->
-        Exists x.
-    Proof.
-      induction x as [| u₀ x₀ IHx₀]; intros P_nil.
-        now constructor.
-      now constructor 2; apply IHx₀.
-    Qed.
-  End Tails.
-End Tails.
+        Forall P [].
+      Proof.
+        intros P_y x Skip_y_x.
+        now apply nil_inv in Skip_y_x as ->.
+      Qed.
+
+      Lemma cons :
+        P (v₀ :: y₀) ->
+        Forall P y₀ ->
+        Forall P (v₀ :: y₀).
+      Proof.
+        intros P_y P_y₀ x Skip_y_x.
+        now apply cons_inv in Skip_y_x as [->| Skip_y₀_x];
+          [| apply P_y₀].
+      Qed.
+    End Forall.
+  End Forall.
+
+  Notation Exists P y :=
+    (exists
+      x,
+        Skip y x /\
+        P x)
+    (only parsing).
+
+  Module Exists.
+    Section Exists.
+      Variables
+        (A : Type)
+        (P : list A -> Prop)
+        (v₀ : A)
+        (y₀ y : list A).
+
+      Lemma refl :
+        P y ->
+        Exists P y.
+      Proof.
+        intros P_y.
+        now exists y.
+      Qed.
+
+      Lemma cons :
+        Exists P y₀ ->
+        Exists P (v₀ :: y₀).
+      Proof.
+        intros (x & Skip_y₀_x & P_x).
+        now exists x; split;
+          [constructor 2 with y₀|].
+      Qed.
+    End Exists.
+  End Exists.
+End Skip.
+Export Skip(Skip).
 
 Module Nth.
   Notation Nth x n v :=

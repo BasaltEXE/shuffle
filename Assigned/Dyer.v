@@ -451,7 +451,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Assumption.Ok instructions coloring unused_colors ->
       OptionSpec (fun result : Coloring.t =>
         Coloring.Ok result /\
-        Tails.Forall (RealColoring result) instructions /\
+        Skip.Forall (RealColoring result) instructions /\
         Synced' instructions coloring result)
         False
         (regular_body instructions coloring unused_colors).
@@ -460,7 +460,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros coloring unused_colors ok.
             Ok_destruct ok.
           constructor; split_left...
-          constructor.
+          apply Skip.Forall.nil.
             intros x y x_neq_y Active_x Active_y.
             absurd (Active x [])...
           intros owner' color' not_Ahead_owner' owner'_to_color'...
@@ -471,7 +471,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           intros result (Ok_result & Proper_result & Synced_result).
           Ok_destruct ok'.
           split_left...
-            constructor...
+            apply Skip.Forall.cons...
             intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
             apply Proper_coloring with x y...
             1 - 2:
@@ -491,7 +491,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros result (Ok_result & Proper_result & Synced_result).
         Ok_destruct ok'.
         split_left...
-          constructor...
+          apply Skip.Forall.cons...
           intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
           apply Proper_coloring with x y...
           1 - 2:
@@ -513,7 +513,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       apply OptionSpec_impl with (2 := IHinstructions).
       intros result (Ok_result & Proper_result & Synced_result).
       split_left...
-        constructor...
+        apply Skip.Forall.cons...
         intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
         assert (Ok_instructions' : Instructions.Ok (Down owner :: instructions)) by
           now destruct ok.
@@ -535,7 +535,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Instructions.Closed instructions ->
       OptionSpec (fun result =>
         Coloring.Ok result /\
-        Tails.Forall (RealColoring result) instructions)
+        Skip.Forall (RealColoring result) instructions)
         False
         (regular instructions).
     Proof with my_auto.
