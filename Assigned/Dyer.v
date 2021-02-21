@@ -1342,6 +1342,60 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       | [] => ret coloring
       end.
 
+    Module State.
+      Definition t :
+        Type :=
+        Instructions.t *
+        Coloring.t *
+        list nat.
+
+      Definition instructions
+        (self : t) :
+        Instructions.t :=
+        let '(instructions, _, _) := self in
+        instructions.
+
+      Definition coloring
+        (self : t) :
+        Coloring.t :=
+        let '(_, coloring, _) := self in
+        coloring.
+
+      Definition counts
+        (self : t) :
+        list nat :=
+        let '(_, _, counts) := self in
+        counts.
+
+      Notation MapsTo self p c :=
+        (Map.MapsTo p c (coloring self))
+        (only parsing).
+    End State.
+
+    Inductive Fixed : relation State.t :=
+    | Fixed_Up :
+      forall
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t)
+        (coloring : Coloring.t)
+        (counts counts' : list nat)
+        (c₀ v₀ : nat),
+        Min'.Min counts c₀ v₀ ->
+        Replace.Ok counts c₀ (S v₀) counts' ->
+        Fixed (x₀, add_S coloring p₀ c₀, counts') (Up p₀ :: x₀, coloring, counts)
+    | Fixed_Down :
+      forall
+        (p₀ : Owner.t)
+        (x₀ : Instructions.t)
+        (coloring : Coloring.t)
+        (counts counts' : list nat)
+        (c₀ v₀ v₀' : nat),
+        Coloring.MapsTo coloring p₀ c₀ ->
+        Nth counts c₀ v₀ ->
+        Pred.Ok v₀ v₀' ->
+        Replace.Ok counts c₀ v₀' counts' ->
+        Fixed (x₀, coloring, counts') (Down p₀ :: x₀, coloring, counts).
+
     Lemma StronglyExtensional
       (coloring : Coloring.t) :
       forall p p' c c',
