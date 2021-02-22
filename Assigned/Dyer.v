@@ -1467,6 +1467,22 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           now rewrite <- Pred_s₁_s₀.
         Qed.
 
+        Let Ok_coloring₁ :
+          Coloring.Ok s₁.(coloring).
+        Proof with (simpl; my_auto).
+          destruct_Fixed.
+            apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
+              (Active_p₀_x₀ & Ok_x₀).
+            assert (not_In_p₀ : ~ Coloring.Contains coloring₀ p₀).
+              apply Synced_s₀...
+            enough (c₀ < Coloring.colors coloring₀ \/ c₀ = Coloring.colors coloring₀) as [c₀_lt_colors₀| ->].
+                rewrite max_r; [apply Coloring.Ok.add_lt|]...
+              rewrite max_l; [apply Coloring.Ok.add_eq|]...
+            enough (c₀ <= Coloring.colors coloring₀) by now apply le_lt_or_eq.
+            now apply (@Corollary_Min (new (Up p₀ :: x₀) coloring₀ counts₀) c₀ v₀).
+          auto.
+        Qed.
+
         Let Synced_s₁ :
           Synced s₁.(instructions) s₁.(coloring).
         Proof with (simpl; my_auto).
