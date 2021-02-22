@@ -1,4 +1,5 @@
 Set Implicit Arguments.
+Set Printing Projections.
 
 Require Import Coq.Structures.Equalities Coq.Structures.EqualitiesFacts.
 Require Import Coq.Structures.Orders Coq.Structures.OrdersFacts.
@@ -1342,59 +1343,128 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       | [] => ret coloring
       end.
 
+    Definition fixed
+      (instructions : Instructions.t)
+      (colors : nat) :
+      option Coloring.t :=
+      fixed_body instructions Coloring.empty (repeat O colors).
+
     Module State.
-      Definition t :
-        Type :=
-        Instructions.t *
-        Coloring.t *
-        list nat.
+      Record t : Type := new {
+        instructions : Instructions.t;
+        coloring : Coloring.t;
+        counts : list nat
+      }.
 
-      Definition instructions
-        (self : t) :
-        Instructions.t :=
-        let '(instructions, _, _) := self in
-        instructions.
+      Inductive Fixed : relation State.t :=
+      | Fixed_Up :
+        forall
+          (p₀ : Owner.t)
+          (x₀ : Instructions.t)
+          (coloring : Coloring.t)
+          (counts counts' : list nat)
+          (c₀ v₀ : nat),
+          Min'.Min counts c₀ v₀ ->
+          Replace.Ok counts c₀ (S v₀) counts' ->
+          Fixed (new x₀ (add_S coloring p₀ c₀) counts') (new (Up p₀ :: x₀) coloring counts)
+      | Fixed_Down :
+        forall
+          (p₀ : Owner.t)
+          (x₀ : Instructions.t)
+          (coloring : Coloring.t)
+          (counts counts' : list nat)
+          (c₀ v₀' : nat),
+          Coloring.MapsTo coloring p₀ c₀ ->
+          Nth counts c₀ (S v₀') ->
+          Replace.Ok counts c₀ v₀' counts' ->
+          Fixed (new x₀ coloring counts') (new (Down p₀ :: x₀) coloring counts).
 
-      Definition coloring
-        (self : t) :
-        Coloring.t :=
-        let '(_, coloring, _) := self in
-        coloring.
+      Module M := MSetWeakList.Make Owner.
+      Module M_Facts := MSetFacts.Facts M.
+      Module M_Properties := MSetProperties.WProperties M.
 
-      Definition counts
-        (self : t) :
-        list nat :=
-        let '(_, _, counts) := self in
-        counts.
+      Definition Ok_counts
+        (s : State.t) :
+        Prop :=
+        ForNth
+          (fun (color count : nat) =>
+          exists owners : M.t,
+            (forall owner : Owner.t,
+            M.In owner owners <->
+              Active owner s.(instructions) /\
+              Coloring.MapsTo s.(coloring) owner color) /\
+            M.cardinal owners = count)
+          s.(counts) /\
+        Coloring.colors s.(coloring) <= length s.(counts).
 
-      Notation MapsTo self p c :=
-        (Map.MapsTo p c (coloring self))
-        (only parsing).
+      Lemma Corollary_counts :
+        forall
+          s : State.t,
+          Ok_counts s ->
+          Coloring.Ok s.(coloring) ->
+          forall
+            color : nat,
+            Coloring.colors s.(coloring) <= color < length s.(counts) ->
+            Nth s.(counts) color 0.
+      Proof.
+        intros s Ok_counts Ok_coloring c (colors_le_c & c_lt_counts).
+        specialize NthError.lt_Some with (1 := c_lt_counts) as (v & c_to_v).
+        enough (v = 0) as -> by easy.
+        apply Ok_counts in c_to_v as (owners & Ok_owners & <-).
+        enough (M.Empty owners) by
+          now apply M_Properties.cardinal_Empty.
+        intros p.
+        enough (~ Coloring.MapsTo s.(coloring) p c) by
+            now rewrite Ok_owners.
+        enough (c_nlt_colors : ~ c < Coloring.colors s.(coloring)) by
+          now contradict c_nlt_colors; apply Ok_coloring; exists p.
+        auto with arith.
+      Qed.
+
+      Section Facts.
+        Variables
+          (s₀ s₁ : State.t)
+          (Fixed_s₁_s₀ : Fixed s₁ s₀)
+          (Ok_instructions₀ : Instructions.Ok s₀.(instructions))
+          (Ok_coloring₀ : Coloring.Ok s₀.(coloring))
+          (Synced_s₀ : Synced s₀.(instructions) s₀.(coloring))
+          (Ok_counts₀ : Ok_counts s₀).
+
+        Ltac destruct_Fixed :=
+          destruct Fixed_s₁_s₀ as
+          [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
+          p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁].
+
+        Let Pred_s₁_s₀ :
+          Tail s₀.(instructions) s₁.(instructions).
+        Proof.
+          destruct_Fixed; constructor.
+        Qed.
+
+        Let Ok_instructions₁ :
+          Instructions.Ok s₁.(instructions).
+        Proof.
+          now rewrite <- Pred_s₁_s₀.
+        Qed.
+
+        Let Synced_s₁ :
+          Synced s₁.(instructions) s₁.(coloring).
+        Proof with (simpl; my_auto).
+          destruct_Fixed;
+            intros p; split; simpl.
+                intros Active_p_x₀; apply add_in_iff.
+                destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
+                  [left| right; apply Synced_s₀]...
+              apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
+                  (Active_p₀_x₀ & Ok_x₀).
+              intros Ahead_p₀_x₀.
+              apply add_not_in_iff; split...
+              apply Synced_s₀...
+            intros Active_p_x₀; apply Synced_s₀...
+          intros Ahead_p_x₀; apply Synced_s₀...
+        Qed.
+      End Facts.
     End State.
-
-    Inductive Fixed : relation State.t :=
-    | Fixed_Up :
-      forall
-        (p₀ : Owner.t)
-        (x₀ : Instructions.t)
-        (coloring : Coloring.t)
-        (counts counts' : list nat)
-        (c₀ v₀ : nat),
-        Min'.Min counts c₀ v₀ ->
-        Replace.Ok counts c₀ (S v₀) counts' ->
-        Fixed (x₀, add_S coloring p₀ c₀, counts') (Up p₀ :: x₀, coloring, counts)
-    | Fixed_Down :
-      forall
-        (p₀ : Owner.t)
-        (x₀ : Instructions.t)
-        (coloring : Coloring.t)
-        (counts counts' : list nat)
-        (c₀ v₀ v₀' : nat),
-        Coloring.MapsTo coloring p₀ c₀ ->
-        Nth counts c₀ v₀ ->
-        Pred.Ok v₀ v₀' ->
-        Replace.Ok counts c₀ v₀' counts' ->
-        Fixed (x₀, coloring, counts') (Down p₀ :: x₀, coloring, counts).
 
     Lemma StronglyExtensional
       (coloring : Coloring.t) :
