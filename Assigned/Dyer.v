@@ -1421,6 +1421,26 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         auto with arith.
       Qed.
 
+      Lemma Corollary_Min :
+        forall
+          (s : State.t)
+          (c v : nat),
+          Ok_counts s ->
+          Coloring.Ok s.(coloring) ->
+          Min'.Min s.(counts) c v ->
+          c <= Coloring.colors s.(coloring).
+      Proof with auto with arith.
+        intros s c v Ok_counts Ok_coloring (Min_c_v & c_to_v).
+        enough (~ c > Coloring.colors s.(coloring)) by
+          now apply not_gt.
+        specialize Nat.nlt_0_r with v as c_gt_colors;
+          contradict c_gt_colors.
+        apply Min_c_v with (2 := c_gt_colors), Corollary_counts...
+        enough (Coloring.colors s.(coloring) < length s.(counts))...
+        transitivity c;
+          [| apply NthError.Some_lt with v]...
+      Qed.
+
       Section Facts.
         Variables
           (s₀ s₁ : State.t)
