@@ -1394,7 +1394,11 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Active owner s.(instructions) /\
               Coloring.MapsTo s.(coloring) owner color) /\
             M.cardinal owners = count)
-          s.(counts) /\
+          s.(counts).
+
+      Definition Ok_length
+        (s : State.t) :
+        Prop :=
         Coloring.colors s.(coloring) <= length s.(counts).
 
       Lemma Corollary_counts :
@@ -1448,7 +1452,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           (Ok_instructions₀ : Instructions.Ok s₀.(instructions))
           (Ok_coloring₀ : Coloring.Ok s₀.(coloring))
           (Synced_s₀ : Synced s₀.(instructions) s₀.(coloring))
-          (Ok_counts₀ : Ok_counts s₀).
+          (Ok_counts₀ : Ok_counts s₀)
+          (Ok_length₀ : Ok_length s₀).
 
         Ltac destruct_Fixed :=
           destruct Fixed_s₁_s₀ as
@@ -1498,6 +1503,21 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               apply Synced_s₀...
             intros Active_p_x₀; apply Synced_s₀...
           intros Ahead_p_x₀; apply Synced_s₀...
+        Qed.
+
+        Let length_eq :
+          length s₁.(counts) = length s₀.(counts).
+        Proof.
+          symmetry; destruct_Fixed; apply Replace_counts₁.
+        Qed.
+
+        Let Ok_length₁ :
+          Ok_length s₁.
+        Proof with auto.
+          unfold Ok_length; rewrite length_eq.
+          destruct_Fixed...
+          apply Nat.max_lub...
+          simpl; apply NthError.Some_lt with v₀...
         Qed.
       End Facts.
     End State.
