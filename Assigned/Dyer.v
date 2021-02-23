@@ -1661,6 +1661,24 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       End Facts.
     End State.
 
+    Definition Graph :=
+      clos_refl_trans_n1 _ State.Fixed.
+
+    Add Parametric Morphism : State.Ok.t with signature
+      State.Fixed --> impl as Fixed_morphism.
+    Proof.
+      intros s₀ s₁ Fixed_s₁_s₀ Ok_s₀.
+      now apply State.Ok_s₁ with s₀.
+    Qed.
+
+    Add Parametric Morphism : State.Ok.t with signature
+      Graph --> impl as Graph_morphism.
+    Proof.
+      intros s s'.
+      now induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
+        [| intros Ok_s₀; apply IHs₁; rewrite Fixed_s₁_s₀].
+    Qed.
+
     Module Assumptions.
       Import MSets.
 
