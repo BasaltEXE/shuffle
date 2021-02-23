@@ -1482,7 +1482,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Ltac destruct_Fixed :=
           destruct Fixed_s₁_s₀ as
           [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
-          p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁].
+          p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁];
+          [apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as (Active_p₀_x₀ & Ok_x₀)| apply Instructions.Ok.cons_Down_iff in Ok_instructions₀ as (Absent_p₀_x₀ & Ok_x₀)].
 
         Let Pred_s₁_s₀ :
           Tail s₀.(instructions) s₁.(instructions).
@@ -1498,18 +1499,15 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
         Let Ok_coloring₁ :
           Coloring.Ok s₁.(coloring).
-        Proof with (simpl; my_auto).
-          destruct_Fixed.
-            apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
-              (Active_p₀_x₀ & Ok_x₀).
-            assert (not_In_p₀ : ~ Coloring.Contains coloring₀ p₀).
-              apply Synced_s₀...
-            enough (c₀ < Coloring.colors coloring₀ \/ c₀ = Coloring.colors coloring₀) as [c₀_lt_colors₀| ->].
-                rewrite max_r; [apply Coloring.Ok.add_lt|]...
-              rewrite max_l; [apply Coloring.Ok.add_eq|]...
-            enough (c₀ <= Coloring.colors coloring₀) by now apply le_lt_or_eq.
-            now apply (@Corollary_Min (new (Up p₀ :: x₀) coloring₀ counts₀) c₀ v₀).
-          auto.
+        Proof with my_auto.
+          destruct_Fixed; cbn - [max] in *...
+          assert (not_In_p₀ : ~ Coloring.Contains coloring₀ p₀).
+            apply Synced_s₀...
+          enough (c₀ < Coloring.colors coloring₀ \/ c₀ = Coloring.colors coloring₀) as [c₀_lt_colors₀| ->].
+              rewrite max_r; [apply Coloring.Ok.add_lt|]...
+            rewrite max_l; [apply Coloring.Ok.add_eq|]...
+          enough (c₀ <= Coloring.colors coloring₀) by now apply le_lt_or_eq.
+          now apply (@Corollary_Min (new (Up p₀ :: x₀) coloring₀ counts₀) c₀ v₀).
         Qed.
 
         Let Synced_s₁ :
@@ -1520,8 +1518,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 intros Active_p_x₀; apply add_in_iff.
                 destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
                   [left| right; apply Synced_s₀]...
-              apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
-                  (Active_p₀_x₀ & Ok_x₀).
               intros Ahead_p₀_x₀.
               apply add_not_in_iff; split...
               apply Synced_s₀...
@@ -1547,12 +1543,11 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Let Ok_counts₁ :
           Ok_counts s₁.
         Proof with (simpl; my_auto).
-          unfold Ok_counts in *; destruct_Fixed.
+          unfold Ok_counts, ForNth in Ok_counts₀.
+          destruct_Fixed.
             intros c v c_to_v.
-            apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
-              (Active_p₀_x₀ & Ok_x₀).
-            unfold Replace.Ok in Replace_counts₁.
-            unfold ForNth in Ok_counts₀.
+            destruct Replace_counts₁ as
+              (c₀_lt_counts₀ & _ & c₀_to_S_v₀ & H).
             destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
               specialize Ok_counts₀ with (1 := c₀_to_v₀) as
                 (owners & owners_iff & owners_length).
@@ -1577,8 +1572,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               enough (Owner.eq p₀ p₀) by
                 (rewrite Instructions.Active.cons_Up_iff; tauto).
               reflexivity.
-            destruct Replace_counts₁ as
-              (c₀_lt_counts₀ & _ & c₀_to_S_v₀ & H).
             specialize Ok_counts₀ with c v as
               (owners & owners_iff & owners_length);
               [now rewrite H|].
@@ -1602,9 +1595,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             now apply NthError.Some_lt with v'.
           specialize NthError.lt_Some with (1 := c_lt_counts₀) as
             (v & c_to_v).
-          unfold ForNth in Ok_counts₀.
           destruct Replace_counts₁ as
-            (c₀_lt_counts₀ & _ & c₀_to_S_v₀ & H).
+            (c₀_lt_counts₀ & _ & c₀_to_v₀' & H).
           specialize Ok_counts₀ with (1 := c_to_v) as
             (owners & owners_iff & owners_length).
           destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
@@ -1614,8 +1606,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 now rewrite <- c_to_v, <- c_to_v'; apply H.
               split; [| assumption].
               intros p.
-              rewrite owners_iff, Instructions.Active.cons_Down_iff by
-                assumption.
+              rewrite owners_iff, Instructions.Active.cons_Down_iff...
               enough (Coloring.MapsTo coloring₀ p c -> ~ Owner.eq p₀ p) by tauto.
               intros p_to_c.
               now apply StronglyExtensional with coloring₀ c₀ c;
@@ -1626,19 +1617,16 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             rewrite
               M.remove_spec,
               owners_iff,
-              Instructions.Active.cons_Down_iff by assumption.
+              Instructions.Active.cons_Down_iff...
             enough ((Owner.eq p₀ p \/ Active p x₀) /\
             ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
             assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
             enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
-            apply Instructions.Ok.cons_Down_iff in Ok_instructions₀ as
-              (Absent_p₀_x₀ & Ok_x₀).
-            intros Active_p_x₀...
           change (pred (S (M.cardinal (M.remove p₀ owners))) = v').
           rewrite M_Properties.remove_cardinal_1, owners_length; [| apply owners_iff]...
           enough (Some v = Some (S v₀') /\ Some v' = Some v₀') as
             ([= ->] & [= ->]) by reflexivity.
-          now rewrite <- c_to_v, <- c₀_to_v₀, <- c_to_v', <- c₀_to_S_v₀.
+          now rewrite <- c_to_v, <- c₀_to_v₀, <- c_to_v', <- c₀_to_v₀'.
         Qed.
       End Facts.
     End State.
