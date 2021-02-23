@@ -1665,10 +1665,20 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       clos_refl_trans_n1 _ State.Fixed.
 
     Add Parametric Morphism : State.Ok.t with signature
-      State.Fixed --> impl as Fixed_morphism.
+      State.Fixed --> impl as Ok_morphism.
     Proof.
       intros s₀ s₁ Fixed_s₁_s₀ Ok_s₀.
       now apply State.Ok_s₁ with s₀.
+    Qed.
+
+    Add Parametric Morphism : (compose (length (A := nat)) State.counts) with signature
+      State.Fixed ++> eq as length_morphism.
+    Proof.
+      intros s₁ s₀ Fixed_s₁_s₀.
+      symmetry; destruct Fixed_s₁_s₀ as
+        [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
+        p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁];
+        apply Replace_counts₁.
     Qed.
 
     Add Parametric Morphism : State.Ok.t with signature
