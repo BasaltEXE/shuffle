@@ -1362,6 +1362,21 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now apply MapsTo_fun with (1 := p_to_c).
     Qed.
 
+    Module M := MSetWeakList.Make Owner.
+    Module M_Facts := MSetFacts.Facts M.
+    Module M_Properties := MSetProperties.WProperties M.
+
+    Lemma add_eq_iff : forall
+      (s : M.t)
+      (x y : Owner.t),
+      Owner.eq x y ->
+        M.In y (M.add x s) <->
+        True.
+    Proof.
+      intros.
+      rewrite M_Facts.add_iff; tauto.
+    Qed.
+
     Module State.
       Record t : Type := new {
         instructions : Instructions.t;
@@ -1391,21 +1406,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Nth counts c₀ (S v₀') ->
           Replace.Ok counts c₀ v₀' counts' ->
           Fixed (new x₀ coloring counts') (new (Down p₀ :: x₀) coloring counts).
-
-      Module M := MSetWeakList.Make Owner.
-      Module M_Facts := MSetFacts.Facts M.
-      Module M_Properties := MSetProperties.WProperties M.
-
-      Lemma add_eq_iff : forall
-        (s : M.t)
-        (x y : Owner.t),
-        Owner.eq x y ->
-          M.In y (M.add x s) <->
-          True.
-      Proof.
-        intros.
-        rewrite M_Facts.add_iff; tauto.
-      Qed.
 
       Module Ok.
         Section Ok.
@@ -1687,6 +1687,74 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       intros s s'.
       now induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
         [| intros Ok_s₀; apply IHs₁; rewrite Fixed_s₁_s₀].
+    Qed.
+
+    Lemma fixed_body_spec :
+      forall
+        (instructions : Instructions.t)
+        (coloring : Coloring.t)
+        (counts : list nat)
+        (s := State.new instructions coloring counts),
+        State.Ok.t s ->
+        length s.(State.counts) <> 0 ->
+        exists s' : State.t,
+          Graph s' s /\
+          fixed_body instructions coloring counts = Some s'.(State.coloring).
+    Proof with (simpl; my_auto).
+      induction instructions as [| [[|] p₀] x₀ IHx₀];
+        intros coloring₀ counts₀ s₀ Ok_s₀ counts₀_neq_nil.
+          exists s₀; repeat constructor.
+        simpl; destruct (Min'.minimum_spec counts₀) as
+          [(c₀ & v₀) Min_c₀_v₀| counts_eq_nil];
+          [| now apply length_zero_iff_nil in counts_eq_nil];
+          simpl.
+        specialize Replace.lt_Some with _ counts₀ c₀ (S v₀) as
+          (counts₁ & -> & Replace_counts₁).
+          apply NthError.Some_lt with v₀, Min_c₀_v₀.
+        pose (s₁ := State.new x₀ (add_S coloring₀ p₀ c₀) counts₁).
+        assert (Fixed_s₁_s₀ : State.Fixed s₁ s₀) by
+          now constructor 1 with v₀.
+        assert (Ok_s₁ : State.Ok.t s₁) by
+          now rewrite Fixed_s₁_s₀.
+        specialize IHx₀ with (1 := Ok_s₁) as
+          (s' & Graph_s'_s₁ & H).
+          change (compose (@length nat) State.counts s₁ <> 0).
+          now rewrite Fixed_s₁_s₀.
+        now exists s'; split;
+          [constructor 2 with s₁|].
+      assert (Active_p₀_s₀ : Active p₀ s₀.(State.instructions)) by
+        (apply Instructions.Active.cons_Down_eq;
+          [exact (Ok_s₀.(State.Ok.instructions))| reflexivity]).
+      simpl; specialize find_In_Some as (c₀ & -> & p₀_to_c₀).
+        now apply Ok_s₀.(State.Ok.synced).
+      specialize NthError.lt_Some with _ counts₀ c₀ as
+        (v₀ & c₀_to_v₀).
+        apply lt_le_trans with (Coloring.colors s₀.(State.coloring)).
+          now apply Ok_s₀.(State.Ok.coloring); exists p₀.
+        apply Ok_s₀.(State.Ok.length).
+      simpl; rewrite c₀_to_v₀; simpl.
+      specialize Pred.neq_Some with v₀ as
+        (v₀' & -> & Ok_v₀_v₀').
+        specialize Ok_s₀.(State.Ok.counts) as
+          (owners₀ & owners₀_iff & owners₀_length).
+          exact c₀_to_v₀.
+        rewrite <- owners₀_length, <- M_Properties.cardinal_Empty.
+        now enough (In_p₀_owners₀ : M.In p₀ owners₀);
+          [contradict In_p₀_owners₀| apply owners₀_iff].
+      simpl; specialize Replace.lt_Some with _ counts₀ c₀ v₀' as
+        (counts₁ & -> & Replace_counts₁).
+        now apply NthError.Some_lt with v₀.
+      pose (s₁ := State.new x₀ coloring₀ counts₁).
+      assert (Fixed_s₁_s₀ : State.Fixed s₁ s₀) by
+        now rewrite Ok_v₀_v₀' in c₀_to_v₀; constructor 2 with c₀ v₀'.
+      assert (Ok_s₁ : State.Ok.t s₁).
+        now rewrite Fixed_s₁_s₀.
+      specialize IHx₀ with (1 := Ok_s₁) as
+        (s' & Graph_s'_s₁ & H).
+        change (compose (@length nat) State.counts s₁ <> 0).
+        now rewrite Fixed_s₁_s₀.
+      now exists s'; split;
+        [constructor 2 with s₁|].
     Qed.
 
     Module Assumptions.
