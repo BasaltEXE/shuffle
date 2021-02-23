@@ -1689,6 +1689,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         [| intros Ok_s₀; apply IHs₁; rewrite Fixed_s₁_s₀].
     Qed.
 
+    Add Parametric Morphism : State.instructions with signature
+      State.Fixed --> Tail (A := Instruction.t) as instructions_morphism.
+    Proof.
+      intros v₀ v₁ Counter_v₁_v₀.
+      induction Counter_v₁_v₀; constructor.
+    Qed.
+
     Lemma coloring_morphism :
       forall
         s₀ s₁ : State.t,
