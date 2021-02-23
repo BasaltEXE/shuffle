@@ -1349,6 +1349,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       option Coloring.t :=
       fixed_body instructions Coloring.empty (repeat O colors).
 
+    Lemma StronglyExtensional
+      (coloring : Coloring.t) :
+      forall p p' c c',
+        Coloring.MapsTo coloring p c ->
+        Coloring.MapsTo coloring p' c' ->
+        c <> c' ->
+        ~ Owner.eq p p'.
+    Proof.
+      intros p p' c c' p_to_c p'_to_c' c_neq_c'.
+      contradict c_neq_c'; rewrite c_neq_c' in p_to_c.
+      now apply MapsTo_fun with (1 := p_to_c).
+    Qed.
+
     Module State.
       Record t : Type := new {
         instructions : Instructions.t;
@@ -1382,6 +1395,17 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Module M := MSetWeakList.Make Owner.
       Module M_Facts := MSetFacts.Facts M.
       Module M_Properties := MSetProperties.WProperties M.
+
+      Lemma add_eq_iff : forall
+        (s : M.t)
+        (x y : Owner.t),
+        Owner.eq x y ->
+          M.In y (M.add x s) <->
+          True.
+      Proof.
+        intros.
+        rewrite M_Facts.add_iff; tauto.
+      Qed.
 
       Definition Ok_counts
         (s : State.t) :
@@ -1519,21 +1543,105 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           apply Nat.max_lub...
           simpl; apply NthError.Some_lt with v₀...
         Qed.
+
+        Let Ok_counts₁ :
+          Ok_counts s₁.
+        Proof with (simpl; my_auto).
+          unfold Ok_counts in *; destruct_Fixed.
+            intros c v c_to_v.
+            apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
+              (Active_p₀_x₀ & Ok_x₀).
+            unfold Replace.Ok in Replace_counts₁.
+            unfold ForNth in Ok_counts₀.
+            destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
+              specialize Ok_counts₀ with (1 := c₀_to_v₀) as
+                (owners & owners_iff & owners_length).
+              exists (M.add p₀ owners); simpl in *; split.
+                intro p; destruct (Owner.eq_dec p₀ p) as
+                  [p₀_eq_p| p₀_neq_p].
+                  symmetry in p₀_eq_p.
+                  now rewrite
+                    add_eq_iff,
+                    add_eq_mapsto_iff,
+                    p₀_eq_p.
+                now rewrite
+                  M_Facts.add_neq_iff,
+                  owners_iff,
+                  add_neq_mapsto_iff,
+                  Instructions.Active.cons_Up_neq_iff.
+              rewrite M_Properties.add_cardinal_2, owners_length.
+                now enough (Some (S v₀) = Some v) as [=];
+                  [| transitivity (nth_error counts₁ c₀)].
+              enough (~ Active p₀ (Up p₀ :: x₀)) by
+                (rewrite owners_iff; tauto).
+              enough (Owner.eq p₀ p₀) by
+                (rewrite Instructions.Active.cons_Up_iff; tauto).
+              reflexivity.
+            destruct Replace_counts₁ as
+              (c₀_lt_counts₀ & _ & c₀_to_S_v₀ & H).
+            specialize Ok_counts₀ with c v as
+              (owners & owners_iff & owners_length);
+              [now rewrite H|].
+            exists owners; split; [| assumption].
+            intros p; simpl in *.
+            rewrite owners_iff.
+            split; intros (Active_p & p_to_c).
+              enough (~ Owner.eq p₀ p) by
+              now rewrite
+                <- Instructions.Active.cons_Up_neq_iff with (p₀ := p₀),
+                add_neq_mapsto_iff...
+              now apply Instructions.Active.cons_Up_iff in Active_p.
+            apply add_mapsto_iff in p_to_c as
+              [(_ & c₀_eq_c)| (p₀_neq_p & p_to_c₀)];
+              [now contradict c_neq_c₀|].
+            split...
+          simpl in *.
+          intros c v' c_to_v'.
+          assert (c_lt_counts₀ : c < length counts₀).
+            rewrite <- length_eq.
+            now apply NthError.Some_lt with v'.
+          specialize NthError.lt_Some with (1 := c_lt_counts₀) as
+            (v & c_to_v).
+          unfold ForNth in Ok_counts₀.
+          destruct Replace_counts₁ as
+            (c₀_lt_counts₀ & _ & c₀_to_S_v₀ & H).
+          specialize Ok_counts₀ with (1 := c_to_v) as
+            (owners & owners_iff & owners_length).
+          destruct (Nat.eq_dec c c₀) as [->| c_neq_c₀].
+            2: {
+              exists owners.
+              assert (Some v = Some v') as [= <-] by
+                now rewrite <- c_to_v, <- c_to_v'; apply H.
+              split; [| assumption].
+              intros p.
+              rewrite owners_iff, Instructions.Active.cons_Down_iff by
+                assumption.
+              enough (Coloring.MapsTo coloring₀ p c -> ~ Owner.eq p₀ p) by tauto.
+              intros p_to_c.
+              now apply StronglyExtensional with coloring₀ c₀ c;
+                [..| change (complement Logic.eq c₀ c)].
+            }
+          exists (M.remove p₀ owners); split.
+            intros p.
+            rewrite
+              M.remove_spec,
+              owners_iff,
+              Instructions.Active.cons_Down_iff by assumption.
+            enough ((Owner.eq p₀ p \/ Active p x₀) /\
+            ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
+            assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
+            enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
+            apply Instructions.Ok.cons_Down_iff in Ok_instructions₀ as
+              (Absent_p₀_x₀ & Ok_x₀).
+            intros Active_p_x₀...
+          change (pred (S (M.cardinal (M.remove p₀ owners))) = v').
+          rewrite M_Properties.remove_cardinal_1, owners_length; [| apply owners_iff]...
+          enough (Some v = Some (S v₀') /\ Some v' = Some v₀') as
+            ([= ->] & [= ->]) by reflexivity.
+          now rewrite <- c_to_v, <- c₀_to_v₀, <- c_to_v', <- c₀_to_S_v₀.
+        Qed.
       End Facts.
     End State.
-
-    Lemma StronglyExtensional
-      (coloring : Coloring.t) :
-      forall p p' c c',
-        Coloring.MapsTo coloring p c ->
-        Coloring.MapsTo coloring p' c' ->
-        c <> c' ->
-        ~ Owner.eq p p'.
-    Proof.
-      intros p p' c c' p_to_c p'_to_c' c_neq_c'.
-      contradict c_neq_c'; rewrite c_neq_c' in p_to_c.
-      now apply MapsTo_fun with (1 := p_to_c).
-    Qed.
 
     Module Assumptions.
       Import MSets.
