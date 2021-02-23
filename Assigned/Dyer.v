@@ -1407,77 +1407,97 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         rewrite M_Facts.add_iff; tauto.
       Qed.
 
-      Definition Ok_counts
-        (s : State.t) :
-        Prop :=
-        ForNth
-          (fun (color count : nat) =>
-          exists owners : M.t,
-            (forall owner : Owner.t,
-            M.In owner owners <->
-              Active owner s.(instructions) /\
-              Coloring.MapsTo s.(coloring) owner color) /\
-            M.cardinal owners = count)
-          s.(counts).
+      Module Ok.
+        Section Ok.
+          Variable
+            (s : State.t).
 
-      Definition Ok_length
-        (s : State.t) :
-        Prop :=
-        Coloring.colors s.(coloring) <= length s.(counts).
+          Definition Counts :
+            Prop :=
+            ForNth
+              (fun (color count : nat) =>
+              exists owners : M.t,
+                (forall owner : Owner.t,
+                M.In owner owners <->
+                  Active owner s.(instructions) /\
+                  Coloring.MapsTo s.(coloring) owner color) /\
+                M.cardinal owners = count)
+              s.(counts).
 
-      Lemma Corollary_counts :
-        forall
-          s : State.t,
-          Ok_counts s ->
-          Coloring.Ok s.(coloring) ->
-          forall
-            color : nat,
-            Coloring.colors s.(coloring) <= color < length s.(counts) ->
-            Nth s.(counts) color 0.
-      Proof.
-        intros s Ok_counts Ok_coloring c (colors_le_c & c_lt_counts).
-        specialize NthError.lt_Some with (1 := c_lt_counts) as (v & c_to_v).
-        enough (v = 0) as -> by easy.
-        apply Ok_counts in c_to_v as (owners & Ok_owners & <-).
-        enough (M.Empty owners) by
-          now apply M_Properties.cardinal_Empty.
-        intros p.
-        enough (~ Coloring.MapsTo s.(coloring) p c) by
-            now rewrite Ok_owners.
-        enough (c_nlt_colors : ~ c < Coloring.colors s.(coloring)) by
-          now contradict c_nlt_colors; apply Ok_coloring; exists p.
-        auto with arith.
-      Qed.
+          Definition Length :
+            Prop :=
+            Coloring.colors s.(coloring) <= length s.(counts).
 
-      Lemma Corollary_Min :
-        forall
-          (s : State.t)
-          (c v : nat),
-          Ok_counts s ->
-          Coloring.Ok s.(coloring) ->
-          Min'.Min s.(counts) c v ->
-          c <= Coloring.colors s.(coloring).
-      Proof with auto with arith.
-        intros s c v Ok_counts Ok_coloring (Min_c_v & c_to_v).
-        enough (~ c > Coloring.colors s.(coloring)) by
-          now apply not_gt.
-        specialize Nat.nlt_0_r with v as c_gt_colors;
-          contradict c_gt_colors.
-        apply Min_c_v with (2 := c_gt_colors), Corollary_counts...
-        enough (Coloring.colors s.(coloring) < length s.(counts))...
-        transitivity c;
-          [| apply NthError.Some_lt with v]...
-      Qed.
+          Record t : Prop := new {
+            instructions : Instructions.Ok s.(State.instructions);
+            coloring : Coloring.Ok s.(State.coloring);
+            synced : Synced s.(State.instructions) s.(State.coloring);
+            counts : Counts;
+            length : Length;
+          }.
+
+          Corollary counts_O :
+            t ->
+            forall
+              color : nat,
+              Coloring.colors s.(State.coloring) <= color < List.length s.(State.counts) ->
+              Nth s.(State.counts) color 0.
+          Proof.
+            intros Ok_s c (colors_le_c & c_lt_counts).
+            specialize NthError.lt_Some with (1 := c_lt_counts) as (v & c_to_v).
+            enough (v = 0) as -> by easy.
+            apply Ok_s.(counts) in c_to_v as (owners & Ok_owners & <-).
+            enough (M.Empty owners) by
+              now apply M_Properties.cardinal_Empty.
+            intros p.
+            enough (~ Coloring.MapsTo s.(State.coloring) p c) by
+                now rewrite Ok_owners.
+            enough (c_nlt_colors : ~ c < Coloring.colors s.(State.coloring)) by
+              now contradict c_nlt_colors; apply Ok_s.(coloring); exists p.
+            auto with arith.
+          Qed.
+
+          Corollary Min_le_colors :
+            t ->
+            forall
+              c v : nat,
+              Min'.Min s.(State.counts) c v ->
+              c <= Coloring.colors s.(State.coloring).
+          Proof with auto with arith.
+            intros Ok_s c v (Min_c_v & c_to_v).
+            enough (~ c > Coloring.colors s.(State.coloring)) by
+              now apply not_gt.
+            specialize Nat.nlt_0_r with v as c_gt_colors;
+              contradict c_gt_colors.
+            apply Min_c_v with (2 := c_gt_colors), counts_O...
+            enough (Coloring.colors s.(State.coloring) < List.length s.(State.counts))...
+            transitivity c;
+              [| apply NthError.Some_lt with v]...
+          Qed.
+        End Ok.
+      End Ok.
 
       Section Facts.
         Variables
           (s₀ s₁ : State.t)
           (Fixed_s₁_s₀ : Fixed s₁ s₀)
-          (Ok_instructions₀ : Instructions.Ok s₀.(instructions))
-          (Ok_coloring₀ : Coloring.Ok s₀.(coloring))
-          (Synced_s₀ : Synced s₀.(instructions) s₀.(coloring))
-          (Ok_counts₀ : Ok_counts s₀)
-          (Ok_length₀ : Ok_length s₀).
+          (Ok_s₀ : Ok.t s₀).
+
+        Let Ok_instructions₀ :
+          Instructions.Ok s₀.(instructions) :=
+          Ok_s₀.(Ok.instructions).
+        Let Ok_coloring₀ :
+          Coloring.Ok s₀.(coloring) :=
+          Ok_s₀.(Ok.coloring).
+        Let Synced_s₀ :
+          Synced s₀.(instructions) s₀.(coloring) :=
+          Ok_s₀.(Ok.synced).
+        Let Ok_counts₀ :
+          Ok.Counts s₀ :=
+          Ok_s₀.(Ok.counts).
+        Let Ok_length₀ :
+          Ok.Length s₀ :=
+          Ok_s₀.(Ok.length).
 
         Ltac destruct_Fixed :=
           destruct Fixed_s₁_s₀ as
@@ -1494,6 +1514,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Let Ok_instructions₁ :
           Instructions.Ok s₁.(instructions).
         Proof.
+          pose proof (Ok_s₀.(Ok.instructions)).
           now rewrite <- Pred_s₁_s₀.
         Qed.
 
@@ -1507,7 +1528,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               rewrite max_r; [apply Coloring.Ok.add_lt|]...
             rewrite max_l; [apply Coloring.Ok.add_eq|]...
           enough (c₀ <= Coloring.colors coloring₀) by now apply le_lt_or_eq.
-          now apply (@Corollary_Min (new (Up p₀ :: x₀) coloring₀ counts₀) c₀ v₀).
+          now apply Ok.Min_le_colors with
+            (s :=new (Up p₀ :: x₀) coloring₀ counts₀)
+            (c := c₀)
+            (v := v₀).
         Qed.
 
         Let Synced_s₁ :
@@ -1532,18 +1556,18 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Qed.
 
         Let Ok_length₁ :
-          Ok_length s₁.
+          Ok.Length s₁.
         Proof with auto.
-          unfold Ok_length; rewrite length_eq.
+          unfold Ok.Length; rewrite length_eq.
           destruct_Fixed...
           apply Nat.max_lub...
           simpl; apply NthError.Some_lt with v₀...
         Qed.
 
         Let Ok_counts₁ :
-          Ok_counts s₁.
+          Ok.Counts s₁.
         Proof with (simpl; my_auto).
-          unfold Ok_counts, ForNth in Ok_counts₀.
+          unfold Ok.Counts, ForNth in Ok_counts₀.
           destruct_Fixed.
             intros c v c_to_v.
             destruct Replace_counts₁ as
@@ -1627,6 +1651,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           enough (Some v = Some (S v₀') /\ Some v' = Some v₀') as
             ([= ->] & [= ->]) by reflexivity.
           now rewrite <- c_to_v, <- c₀_to_v₀, <- c_to_v', <- c₀_to_v₀'.
+        Qed.
+
+        Lemma Ok_s₁ :
+          Ok.t s₁.
+        Proof.
+          now constructor.
         Qed.
       End Facts.
     End State.
