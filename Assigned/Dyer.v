@@ -1682,11 +1682,48 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Qed.
 
     Add Parametric Morphism : State.Ok.t with signature
-      Graph --> impl as Graph_morphism.
+      Graph --> impl as Graph_Ok_morphism.
     Proof.
       intros s s'.
       now induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
         [| intros Ok_s₀; apply IHs₁; rewrite Fixed_s₁_s₀].
+    Qed.
+
+    Lemma coloring_morphism :
+      forall
+        s₀ s₁ : State.t,
+        State.Ok.t s₀ ->
+        State.Fixed s₁ s₀ ->
+        Coloring.le s₀.(State.coloring) s₁.(State.coloring).
+    Proof with my_auto.
+      intros s₀ s₁ Ok_s₀ Fixed_s₁_s₀.
+      destruct Fixed_s₁_s₀ as
+        [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
+        p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁].
+        split.
+          cbn - [max]; auto with arith.
+        cbn; intros p c p_to_c.
+        apply Map.add_2 with (2 := p_to_c).
+        contradict p_to_c; rewrite <- p_to_c.
+        enough (H : ~ Coloring.Contains coloring₀ p₀) by
+          now contradict H; exists c.
+        enough (Ahead p₀ (Up p₀ :: x₀)) by
+          now apply Ok_s₀.(State.Ok.synced)...
+      now split.
+    Qed.
+
+    Lemma Graph_coloring_morphism :
+      forall
+        s' s : State.t,
+        State.Ok.t s ->
+        Graph s' s ->
+        Coloring.le s.(State.coloring) s'.(State.coloring).
+    Proof with my_auto.
+      intros s' s Ok_s Graph_s'_s.
+      induction Graph_s'_s as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁].
+        reflexivity.
+      now transitivity s₁.(State.coloring);
+        [apply coloring_morphism| apply IHs₁; rewrite Fixed_s₁_s₀].
     Qed.
 
     Lemma fixed_body_spec :
