@@ -1817,6 +1817,36 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         [constructor 2 with s₁|].
     Qed.
 
+    Lemma Ahead_impl_Contains :
+    forall
+      s' s : State.t,
+      s'.(State.instructions) = [] ->
+      Graph s' s ->
+      State.Ok.t s ->
+      forall p : Owner.t,
+        Ahead p s.(State.instructions) ->
+        Coloring.Contains s'.(State.coloring) p.
+    Proof with (simpl; my_auto).
+      intros s' s instructions'_eq_nil.
+      induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
+        intros Ok_s₀ p Ahead_p;
+        [| assert(Ok_s₁ : State.Ok.t s₁) by now rewrite Fixed_s₁_s₀].
+        contradict Ahead_p; rewrite instructions'_eq_nil...
+      specialize Tail.inv with _ s₁.(State.instructions) s₀.(State.instructions)
+        as [([|] & p₀) H];
+        [now apply instructions_morphism| rewrite H in Ahead_p..].
+        apply Instructions.Ahead.cons_Up_iff in Ahead_p as [<-| Ahead_p].
+          enough (Coloring.Contains s₁.(State.coloring) p₀) as (c & p_to_c) by
+            now exists c; apply Graph_coloring_morphism with (2 := Graph_s'_s₁).
+          apply Ok_s₁.(State.Ok.synced), Instructions.Ok.cons_Up_iff.
+          replace (Up p₀ :: s₁.(State.instructions)) with
+            (s₀.(State.instructions)).
+          now apply State.Ok.instructions.
+        now apply IHs₁.
+      apply Instructions.Ahead.cons_Down_iff in Ahead_p.
+      now apply IHs₁.
+    Qed.
+
     Module Assumptions.
       Import MSets.
 
