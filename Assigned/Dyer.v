@@ -1664,6 +1664,30 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Definition Graph :=
       clos_refl_trans_n1 _ State.Fixed.
 
+    Instance Fixed_Graph_subrelation :
+      subrelation State.Fixed Graph.
+    Proof.
+      intros s' s Fixed_s'_s.
+      now apply clos_rtn1_step.
+    Qed.
+
+    Generalizable Variables A R f.
+
+    Instance Graph_morphism
+      `{PreOrder_R : @PreOrder A R}
+      `{Proper_f : Proper _ (State.Fixed --> R) f} :
+      Proper (Graph --> R) f.
+    Proof.
+      intros s s'; induction 1 as [| s₀ s₁ Fixed_s₁_s₀]; [reflexivity|].
+      now transitivity (f s₀);
+        [rewrite Fixed_s₁_s₀|].
+    Qed.
+
+    Add Parametric Relation : Prop impl
+      reflexivity proved by impl_Reflexive
+      transitivity proved by impl_Transitive
+      as PreOrder_impl.
+
     Add Parametric Morphism : State.Ok.t with signature
       State.Fixed --> impl as Ok_morphism.
     Proof.
@@ -1679,14 +1703,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
         p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀' p₀_to_c₀ c₀_to_v₀ Replace_counts₁];
         apply Replace_counts₁.
-    Qed.
-
-    Add Parametric Morphism : State.Ok.t with signature
-      Graph --> impl as Graph_Ok_morphism.
-    Proof.
-      intros s s'.
-      now induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
-        [| intros Ok_s₀; apply IHs₁; rewrite Fixed_s₁_s₀].
     Qed.
 
     Add Parametric Morphism : State.instructions with signature
