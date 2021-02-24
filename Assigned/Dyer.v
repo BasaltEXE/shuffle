@@ -1664,6 +1664,27 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Definition Graph :=
       clos_refl_trans_n1 _ State.Fixed.
 
+    Inductive Graph_Contains (s' : State.t) :
+      forall s : State.t,
+      Graph s' s ->
+      State.t ->
+      Prop :=
+    | Contains_rtn1_refl :
+      Graph_Contains (rtn1_refl State.t State.Fixed s') s'
+    | Contains_rtn1_trans_left :
+      forall
+        (s₀ s₁ : State.t)
+        (Fixed_s₁_s₀ : State.Fixed s₁ s₀)
+        (Graph_s'_s₁ : Graph s' s₁),
+        Graph_Contains (rtn1_trans _ _ _ _ _ Fixed_s₁_s₀ Graph_s'_s₁) s₀
+    | Contains_rtn1_trans_right :
+      forall
+        (s₀ s₁ r : State.t)
+        (Fixed_s₁_s₀ : State.Fixed s₁ s₀)
+        (Graph_s'_s₁ : Graph s' s₁),
+        Graph_Contains Graph_s'_s₁ r ->
+        Graph_Contains (rtn1_trans _ _ _ _ _ Fixed_s₁_s₀ Graph_s'_s₁) r.
+
     Instance Fixed_Graph_subrelation :
       subrelation State.Fixed Graph.
     Proof.
