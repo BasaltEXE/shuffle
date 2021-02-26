@@ -1,89 +1,82 @@
 Require Import Coq.FSets.FMaps.
-Require Import Coq.Program.Program.
 
 Module Make (Owner : DecidableType) (Map : WSfun Owner).
-  Module Import Facts := WFacts_fun Owner Map.
+  Module Map_Facts := WFacts_fun Owner Map.
 
-  Notation t :=
-    (nat * Map.t nat)%type.
-
-  Notation colors
-    self :=
-    (fst self)
-    (only parsing).
-
-  Notation labeling
-    self :=
-    (snd self)
-    (only parsing).
+  Record t :
+    Type :=
+    new {
+      colors : nat;
+      labeling : Map.t nat
+    }.
 
   Notation empty :=
-    (0, Map.empty nat)
+    (new 0 (Map.empty nat))
     (only parsing).
 
   Notation add_lt
     self
     owner
     color :=
-    (colors self, Map.add owner color (labeling self))
+    (new (self.(colors)) (Map.add owner color (self.(labeling))))
     (only parsing).
 
   Notation add_eq
     self
     owner :=
-    (S (colors self), Map.add owner (colors self) (labeling self))
+    (new (S (self.(colors))) (Map.add owner (self.(colors)) (self.(labeling))))
     (only parsing).
 
   Notation find
     self
     owner :=
-    (Map.find owner (labeling self))
+    (Map.find owner (self.(labeling)))
     (only parsing).
 
   Notation MapsTo
     self
     owner
     color :=
-    (Map.MapsTo owner color (labeling self))
+    (Map.MapsTo owner color (self.(labeling)))
     (only parsing).
 
   Notation Contains
     self
     owner :=
-    (Map.In owner (labeling self))
+    (Map.In owner (self.(labeling)))
     (only parsing).
 
   Notation Ok
     self :=
     (forall color : nat,
-      color < colors self <->
+      color < self.(colors) <->
       (exists owner : Owner.t, MapsTo self owner color))
     (only parsing).
 
   Module Ok.
     Section Constructors.
+      Lemma empty :
+        Ok Make.empty.
+      Proof with auto with arith.
+        split.
+          intros color_lt_colors.
+          contradict color_lt_colors...
+        intros [owner owner_to_color].
+        contradict owner_to_color.
+        firstorder using Map_Facts.empty_in_iff.
+      Qed.
+
       Variables
         (self : Make.t)
         (owner : Owner.t)
         (color : nat).
 
-      Lemma empty :
-        Ok Make.empty.
-      Proof.
-        clear self owner color; split.
-          intros color_lt_colors.
-          contradict color_lt_colors; auto with arith.
-        intros [owner owner_to_color].
-        contradict owner_to_color.
-        firstorder using empty_in_iff.
-      Qed.
-
       Lemma add_lt :
         Ok self ->
         ~ Contains self owner ->
-        color < colors self ->
+        color < self.(colors) ->
         Ok (Make.add_lt self owner color).
-      Proof.
+      Proof with auto.
         intros Ok_self not_In_owner color_lt_colors n.
         split.
           intros n_lt_colors.
@@ -92,8 +85,8 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
           contradict not_In_owner.
           rewrite not_In_owner; now exists n.
         intros [owner' owner'_to_n].
-        apply add_mapsto_iff in owner'_to_n as [(_ & ->)| (_ & owner'_to_n)].
-          assumption.
+        apply Map_Facts.add_mapsto_iff in owner'_to_n as
+          [(_ & ->)| (_ & owner'_to_n)]...
         now apply Ok_self; exists owner'.
       Qed.
 
@@ -101,7 +94,7 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
         Ok self ->
         ~ Contains self owner ->
         Ok (Make.add_eq self owner).
-      Proof.
+      Proof with auto.
         clear color; intros Ok_self not_In_owner.
         split.
           intros color_lt_S_colors.
@@ -112,8 +105,8 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
               [contradict not_In_owner; rewrite not_In_owner; exists color|].
           now exists owner; apply Map.add_1.
         intros [owner' owner'_to_color].
-        apply add_mapsto_iff in owner'_to_color as [[eq <-]| [neq owner'_to_color]].
-          auto.
+        apply Map_Facts.add_mapsto_iff in owner'_to_color as
+          [[eq <-]| [neq owner'_to_color]]...
         apply PeanoNat.Nat.lt_lt_succ_r, Ok_self.
         now exists owner'.
       Defined.
@@ -123,8 +116,8 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
   Definition eq
     (self other : t) :
     Prop :=
-    colors self = colors other /\
-    Map.Equal (labeling self) (labeling other).
+    self.(colors) = other.(colors) /\
+    Map.Equal (self.(labeling)) (other.(labeling)).
 
   Module Eq.
     #[global]
@@ -150,7 +143,7 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
       unfold eq.
       intros x y z x_le_y y_le_z.
       now split;
-        [transitivity (colors y)| transitivity (labeling y)].
+        [transitivity (y.(colors))| transitivity (y.(labeling))].
     Qed.
 
     #[global]
@@ -164,7 +157,7 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
   Definition le
     (self other : t) :
     Prop :=
-      colors self <= colors other /\
+      self.(colors) <= other.(colors) /\
       (forall
         (owner : Owner.t)
         (color : nat),
@@ -186,7 +179,7 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
       unfold le.
       intros x y z x_le_y y_le_z.
       split.
-        now transitivity (colors y).
+        now transitivity (y.(colors)).
       firstorder.
     Qed.
 
@@ -199,14 +192,14 @@ Module Make (Owner : DecidableType) (Map : WSfun Owner).
     #[global]
     Instance antisymmetric :
       Antisymmetric t eq le.
-    Proof.
+    Proof with auto with arith.
       unfold le.
       intros x y x_le_y x_ge_y; split.
-        destruct x_le_y, x_ge_y; auto with arith.
+        destruct x_le_y, x_ge_y...
       intros key.
-      destruct (Map.find key (labeling x)) as [value|] eqn: find; symmetry.
-        now apply find_mapsto_iff, x_le_y, find_mapsto_iff.
-      rewrite <- not_find_in_iff in find |- *.
+      destruct (find x key) as [value|] eqn: find; symmetry.
+        now apply Map_Facts.find_mapsto_iff, x_le_y, Map_Facts.find_mapsto_iff.
+      rewrite <- Map_Facts.not_find_in_iff in find |- *.
       contradict find; destruct find as
         (value & key_to_value).
       now exists value; apply x_ge_y.

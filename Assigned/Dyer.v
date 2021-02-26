@@ -267,7 +267,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             [(p₀_eq_x & <-)| (p₀_neq_x & x_to_m)]
             [(p₀_eq_y & <-)| (p₀_neq_y & y_to_m)].
                 now contradict x_neq_y; transitivity p₀.
-              enough (n <> Coloring.colors coloring) by firstorder.
+              enough (n <> coloring.(Coloring.colors)) by firstorder.
               now apply Nat.lt_neq, Ok_coloring; exists y.
             now apply Nat.lt_neq, Ok_coloring; exists x.
           apply Proper_coloring with x y...
@@ -489,7 +489,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             apply Synced_result...
           intros owner' color' not_Ahead_owner' owner'_to_color'.
           rewrite Instructions.Ahead.cons_Up_iff in not_Ahead_owner'.
-          apply Map.add_3 with owner (Coloring.colors coloring),
+          apply Map.add_3 with owner coloring.(Coloring.colors),
             Synced_result...
         pose proof (ok' := Assumption.cons_Up_lt ok).
         specialize IHinstructions with (1 := ok').
@@ -1320,7 +1320,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       self
       p₀
       c₀ :=
-      (max (S c₀) (Coloring.colors self), Map.add p₀ c₀%nat (Coloring.labeling self)).
+      (Coloring.new
+        (max (S c₀) self.(Coloring.colors))
+        (Map.add p₀ c₀%nat self.(Coloring.labeling))).
 
     Fixpoint fixed_body
       (instructions : list Instruction.t)
@@ -1426,7 +1428,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
           Definition Length :
             Prop :=
-            Coloring.colors s.(coloring) <= length s.(counts).
+            s.(coloring).(Coloring.colors) <= length s.(counts).
 
           Record t : Prop := new {
             instructions : Instructions.Ok s.(State.instructions);
@@ -1440,7 +1442,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             t ->
             forall
               color : nat,
-              Coloring.colors s.(State.coloring) <= color < List.length s.(State.counts) ->
+              s.(State.coloring).(Coloring.colors) <= color < List.length s.(State.counts) ->
               Nth s.(State.counts) color 0.
           Proof.
             intros Ok_s c (colors_le_c & c_lt_counts).
@@ -1452,7 +1454,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             intros p.
             enough (~ Coloring.MapsTo s.(State.coloring) p c) by
                 now rewrite Ok_owners.
-            enough (c_nlt_colors : ~ c < Coloring.colors s.(State.coloring)) by
+            enough (c_nlt_colors : ~ c < s.(State.coloring).(Coloring.colors)) by
               now contradict c_nlt_colors; apply Ok_s.(coloring); exists p.
             auto with arith.
           Qed.
@@ -1462,15 +1464,15 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             forall
               c v : nat,
               Min'.Min s.(State.counts) c v ->
-              c <= Coloring.colors s.(State.coloring).
+              c <= s.(State.coloring).(Coloring.colors).
           Proof with auto with arith.
             intros Ok_s c v (Min_c_v & c_to_v).
-            enough (~ c > Coloring.colors s.(State.coloring)) by
+            enough (~ c > s.(State.coloring).(Coloring.colors)) by
               now apply not_gt.
             specialize Nat.nlt_0_r with v as c_gt_colors;
               contradict c_gt_colors.
             apply Min_c_v with (2 := c_gt_colors), counts_O...
-            enough (Coloring.colors s.(State.coloring) < List.length s.(State.counts))...
+            enough (s.(State.coloring).(Coloring.colors) < List.length s.(State.counts))...
             transitivity c;
               [| apply NthError.Some_lt with v]...
           Qed.
@@ -1524,10 +1526,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           destruct_Fixed; cbn - [max] in *...
           assert (not_In_p₀ : ~ Coloring.Contains coloring₀ p₀).
             apply Synced_s₀...
-          enough (c₀ < Coloring.colors coloring₀ \/ c₀ = Coloring.colors coloring₀) as [c₀_lt_colors₀| ->].
+          enough (c₀ < coloring₀.(Coloring.colors) \/ c₀ = coloring₀.(Coloring.colors)) as [c₀_lt_colors₀| ->].
               rewrite max_r; [apply Coloring.Ok.add_lt|]...
             rewrite max_l; [apply Coloring.Ok.add_eq|]...
-          enough (c₀ <= Coloring.colors coloring₀) by now apply le_lt_or_eq.
+          enough (c₀ <= coloring₀.(Coloring.colors)) by now apply le_lt_or_eq.
           now apply Ok.Min_le_colors with
             (s :=new (Up p₀ :: x₀) coloring₀ counts₀)
             (c := c₀)
@@ -1810,7 +1812,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now apply Ok_s₀.(State.Ok.synced).
       specialize NthError.lt_Some with _ counts₀ c₀ as
         (v₀ & c₀_to_v₀).
-        apply lt_le_trans with (Coloring.colors s₀.(State.coloring)).
+        apply lt_le_trans with s₀.(State.coloring).(Coloring.colors).
           now apply Ok_s₀.(State.Ok.coloring); exists p₀.
         apply Ok_s₀.(State.Ok.length).
       simpl; rewrite c₀_to_v₀; simpl.
@@ -1908,11 +1910,11 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Prop :=
         Instructions.Ok instructions /\
         Coloring.Ok coloring /\
-        (Coloring.colors coloring <= length counts /\ length counts <> O) /\
+        (coloring.(Coloring.colors) <= length counts /\ length counts <> O) /\
         Synced instructions coloring /\
         ForNth (Count.Ok instructions coloring) counts /\
         (forall color : nat,
-          Coloring.colors coloring <= color < length counts ->
+          coloring.(Coloring.colors) <= color < length counts ->
           Nth counts color 0).
 
       Ltac Ok_destruct ok :=
@@ -1956,10 +1958,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         specialize find_In_Some with (1 := In_p₀) as (c₀ & _ & p₀_to_c₀);
           exists c₀.
 
-        assert (c₀_lt_colors : c₀ < Coloring.colors coloring) by
+        assert (c₀_lt_colors : c₀ < coloring.(Coloring.colors)) by
           now apply Ok_coloring; exists p₀.
         assert (c₀_lt_counts : c₀ < length counts) by
-          now apply lt_le_trans with (Coloring.colors coloring).
+          now apply lt_le_trans with coloring.(Coloring.colors).
         specialize NthError.lt_Some with (1 := c₀_lt_counts) as
           (v₀ & c₀_to_v₀);
           exists v₀.
@@ -2034,7 +2036,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           rewrite <- (H c).
             now apply Ok_zero; rewrite length_counts'.
           change (complement Logic.eq c c₀); symmetry.
-          now apply Nat.lt_neq, lt_le_trans with (Coloring.colors coloring).
+          now apply Nat.lt_neq, lt_le_trans with coloring.(Coloring.colors).
         Qed.
 
         Lemma cons_Up : forall
@@ -2047,7 +2049,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             (c₀ : nat)
             (v₀ : nat)
             (counts' : list nat),
-            let coloring' := (max (S c₀) (Coloring.colors coloring), Map.add p₀ c₀ (Coloring.labeling coloring)) in
+            let coloring' := add_S coloring p₀ c₀ in
             Min'.Minimum counts c₀ v₀ /\
             Min'.Min counts c₀ v₀ /\
             List.Replace.Replace counts c₀ (S v₀) counts' /\
@@ -2056,8 +2058,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Proof with my_auto.
           intros p₀ x₀ coloring counts ok.
           Ok_destruct ok.
-          set (labeling := Coloring.labeling coloring) in *.
-          set (colors := Coloring.colors coloring) in *.
+          set (labeling := coloring.(Coloring.labeling)) in *.
+          set (colors := coloring.(Coloring.colors)) in *.
 
           assert (Ok_x₀ : Instructions.Ok x₀) by
             now apply Instructions.Ok.cons_inv with (Up p₀).
