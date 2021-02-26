@@ -19,6 +19,20 @@ Proof.
     [left; apply P_impl_P'| right].
 Qed.
 
+Lemma OptionSpec_map : forall
+  (A : Type)
+  (P P' : A -> Prop)
+  (Q Q' : Prop)
+  (o : option A),
+  (forall a : A, P a -> P' a) ->
+  (Q -> Q') ->
+  OptionSpec P Q o ->
+  OptionSpec P' Q' o.
+Proof.
+  now intros A P P' Q Q' o P_impl_P' Q_impl_Q' [a P_a| q];
+    [left; apply P_impl_P'| right; apply Q_impl_Q'].
+Qed.
+
 Section Option.
   Variables
     (A B : Type).
