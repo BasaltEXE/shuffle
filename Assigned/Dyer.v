@@ -106,8 +106,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Ltac split_left :=
     split; [| try split_left].
-  Ltac my_auto :=
-    auto with relations instructions.
 
   Import Instructions.Ok.
   Import Instructions.Hints.
@@ -244,13 +242,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Lemma cons_Up_eq :
           Ok (Up p₀ :: x₀) coloring [] ->
           Ok x₀ (Coloring.add_eq coloring p₀) [].
-        Proof with my_auto.
+        Proof with instructions_tac.
           intros ok; Ok_destruct ok.
           assert (not_In_p₀ : ~ Coloring.Contains coloring p₀).
             apply Synced_coloring...
           unfold Ok.
           split_left...
-                now apply Instructions.Ok.cons_inv in Ok_instructions.
               apply Coloring.Ok.add_eq, Synced_coloring...
             intros p.
             split.
@@ -260,7 +257,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 [left| right; apply Synced_coloring]...
             intros Ahead_p₀.
             apply add_not_in, Synced_coloring...
-            enough (Active p₀ x₀)...
+            contradict Ahead_p₀; rewrite <- Ahead_p₀...
           intros x y x_neq_y Active_x Active_y m n.
           simpl; rewrite ?add_mapsto_iff.
           intros
@@ -276,14 +273,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Lemma cons_Up_lt :
           Ok (Up p₀ :: x₀) coloring (color :: unused_colors) ->
           Ok x₀ (Coloring.add_lt coloring p₀ color) unused_colors.
-        Proof with my_auto.
+        Proof with instructions_tac.
           intros ok; Ok_destruct ok.
           apply Forall_cons_iff in Ok_unused_colors as (Ok_color & Ok_unused_colors).
           apply NoDup_cons_iff in NoDup_unused_colors as (not_In_color & NoDup_unused_colors).
           assert (not_In_p₀ : ~ Coloring.Contains coloring p₀).
             apply Synced_coloring...
           split_left...
-                  now apply Instructions.Ok.cons_inv with (Up p₀).
                 apply Coloring.Ok.add_lt, Ok_coloring...
                 destruct Ok_color as (_ & p & p_to_color & _).
                 now exists p.
@@ -294,7 +290,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 destruct (Owner.eq_dec p₀ p) as [eq| neq];
                   [left| right; apply Synced_coloring]...
               intros Ahead_p₀.
-              apply add_not_in, Synced_coloring; enough (Active p₀ x₀)...
+              apply add_not_in, Synced_coloring...
+              contradict Ahead_p₀; rewrite <- Ahead_p₀...
             intros x y x_neq_y Active_x Active_y m n.
             simpl; rewrite ?add_mapsto_iff.
             intros
@@ -326,7 +323,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           exists color : nat,
             Coloring.MapsTo coloring p₀ color /\
             Ok x₀ coloring (color :: unused_colors).
-        Proof with my_auto.
+        Proof with instructions_tac.
           clear color; intros (Ok_x₀ & Ok_coloring & Synced_coloring & Real & Ok_unused_colors & NoDup_unused_colors).
           assert (In_p₀ : Coloring.Contains coloring p₀).
             apply Synced_coloring...
@@ -334,7 +331,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             (color & _ & p₀_to_color);
             exists color.
           split_left...
-                  now apply Instructions.Ok.cons_inv in Ok_x₀.
                 intros p.
                 split.
                   intros Active_p.
@@ -347,7 +343,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               split.
                 intros p color' Active_p p_to_color'.
                 apply Real with p₀ p...
-                enough (Absent p₀ x₀)...
+                contradict Active_p; rewrite <- Active_p...
               exists p₀...
             eapply Forall_impl with (2 := Ok_unused_colors).
             intros n (H & p & p_to_color & not_InDown_p).
@@ -461,7 +457,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Synced' instructions coloring result)
         False
         (regular_body instructions coloring unused_colors).
-    Proof with my_auto.
+    Proof with instructions_tac.
       induction instructions as [| [[|] owner] instructions IHinstructions];
         intros coloring unused_colors ok.
             Ok_destruct ok.
@@ -480,8 +476,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             apply Skip.Forall.cons...
             intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
             apply Proper_coloring with x y...
-            1 - 2:
-              now apply Instructions.Active.cons_Up_inv with owner.
+                  enough (~ Owner.eq owner x) by now
+                    rewrite Instructions.Active.cons_Up_iff in Active_x.
+                  contradict Active_x; rewrite Active_x...
+                enough (~ Owner.eq owner y) by now
+                  rewrite Instructions.Active.cons_Up_iff in Active_y.
+                contradict Active_y; rewrite Active_y...
             1 - 2:
             destruct
               Active_x as (not_Ahead_x & _),
@@ -500,8 +500,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           apply Skip.Forall.cons...
           intros x y x_neq_y Active_x Active_y m n x_to_m y_to_n.
           apply Proper_coloring with x y...
-          1 - 2:
-            now apply Instructions.Active.cons_Up_inv with owner.
+                enough (~ Owner.eq owner x) by now
+                  rewrite Instructions.Active.cons_Up_iff in Active_x.
+                contradict Active_x; rewrite Active_x...
+              enough (~ Owner.eq owner y) by now
+                rewrite Instructions.Active.cons_Up_iff in Active_y.
+              contradict Active_y; rewrite Active_y...
           1 - 2:
           destruct
             Active_x as (not_Ahead_x & _),
@@ -544,7 +548,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Skip.Forall (RealColoring result) instructions)
         False
         (regular instructions).
-    Proof with my_auto.
+    Proof with instructions_tac.
       intros instructions Ok_instructions Down_impl_Up.
       eapply OptionSpec_impl, regular_body_spec.
         intros result (Ok_result & Proper_result & _)...
@@ -691,7 +695,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Proof.
         intros Ok_x Closed_x p.
         rewrite active_spec by assumption.
-        now apply Instructions.Closed_not_Active.
+        now apply Instructions.Closed_impl_not_Active.
       Qed.
 
       Lemma count_closed :
@@ -722,14 +726,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Lemma count_Down :
         Instructions.Ok (Down p₀ :: x₀) ->
         count (Down p₀ :: x₀) = S (count x₀).
-      Proof with my_auto.
+      Proof with instructions_tac.
         intros Ok_x.
         apply Instructions.Ok.cons_Down_iff in Ok_x
           as (Absent_p₀ & Ok_x₀).
         apply M_Properties.add_cardinal_2.
-        rewrite active_spec by assumption.
-        assert (p₀_eq_p₀ : Owner.eq p₀ p₀) by reflexivity.
-        contradict p₀_eq_p₀...
+        rewrite active_spec by assumption...
       Qed.
     End Count.
   End Active.
@@ -1522,7 +1524,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
         Let Ok_coloring₁ :
           Coloring.Ok s₁.(coloring).
-        Proof with my_auto.
+        Proof with instructions_tac.
           destruct_Fixed; cbn - [max] in *...
           assert (not_In_p₀ : ~ Coloring.Contains coloring₀ p₀).
             apply Synced_s₀...
@@ -1538,14 +1540,15 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
         Let Synced_s₁ :
           Synced s₁.(instructions) s₁.(coloring).
-        Proof with (simpl; my_auto).
+        Proof with (simpl; instructions_tac).
           destruct_Fixed;
             intros p; split; simpl.
                 intros Active_p_x₀; apply add_in_iff.
                 destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
                   [left| right; apply Synced_s₀]...
               intros Ahead_p₀_x₀.
-              apply add_not_in_iff; split...
+              apply add_not_in_iff; split.
+                contradict Ahead_p₀_x₀; rewrite <- Ahead_p₀_x₀...
               apply Synced_s₀...
             intros Active_p_x₀; apply Synced_s₀...
           intros Ahead_p_x₀; apply Synced_s₀...
@@ -1568,7 +1571,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
         Let Ok_counts₁ :
           Ok.Counts s₁.
-        Proof with (simpl; my_auto).
+        Proof with (simpl; instructions_tac).
           unfold Ok.Counts, ForNth in Ok_counts₀.
           destruct_Fixed.
             intros c v c_to_v.
@@ -1589,7 +1592,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   M_Facts.add_neq_iff,
                   owners_iff,
                   add_neq_mapsto_iff,
-                  Instructions.Active.cons_Up_neq_iff.
+                  Instructions.Active.cons_Up_iff.
               rewrite M_Properties.add_cardinal_2, owners_length.
                 now enough (Some (S v₀) = Some v) as [=];
                   [| transitivity (nth_error counts₁ c₀)].
@@ -1605,11 +1608,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             intros p; simpl in *.
             rewrite owners_iff.
             split; intros (Active_p & p_to_c).
-              enough (~ Owner.eq p₀ p) by
-              now rewrite
-                <- Instructions.Active.cons_Up_neq_iff with (p₀ := p₀),
-                add_neq_mapsto_iff...
-              now apply Instructions.Active.cons_Up_iff in Active_p.
+              enough (p₀_neq_p : ~ Owner.eq p₀ p).
+                apply Active.cons_Up_iff in Active_p.
+                now rewrite add_neq_mapsto_iff.
+              contradict Active_p; rewrite Active_p...
             apply add_mapsto_iff in p_to_c as
               [(_ & c₀_eq_c)| (p₀_neq_p & p_to_c₀)];
               [now contradict c_neq_c₀|].
@@ -1647,7 +1649,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             enough ((Owner.eq p₀ p \/ Active p x₀) /\
             ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
             assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
-            enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
+            enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|].
+            intros Active_p_x₀; contradict Active_p_x₀; rewrite Active_p_x₀...
           change (pred (S (M.cardinal (M.remove p₀ owners))) = v').
           rewrite M_Properties.remove_cardinal_1, owners_length; [| apply owners_iff]...
           enough (Some v = Some (S v₀') /\ Some v' = Some v₀') as
@@ -1741,7 +1744,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         State.Ok.t s₀ ->
         State.Fixed s₁ s₀ ->
         Coloring.le s₀.(State.coloring) s₁.(State.coloring).
-    Proof with my_auto.
+    Proof with instructions_tac.
       intros s₀ s₁ Ok_s₀ Fixed_s₁_s₀.
       destruct Fixed_s₁_s₀ as
         [p₀ x₀ coloring₀ counts₀ counts₁ c₀ v₀ (Min_c₀_v₀ & c₀_to_v₀) Replace_counts₁|
@@ -1764,7 +1767,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         State.Ok.t s ->
         Graph s' s ->
         Coloring.le s.(State.coloring) s'.(State.coloring).
-    Proof with my_auto.
+    Proof with instructions_tac.
       intros s' s Ok_s Graph_s'_s.
       induction Graph_s'_s as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁].
         reflexivity.
@@ -1783,7 +1786,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         exists s' : State.t,
           Graph s' s /\
           fixed_body instructions coloring counts = Some s'.(State.coloring).
-    Proof with (simpl; my_auto).
+    Proof with (simpl; instructions_tac).
       induction instructions as [| [[|] p₀] x₀ IHx₀];
         intros coloring₀ counts₀ s₀ Ok_s₀ counts₀_neq_nil.
           exists s₀; repeat constructor.
@@ -1806,8 +1809,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now exists s'; split;
           [constructor 2 with s₁|].
       assert (Active_p₀_s₀ : Active p₀ s₀.(State.instructions)) by
-        (apply Instructions.Active.cons_Down_eq;
-          [exact (Ok_s₀.(State.Ok.instructions))| reflexivity]).
+        (apply Instructions.Active.cons_Down_hd;
+        exact (Ok_s₀.(State.Ok.instructions))).
       simpl; specialize find_In_Some as (c₀ & -> & p₀_to_c₀).
         now apply Ok_s₀.(State.Ok.synced).
       specialize NthError.lt_Some with _ counts₀ c₀ as
@@ -1849,7 +1852,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       forall p : Owner.t,
         Ahead p s.(State.instructions) ->
         Coloring.Contains s'.(State.coloring) p.
-    Proof with (simpl; my_auto).
+    Proof with (simpl; instructions_tac).
       intros s' s instructions'_eq_nil.
       induction 1 as [| s₁ s₀ Fixed_s₁_s₀ Graph_s'_s₁ IHs₁];
         intros Ok_s₀ p Ahead_p;
@@ -1944,7 +1947,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           List.Replace.Replace counts c₀ v₀' counts' /\
           Replace.Ok counts c₀ v₀' counts' /\
           Ok x₀ coloring counts'.
-      Proof with my_auto.
+      Proof with instructions_tac.
         intros p₀ x₀ coloring counts ok.
         Ok_destruct ok.
 
@@ -2025,7 +2028,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               enough ((Owner.eq p₀ p \/ Active p x₀) /\
               ~ Owner.eq p p₀ <-> Active p x₀) by firstorder.
               assert (Owner.eq p₀ p <-> Owner.eq p p₀) as -> by easy.
-              enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|]...
+              enough (Active p x₀ -> ~ Owner.eq p p₀); [tauto|].
+              intros Active_p_x₀; contradict Active_p_x₀; rewrite Active_p_x₀...
             change (pred (S (M.cardinal (M.remove p₀ owners))) = v').
             rewrite remove_cardinal_1, owners_length; [| apply owners_iff]...
             enough (Some v = Some v₀ /\ Some v' = Some (pred v₀)) as
@@ -2055,7 +2059,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             List.Replace.Replace counts c₀ (S v₀) counts' /\
             Replace.Ok counts c₀ (S v₀) counts' /\
             Ok x₀ coloring' counts'.
-        Proof with my_auto.
+        Proof with instructions_tac.
           intros p₀ x₀ coloring counts ok.
           Ok_destruct ok.
           set (labeling := coloring.(Coloring.labeling)) in *.
@@ -2103,7 +2107,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               destruct (Owner.eq_dec p₀ p) as [p₀_eq_p| p₀_neq_p];
                 [left| right; apply Synced_coloring]...
               intros Ahead_p.
-              apply add_not_in_iff; split...
+              apply add_not_in_iff; split.
+                contradict Ahead_p; rewrite <- Ahead_p...
               apply Synced_coloring...
 
             intros c v c_to_v.
@@ -2127,14 +2132,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   add_neq_iff,
                   owners_iff,
                   add_neq_mapsto_iff,
-                  Instructions.Active.cons_Up_neq_iff.
+                  Instructions.Active.cons_Up_iff.
               rewrite add_cardinal_2, owners_length.
                 now enough (Some (S v₀) = Some v) as [=];
                   [| transitivity (nth_error counts' c₀)].
-              assert (In_p₀ : Owner.eq p₀ p₀) by reflexivity;
-                contradict In_p₀.
-              enough (Active p₀ (Up p₀ :: x₀));
-                [| apply owners_iff]...
+              rewrite owners_iff.
+              enough (~ Active p₀ (Up p₀ :: x₀)) by tauto...
             unfold Count.Ok, ForNth in *.
             specialize Ok_counts with c v as
             (owners & owners_iff & owners_length);
@@ -2143,10 +2146,10 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             intros p; simpl.
             rewrite owners_iff.
             split; intros (Active_p & p_to_c).
-              enough (~ Owner.eq p₀ p) by
-              now rewrite
-                <- Instructions.Active.cons_Up_neq_iff with (p₀ := p₀),
-                add_neq_mapsto_iff...
+              enough (~ Owner.eq p₀ p).
+                apply Active.cons_Up_iff in Active_p.
+                now rewrite add_neq_mapsto_iff.
+              contradict Active_p; rewrite Active_p...
             apply add_mapsto_iff in p_to_c as
               [(_ & c₀_eq_c)| (p₀_neq_p & p_to_c₀)];
               [now contradict c_neq_c₀|].
