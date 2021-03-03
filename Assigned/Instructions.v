@@ -1,4 +1,5 @@
 Require Import Coq.Structures.Equalities.
+Require Import Coq.MSets.MSets.
 Require Import Coq.Lists.SetoidList.
 Import ListNotations.
 
@@ -465,6 +466,160 @@ Module Make (Operand : DecidableTypeBoth).
       #[export]
       Hint Resolve cons_Down_tl : instructions.
     End Hints.
+    Import Hints.
+
+    Module Sets (M : MSetInterface.WSetsOn Operand).
+      Module M_Facts := MSetFacts.WFactsOn Operand M.
+      Module M_Properties := MSetProperties.WPropertiesOn Operand M.
+
+      Notation Ok x s :=
+        (forall
+          p : Operand.t,
+          M.In p s <->
+          Active p x).
+
+      Fixpoint active
+        (x : t) :
+        M.t :=
+        match x with
+        | [] =>
+          M.empty
+        | Up p₀ :: x₀ =>
+          M.remove p₀ (active x₀)
+        | Down p₀ :: x₀ =>
+          M.add p₀ (active x₀)
+        end.
+
+      Notation count x :=
+        (M.cardinal (active x)).
+
+      Section Iff.
+        Variables
+          (p₀ : Operand.t)
+          (x₀ : t)
+          (p : Operand.t).
+
+        Lemma nil_iff :
+          M.In p (active []) <-> False.
+        Proof.
+          apply M_Facts.empty_iff.
+        Qed.
+
+        Lemma cons_Up_iff :
+          M.In p (active (Up p₀ :: x₀)) <->
+            ~ Operand.eq p₀ p /\
+            M.In p (active x₀).
+        Proof.
+          now simpl; rewrite M_Facts.remove_iff.
+        Qed.
+
+        Lemma cons_Down_iff :
+          M.In p (active (Down p₀ :: x₀)) <->
+            Operand.eq p₀ p \/
+            M.In p (active x₀).
+        Proof.
+          apply M_Facts.add_iff.
+        Qed.
+      End Iff.
+
+      Section Spec.
+        Variables
+          x : t.
+
+        Lemma spec :
+          Make.Ok x ->
+          Ok x (active x).
+        Proof.
+          induction 1 as [| u₀ x₀ Active_u₀_x₀ Ok_x₀ IHx₀|
+          u₀ x₀ Absent_u₀_x₀ Ok_x₀ IHx₀]; intros p.
+              now rewrite nil_iff.
+            now rewrite cons_Up_iff, IHx₀, Active.cons_Up_iff.
+          now rewrite cons_Down_iff, IHx₀, Active.cons_Down_iff by
+            now constructor.
+        Qed.
+
+        Lemma closed :
+          Make.Ok x ->
+          Make.Closed x ->
+          M.Empty (active x).
+        Proof.
+          intros Ok_x Closed_x p.
+          rewrite spec by assumption.
+          now apply Closed_impl_not_Active.
+        Qed.
+      End Spec.
+
+      Section Hints.
+        Variables
+          (p₀ : Operand.t)
+          (x₀ : t).
+
+        Lemma not_In_Up :
+          ~ M.In p₀ (active (Up p₀ :: x₀)).
+        Proof.
+          simpl; auto with set.
+        Qed.
+
+        Lemma In_Down :
+          M.In p₀ (active (Down p₀ :: x₀)).
+        Proof.
+          simpl; auto with set.
+        Qed.
+
+        Lemma Down_not_In :
+          Make.Ok (Down p₀ :: x₀) ->
+          ~ M.In p₀ (active x₀).
+        Proof with eauto with instructions.
+          intros Ok_x.
+          enough (Active_p₀_x₀ : ~ Active p₀ x₀).
+            contradict Active_p₀_x₀; apply spec...
+          auto with instructions.
+        Qed.
+
+        Lemma Up_In :
+          Make.Ok (Up p₀ :: x₀) ->
+          M.In p₀ (active x₀).
+        Proof with eauto with instructions.
+          intros Ok_x.
+          apply spec...
+        Qed.
+      End Hints.
+
+      Section Count.
+        Variables
+          (p₀ : Operand.t)
+          (x₀ x : t).
+
+        Lemma count_closed :
+          Make.Ok x ->
+          Make.Closed x ->
+          count x = O.
+        Proof.
+          intros Ok_x Closed_x.
+          enough (M.Empty (active x)) by
+            auto with set.
+          now apply closed.
+        Qed.
+
+        Lemma count_Up :
+          Make.Ok (Up p₀ :: x₀) ->
+          S (count (Up p₀ :: x₀)) = count x₀.
+        Proof.
+          intros Ok_x.
+          apply M_Properties.remove_cardinal_1...
+          now apply Up_In.
+        Qed.
+
+        Lemma count_Down :
+          Make.Ok (Down p₀ :: x₀) ->
+          count (Down p₀ :: x₀) = S (count x₀).
+        Proof with instructions_tac.
+          intros Ok_x.
+          apply M_Properties.add_cardinal_2.
+          now apply Down_not_In.
+        Qed.
+      End Count.
+    End Sets.
   End Active.
 
   Module Absent.
