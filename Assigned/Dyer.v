@@ -766,16 +766,16 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       }.
 
       Module Transition.
-        Inductive UpNil :
+        Inductive t :
           relation State.t :=
-          | UpNil_intro :
+          | UpNil :
             forall
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
               (colors : nat)
               (labeling : Map.t nat)
               (coloring : Coloring.t),
-              UpNil
+              t
                 {|
                   instructions := Up p₀ :: x₀;
                   colors := colors;
@@ -787,11 +787,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   colors := S colors;
                   labeling := Map.add p₀ colors labeling;
                   unused_colors := []
-                |}.
-
-        Inductive UpCons :
-          relation State.t :=
-          | UpCons_intro :
+                |}
+          | UpCons :
             forall
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
@@ -799,7 +796,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               (labeling : Map.t nat)
               (color : nat)
               (unused_colors : list nat),
-              UpCons
+              t
                 {|
                   instructions := Up p₀ :: x₀;
                   colors := colors;
@@ -811,11 +808,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   colors := colors;
                   labeling := Map.add p₀ color labeling;
                   unused_colors := unused_colors
-                |}.
-
-        Inductive Down :
-          relation State.t :=
-          | Down_intro :
+                |}
+          | Down :
             forall
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
@@ -824,7 +818,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               (unused_colors : list nat)
               (c₀ : nat),
               Map.MapsTo p₀ c₀ labeling ->
-              Down
+              t
                 {|
                   instructions := Notations.Down p₀ :: x₀;
                   colors := colors;
@@ -837,13 +831,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   labeling := labeling;
                   unused_colors := c₀ :: unused_colors
                 |}.
-
-        Definition t :
-          relation State.t :=
-          fun s s' : State.t =>
-            UpNil s s' \/
-            UpCons s s' \/
-            Down s s'.
       End Transition.
 
       Module Ok.
