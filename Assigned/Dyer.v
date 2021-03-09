@@ -863,9 +863,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 color : nat,
                 List.In color s.(State.unused_colors) <->
                   color < s.(State.colors) /\
-                  ~ (exists
+                  forall
                     owner : Owner.t,
-                    Active_MapsTo owner color s);
+                    ~ Active_MapsTo owner color s;
             active :
               forall
                 (owner owner' : Owner.t)
@@ -876,6 +876,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             nodup :
               NoDup s.(State.unused_colors);
           }.
+
+        Ltac Ok_tac :=
+          simpl in *; eauto using Nat.lt_neq with arith instructions map.
 
         Module UpNil.
           Section UpNil.
@@ -917,9 +920,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.active).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
-
-            Ltac Ok_tac :=
-              simpl in *; eauto using Nat.lt_neq with arith instructions map.
 
             Let not_In_p₀_labeling :
               ~ Map.In p₀ s₀.(State.labeling).
@@ -1020,9 +1020,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                       setoid_rewrite MapsTo_iff₂ with (1 := color_neq_colors)].
                         now intuition exists p₀.
                       rewrite lt_iff_MapsTo₀; tauto.
-                    simpl; intros owner Ahead_owner_x₀...
+                    simpl; intros owner Ahead_owner_x₀.
                     enough (~ Owner.eq p₀ owner).
-                      rewrite add_neq_in_iff; [apply ahead₀|]...
+                      rewrite add_neq_in_iff by assumption; apply ahead₀...
                     contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
                   intros color.
                   specialize Nat.eq_dec with color s₀.(State.colors) as
@@ -1036,9 +1036,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 specialize Nat.eq_dec with color s₀.(State.colors) as
                   [->|
                 color_neq_colors].
-                  now apply Active_MapsTo_iff₁ in
-                    Active_MapsTo_owner_color as <-,
-                    Active_MapsTo_owner'_color as <-.
+                  now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
                 now apply active₀ with color; apply Active_MapsTo_iff₂.
               constructor.
             Qed.
@@ -1088,9 +1086,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
 
-            Ltac Ok_tac :=
-              simpl in *; eauto using Nat.lt_neq with arith instructions map.
-
             Let not_In_p₀_labeling :
               ~ Map.In p₀ s₀.(State.labeling).
             Proof with Ok_tac.
@@ -1108,7 +1103,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               owner : Owner.t,
               ~ Active_MapsTo owner unused_color s₀.
             Proof.
-              enough (~ exists owner : Owner.t, Active_MapsTo owner unused_color s₀) by firstorder.
               now apply unused₀; left.
             Qed.
 
@@ -1130,6 +1124,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               exists color.
             Qed.
 
+            Let Active_MapsTo_iff₃ :
+              forall
+              owner : Owner.t,
+              ~ Owner.eq p₀ owner ->
+              forall
+              color : nat,
+              Active_MapsTo owner color s₁ <->
+              Active_MapsTo owner color s₀.
+            Proof with Ok_tac.
+              intros owner p₀_neq_owner color.
+              now simpl; rewrite Active.cons_Up_iff, add_neq_mapsto_iff.
+            Qed.
+
             Lemma Active_MapsTo_iff₁ :
               forall
               owner : Owner.t,
@@ -1137,16 +1144,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Owner.eq p₀ owner.
             Proof with Ok_tac.
               intros owner.
-              simpl.
-              rewrite add_mapsto_iff.
-              enough (~ Active_MapsTo owner unused_color s₀).
-                constructor.
-                  intros (Active_owner_x₀ & [(? & ?)| (? & ?)]).
-                    assumption.
-                  contradict H...
-                intros <-.
+              specialize Owner.eq_dec with p₀ owner as
+                [<-|
+              p₀_neq_owner].
                 split...
-              firstorder.
+              specialize not_Active_MapsTo_owner_unused_color with owner.
+              rewrite Active_MapsTo_iff₃; tauto.
             Qed.
 
             Lemma Active_MapsTo_iff₂ :
@@ -1261,9 +1264,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
 
-            Ltac Ok_tac :=
-              simpl in *; eauto using Nat.lt_neq with arith instructions map.
-
             Let Active_MapsTo_p₀_used_color_s₀ :
               Active_MapsTo p₀ used_color s₀.
             Proof with Ok_tac.
@@ -1280,8 +1280,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               ~ List.In used_color s₀.(State.unused_colors).
             Proof.
               contradict Active_MapsTo_p₀_used_color_s₀.
-              enough (~ exists owner, Active_MapsTo owner used_color s₀) by
-                firstorder.
               now apply unused₀.
             Qed.
 
