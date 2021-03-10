@@ -1373,6 +1373,81 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         End Down.
       End Ok.
     End State.
+
+    Add Parametric Morphism : State.Ok.t with signature
+      State.Transition.t ++> impl as Ok_morphism.
+    Proof.
+      intros s t Transition_s_t Ok_s.
+      induction Transition_s_t as [
+          p₀ x₀ colors labeling|
+        p₀ x₀ colors labeling unused_color unused_colors|
+      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+          now apply State.Ok.UpNil.Ok.
+        now apply State.Ok.UpCons.Ok.
+      now apply State.Ok.Down.Ok with (1 := p₀_to_used_color).
+    Qed.
+
+    Definition Graph :
+      relation State.t :=
+      clos_refl_trans_1n _ State.Transition.t.
+
+    Add Parametric Morphism : State.Ok.t with signature
+      Graph ++> impl as Graph_morphism.
+    Proof.
+      intros s t Graph_s_t Ok_s.
+      now induction Graph_s_t as [| s s' t Transition_s_s' Graph_s'_t IHs'_t];
+        [| apply IHs'_t; rewrite <- Transition_s_s'].
+    Qed.
+
+    Lemma regular_body_spec :
+      forall
+      s : State.t,
+      State.Ok.t s ->
+      exists
+      (coloring' : Coloring.t)
+      (unused_colors' : list nat),
+      Regular.regular_body
+        s.(State.instructions)
+        {|
+          Coloring.colors := s.(State.colors);
+          Coloring.labeling := s.(State.labeling);
+        |}
+        s.(State.unused_colors) = Some coloring' /\
+      Graph
+        s
+        {|
+          State.instructions := [];
+          State.labeling := coloring'.(Coloring.labeling);
+          State.colors := coloring'.(Coloring.colors);
+          State.unused_colors := unused_colors'
+        |}.
+    Proof with State.Ok.Ok_tac.
+      intros [instructions colors labeling unused_colors];
+      revert colors labeling unused_colors.
+      induction instructions as [| [[|] p₀] x₀ IHx₀];
+      intros colors labeling unused_colors Ok_s; simpl.
+          exists (Coloring.new colors labeling), unused_colors;
+          split; [reflexivity| constructor].
+        destruct unused_colors as [| unused_color unused_colors];
+          [apply State.Ok.UpNil.Ok in Ok_s as Ok_s'|
+        apply State.Ok.UpCons.Ok in Ok_s as Ok_s'].
+        1, 2 :
+        specialize IHx₀ with (1 := Ok_s') as
+          (coloring' & unused_colors' & H & Graph_s'_t);
+        exists coloring', unused_colors';
+        now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
+      assert (exists used_color : nat, Map.MapsTo p₀ used_color labeling) as
+        (used_color & p₀_to_used_color).
+        pose proof Ok_s.(State.Ok.instructions) as Ok_x;
+        apply Ok_s.(State.Ok.active)...
+      move Ok_s before p₀_to_used_color;
+      apply State.Ok.Down.Ok with (1 := p₀_to_used_color) in Ok_s as Ok_s'.
+      specialize Map.find_1 with (1 := p₀_to_used_color) as ->.
+      specialize IHx₀ with (1 := Ok_s') as
+        (coloring' & unused_colors' & H & Graph_s'_t).
+      exists coloring', unused_colors'.
+      now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
+    Qed.
   End Regular'.
 
   Module Counter.
