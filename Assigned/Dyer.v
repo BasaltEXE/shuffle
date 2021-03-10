@@ -855,8 +855,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             ahead :
               forall
                 owner : Owner.t,
-                  Ahead owner s.(State.instructions) ->
-                  ~ Map.In owner s.(State.labeling);
+                Ahead owner s.(State.instructions) ->
+                ~ Map.In owner s.(State.labeling);
+            active :
+              forall
+                owner : Owner.t,
+                Active owner s.(State.instructions) ->
+                Map.In owner s.(State.labeling);
             unused :
               forall
                 color : nat,
@@ -913,6 +918,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.lt_iff_MapsTo).
             Let ahead₀ :=
               Ok_s₀.(Ok.ahead).
+            Let active₀ :=
+              Ok_s₀.(Ok.active).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
             Let proper₀ :=
@@ -1010,19 +1017,25 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                        Ok_tac.
-                      intros color; rewrite le_lteq.
-                      specialize Nat.eq_dec with color s₀.(State.colors) as
-                        [->|
-                      color_neq_colors];
-                        [setoid_rewrite MapsTo_iff₁|
-                      setoid_rewrite MapsTo_iff₂ with (1 := color_neq_colors)].
-                        now intuition exists p₀.
-                      rewrite lt_iff_MapsTo₀; tauto.
-                    simpl; intros owner Ahead_owner_x₀.
-                    enough (~ Owner.eq p₀ owner).
-                      rewrite add_neq_in_iff by assumption; apply ahead₀...
-                    contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
+                          Ok_tac.
+                        intros color; rewrite le_lteq.
+                        specialize Nat.eq_dec with color s₀.(State.colors) as
+                          [->|
+                        color_neq_colors];
+                          [setoid_rewrite MapsTo_iff₁|
+                        setoid_rewrite MapsTo_iff₂ with (1 := color_neq_colors)].
+                          now intuition exists p₀.
+                        rewrite lt_iff_MapsTo₀; tauto.
+                      simpl; intros owner Ahead_owner_x₀.
+                      enough (~ Owner.eq p₀ owner).
+                        rewrite add_neq_in_iff by assumption; apply ahead₀...
+                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
+                    intros owner Active_owner_x₀.
+                    apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
+                      [p₀_eq_owner|
+                    p₀_neq_owner];
+                      [left|
+                    right; apply active₀]...
                   intros color.
                   specialize Nat.eq_dec with color s₀.(State.colors) as
                     [->|
@@ -1078,6 +1091,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.lt_iff_MapsTo).
             Let ahead₀ :=
               Ok_s₀.(Ok.ahead).
+            Let active₀ :=
+              Ok_s₀.(Ok.active).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
             Let proper₀ :=
@@ -1181,19 +1196,25 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                        Ok_tac.
-                      intros color.
-                      specialize Nat.eq_dec with color unused_color as
-                        [->|
-                      color_neq_unused_color].
-                        enough (Map.MapsTo p₀ unused_color s₁.(State.labeling)).
-                          firstorder.
-                        simpl; auto with map.
-                      now setoid_rewrite MapsTo_iff₂.
-                    intros owner Ahead_owner_x₀.
-                    simpl; rewrite add_neq_in_iff;
-                      [apply ahead₀|
-                    contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀]...
+                          Ok_tac.
+                        intros color.
+                        specialize Nat.eq_dec with color unused_color as
+                          [->|
+                        color_neq_unused_color].
+                          enough (Map.MapsTo p₀ unused_color s₁.(State.labeling)).
+                            firstorder.
+                          simpl; auto with map.
+                        now setoid_rewrite MapsTo_iff₂.
+                      intros owner Ahead_owner_x₀.
+                      simpl; rewrite add_neq_in_iff;
+                        [apply ahead₀|
+                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀]...
+                    intros owner Active_owner_x₀.
+                    apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
+                      [p₀_eq_owner|
+                    p₀_neq_owner];
+                      [left|
+                    right; apply active₀]...
                   intros color.
                     specialize Nat.eq_dec with color unused_color as
                       [->|
@@ -1256,6 +1277,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.lt_iff_MapsTo).
             Let ahead₀ :=
               Ok_s₀.(Ok.ahead).
+            Let active₀ :=
+              Ok_s₀.(Ok.active).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
             Let proper₀ :=
@@ -1321,10 +1344,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                        Ok_tac.
-                      assumption.
-                    intros owner Ahead_owner_x₀.
-                    apply ahead₀...
+                          Ok_tac.
+                        assumption.
+                      intros owner Ahead_owner_x₀.
+                      apply ahead₀...
+                    intros owner Active_owner_x₀.
+                    apply active₀...
                   intros color.
                   specialize Nat.eq_dec with color used_color as
                     [->|
