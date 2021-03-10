@@ -1387,6 +1387,31 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now apply State.Ok.Down.Ok with (1 := p₀_to_used_color).
     Qed.
 
+    Definition Transition_Ok
+      (s t : State.t) :
+      Prop :=
+      State.Transition.t s t /\ State.Ok.t s.
+
+    Add Parametric Morphism : (fun s : State.t => Coloring.new s.(State.colors) s.(State.labeling)) with signature
+      (Transition_Ok ++> Coloring.le) as coloring_morphism.
+    Proof with State.Ok.Ok_tac.
+      intros s t (Transition_s_t & Ok_s).
+      induction Transition_s_t as [
+          p₀ x₀ colors labeling|
+        p₀ x₀ colors labeling unused_color unused_colors|
+      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+        1, 2:
+          split;
+            [auto with arith|
+          intros owner color owner_to_color;
+          enough (~ Owner.eq p₀ owner)]...
+        1, 2:
+          contradict owner_to_color; rewrite <- owner_to_color;
+          enough (~ Map.In p₀ labeling) by firstorder;
+          apply Ok_s.(State.Ok.ahead)...
+      reflexivity.
+    Qed.
+
     Definition Graph :
       relation State.t :=
       clos_refl_trans_1n _ State.Transition.t.
