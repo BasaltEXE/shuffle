@@ -773,8 +773,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
               (colors : nat)
-              (labeling : Map.t nat)
-              (coloring : Coloring.t),
+              (labeling : Map.t nat),
               t
                 {|
                   instructions := Up p₀ :: x₀;
@@ -794,19 +793,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               (x₀ : Instructions.t)
               (colors : nat)
               (labeling : Map.t nat)
-              (color : nat)
+              (unused_color : nat)
               (unused_colors : list nat),
               t
                 {|
                   instructions := Up p₀ :: x₀;
                   colors := colors;
                   labeling := labeling;
-                  unused_colors := color :: unused_colors
+                  unused_colors := unused_color :: unused_colors
                 |}
                 {|
                   instructions := x₀;
                   colors := colors;
-                  labeling := Map.add p₀ color labeling;
+                  labeling := Map.add p₀ unused_color labeling;
                   unused_colors := unused_colors
                 |}
           | Down :
@@ -815,9 +814,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               (x₀ : Instructions.t)
               (colors : nat)
               (labeling : Map.t nat)
-              (unused_colors : list nat)
-              (c₀ : nat),
-              Map.MapsTo p₀ c₀ labeling ->
+              (used_color : nat)
+              (unused_colors : list nat),
+              Map.MapsTo p₀ used_color labeling ->
               t
                 {|
                   instructions := Notations.Down p₀ :: x₀;
@@ -829,7 +828,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   instructions := x₀;
                   colors := colors;
                   labeling := labeling;
-                  unused_colors := c₀ :: unused_colors
+                  unused_colors := used_color :: unused_colors
                 |}.
       End Transition.
 
@@ -866,7 +865,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   forall
                     owner : Owner.t,
                     ~ Active_MapsTo owner color s;
-            active :
+            proper :
               forall
                 (owner owner' : Owner.t)
                 (color : nat),
@@ -916,8 +915,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.ahead).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
+            Let proper₀ :=
+              Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
 
@@ -1037,7 +1036,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   [->|
                 color_neq_colors].
                   now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                now apply active₀ with color; apply Active_MapsTo_iff₂.
+                now apply proper₀ with color; apply Active_MapsTo_iff₂.
               constructor.
             Qed.
           End UpNil.
@@ -1081,8 +1080,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.ahead).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
+            Let proper₀ :=
+              Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
 
@@ -1214,7 +1213,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   [->|
                 color_neq_unused_color].
                   now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                now apply active₀ with color; apply Active_MapsTo_iff₂.
+                now apply proper₀ with color; apply Active_MapsTo_iff₂.
               assumption.
             Qed.
           End UpCons.
@@ -1259,8 +1258,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.ahead).
             Let unused₀ :=
               Ok_s₀.(Ok.unused).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
+            Let proper₀ :=
+              Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
 
@@ -1297,7 +1296,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 enough (~ Active p₀ x₀) by tauto...
               contradict p₀_neq_owner; destruct p₀_neq_owner as
                 (Active_p₀_x₀ & owner_to_used_color).
-              apply active₀ with used_color...
+              apply proper₀ with used_color...
             Qed.
 
             Let Active_MapsTo_iff₂ :
@@ -1342,7 +1341,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   [->|
                 color_neq_used_color].
                   now apply Active_MapsTo_iff₁ in Active_MapsTo_owner_color.
-                now apply active₀ with color; apply Active_MapsTo_iff₂.
+                now apply proper₀ with color; apply Active_MapsTo_iff₂.
               now constructor.
             Qed.
           End Down.
