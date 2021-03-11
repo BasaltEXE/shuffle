@@ -1,6 +1,7 @@
 -R . Shuffle
 
 Misc.v
+Relations.v
 List.v
 Instruction.v
 Coloring.v

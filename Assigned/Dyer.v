@@ -20,6 +20,9 @@ Require Import Setoid.
 
 Require Import Shuffle.Misc.
 Require Import Shuffle.List.
+
+Require Import Shuffle.Relations.
+
 Require Shuffle.Assigned.Instructions.
 Require Import Shuffle.Coloring.
 
@@ -765,6 +768,15 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         unused_colors : list nat;
       }.
 
+      Notation empty
+        instructions :=
+        ({|
+          State.instructions := instructions;
+          State.colors := 0;
+          State.labeling := Map.empty nat;
+          State.unused_colors := [];
+        |}).
+
       Module Transition.
         Inductive t :
           relation State.t :=
@@ -830,9 +842,53 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   labeling := labeling;
                   unused_colors := used_color :: unused_colors
                 |}.
+
+        #[global]
+        Add Parametric Morphism : State.instructions with signature
+          t ++> Tail (A := Instruction.t) as instructions_morphism.
+        Proof.
+          intros s t Transition_s_t.
+          induction Transition_s_t as [
+              p₀ x₀ colors labeling|
+            p₀ x₀ colors labeling unused_color unused_colors|
+          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
+          constructor.
+        Qed.
+
+        #[global]
+        Instance functional :
+          Functional t.
+        Proof.
+          intros s t t' Transition_s_t Transition_s_t'.
+          induction Transition_s_t as [
+              p₀ x₀ colors labeling|
+            p₀ x₀ colors labeling unused_color unused_colors|
+          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
+          inversion_clear Transition_s_t' as [
+              |
+            |
+          ? ? ? ? used_color' ? p_to_used_color];
+          [reflexivity..|].
+          enough (used_color = used_color') as -> by reflexivity.
+          now apply MapsTo_fun with labeling p₀.
+        Qed.
+
+        #[global]
+        Instance irreflexive :
+          Irreflexive t.
+        Proof.
+          intros s; unfold complement.
+          assert (not_Tail_s_s : ~ Tail s.(instructions) s.(instructions)) by
+            apply irreflexivity.
+          now contradict not_Tail_s_s; apply instructions_morphism.
+        Qed.
       End Transition.
 
       Module Ok.
+        Module M := MSetWeakList.Make Owner.
+        Module Active := Active M.
+        Module M_Properties := MSetProperties.WPropertiesOn Owner M.
+
         Notation Active_MapsTo
           owner
           color
@@ -879,10 +935,49 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 Owner.eq owner owner';
             nodup :
               NoDup s.(State.unused_colors);
+            count :
+              s.(State.colors) =
+                Active.count s.(State.instructions) +
+                length s.(State.unused_colors);
           }.
 
         Ltac Ok_tac :=
           simpl in *; eauto using Nat.lt_neq with arith instructions map.
+
+        Module Empty.
+          Section Empty.
+            Variable
+              instructions : Instructions.t.
+
+            Let s :
+              State.t :=
+              State.empty instructions.
+
+            Lemma Ok :
+              Instructions.Ok s.(State.instructions) ->
+              Instructions.Closed s.(State.instructions) ->
+              State.Ok.t s.
+            Proof with Ok_tac.
+              intros Ok_instructions Closed_instructions.
+              specialize Closed_impl_not_Active with
+                (1 := Closed_instructions) as
+                not_Active.
+              constructor.
+                            assumption.
+                          apply Coloring.Ok.empty.
+                        intros owner Ahead_owner_instructions.
+                        specialize Map.empty_1 with nat; firstorder.
+                      intros owner Active_owner_instructions.
+                      now contradict Active_owner_instructions.
+                    intros color.
+                    enough (~ color < 0) by (simpl; tauto)...
+                  intros owner owner' color (Active_owner_instructions & _);
+                  now contradict Active_owner_instructions.
+                constructor.
+              rewrite Active.count_closed...
+            Qed.
+          End Empty.
+        End Empty.
 
         Module UpNil.
           Section UpNil.
@@ -926,6 +1021,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
+            Let count₀ :=
+              Ok_s₀.(Ok.count).
 
             Let not_In_p₀_labeling :
               ~ Map.In p₀ s₀.(State.labeling).
@@ -1017,40 +1114,44 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                          Ok_tac.
-                        intros color; rewrite le_lteq.
-                        specialize Nat.eq_dec with color s₀.(State.colors) as
-                          [->|
-                        color_neq_colors];
-                          [setoid_rewrite MapsTo_iff₁|
-                        setoid_rewrite MapsTo_iff₂ with (1 := color_neq_colors)].
-                          now intuition exists p₀.
-                        rewrite lt_iff_MapsTo₀; tauto.
-                      simpl; intros owner Ahead_owner_x₀.
-                      enough (~ Owner.eq p₀ owner).
-                        rewrite add_neq_in_iff by assumption; apply ahead₀...
-                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
-                    intros owner Active_owner_x₀.
-                    apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
-                      [p₀_eq_owner|
-                    p₀_neq_owner];
-                      [left|
-                    right; apply active₀]...
-                  intros color.
+                            Ok_tac.
+                          intros color; rewrite le_lteq.
+                          specialize Nat.eq_dec with color s₀.(State.colors) as
+                            [->|
+                          color_neq_colors];
+                            [setoid_rewrite MapsTo_iff₁|
+                          setoid_rewrite MapsTo_iff₂ with
+                            (1 := color_neq_colors)].
+                            now intuition exists p₀.
+                          rewrite lt_iff_MapsTo₀; tauto.
+                        simpl; intros owner Ahead_owner_x₀.
+                        enough (~ Owner.eq p₀ owner).
+                          rewrite add_neq_in_iff by assumption; apply ahead₀...
+                        contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
+                      intros owner Active_owner_x₀.
+                      apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
+                        [p₀_eq_owner|
+                      p₀_neq_owner];
+                        [left|
+                      right; apply active₀]...
+                    intros color.
+                    specialize Nat.eq_dec with color s₀.(State.colors) as
+                      [->|
+                    color_neq_colors];
+                      [setoid_rewrite Active_MapsTo_iff₁|
+                    setoid_rewrite Active_MapsTo_iff₂];
+                    firstorder.
+                  intros owner owner' color
+                    Active_MapsTo_owner_color Active_MapsTo_owner'_color.
                   specialize Nat.eq_dec with color s₀.(State.colors) as
                     [->|
-                  color_neq_colors];
-                    [setoid_rewrite Active_MapsTo_iff₁|
-                  setoid_rewrite Active_MapsTo_iff₂];
-                  firstorder.
-                intros owner owner' color
-                  Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-                specialize Nat.eq_dec with color s₀.(State.colors) as
-                  [->|
-                color_neq_colors].
-                  now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                now apply proper₀ with color; apply Active_MapsTo_iff₂.
-              constructor.
+                  color_neq_colors].
+                    now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
+                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
+                constructor.
+              rewrite Nat.add_0_r in count₀ |- *.
+              transitivity (S (Active.count (Up p₀ :: x₀)))...
+              now apply Active.count_Up.
             Qed.
           End UpNil.
         End UpNil.
@@ -1099,6 +1200,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
+            Let count₀ :=
+              Ok_s₀.(Ok.count).
 
             Let not_In_p₀_labeling :
               ~ Map.In p₀ s₀.(State.labeling).
@@ -1196,47 +1299,50 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                          Ok_tac.
-                        intros color.
-                        specialize Nat.eq_dec with color unused_color as
-                          [->|
-                        color_neq_unused_color].
-                          enough (Map.MapsTo p₀ unused_color s₁.(State.labeling)).
-                            firstorder.
-                          simpl; auto with map.
-                        now setoid_rewrite MapsTo_iff₂.
-                      intros owner Ahead_owner_x₀.
-                      simpl; rewrite add_neq_in_iff;
-                        [apply ahead₀|
-                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀]...
-                    intros owner Active_owner_x₀.
-                    apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
-                      [p₀_eq_owner|
-                    p₀_neq_owner];
-                      [left|
-                    right; apply active₀]...
-                  intros color.
-                    specialize Nat.eq_dec with color unused_color as
-                      [->|
-                    color_neq_unused_color].
-                      setoid_rewrite Active_MapsTo_iff₁.
-                      enough (exists owner : Owner.t, Owner.eq p₀ owner) by
-                        firstorder.
-                      now exists p₀.
-                    setoid_rewrite Active_MapsTo_iff₂; [| assumption].
-                    apply not_eq_sym in color_neq_unused_color.
-                    transitivity (List.In color s₀.(State.unused_colors)).
-                      simpl; tauto.
-                    apply unused₀.
-                intros owner owner' color
-                  Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-                specialize Nat.eq_dec with color unused_color as
-                  [->|
-                color_neq_unused_color].
-                  now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                now apply proper₀ with color; apply Active_MapsTo_iff₂.
-              assumption.
-            Qed.
+                            Ok_tac.
+                          intros color.
+                          specialize Nat.eq_dec with color unused_color as
+                            [->|
+                          color_neq_unused_color].
+                            enough (Map.MapsTo p₀ unused_color s₁.(State.labeling)).
+                              firstorder.
+                            simpl; auto with map.
+                          now setoid_rewrite MapsTo_iff₂.
+                        intros owner Ahead_owner_x₀.
+                        simpl; rewrite add_neq_in_iff;
+                          [apply ahead₀|
+                        contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀]...
+                      intros owner Active_owner_x₀.
+                      apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
+                        [p₀_eq_owner|
+                      p₀_neq_owner];
+                        [left|
+                      right; apply active₀]...
+                    intros color.
+                      specialize Nat.eq_dec with color unused_color as
+                        [->|
+                      color_neq_unused_color].
+                        setoid_rewrite Active_MapsTo_iff₁.
+                        enough (exists owner : Owner.t, Owner.eq p₀ owner) by
+                          firstorder.
+                        now exists p₀.
+                      setoid_rewrite Active_MapsTo_iff₂; [| assumption].
+                      apply not_eq_sym in color_neq_unused_color.
+                      transitivity (List.In color s₀.(State.unused_colors)).
+                        simpl; tauto.
+                      apply unused₀.
+                  intros owner owner' color
+                    Active_MapsTo_owner_color Active_MapsTo_owner'_color.
+                  specialize Nat.eq_dec with color unused_color as
+                    [->|
+                  color_neq_unused_color].
+                    now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
+                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
+                assumption.
+              transitivity (S (Active.count (Up p₀ :: x₀)) + length s₁.(State.unused_colors)).
+                now rewrite plus_Snm_nSm.
+              now rewrite Active.count_Up.
+             Qed.
           End UpCons.
         End UpCons.
 
@@ -1285,6 +1391,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok_s₀.(Ok.proper).
             Let nodup₀ :=
               Ok_s₀.(Ok.nodup).
+            Let count₀ :=
+              Ok_s₀.(Ok.count).
 
             Let Active_MapsTo_p₀_used_color_s₀ :
               Active_MapsTo p₀ used_color s₀.
@@ -1344,48 +1452,51 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Ok.t s₁.
             Proof with Ok_tac.
               constructor.
-                          Ok_tac.
-                        assumption.
-                      intros owner Ahead_owner_x₀.
-                      apply ahead₀...
-                    intros owner Active_owner_x₀.
-                    apply active₀...
-                  intros color.
+                            Ok_tac.
+                          assumption.
+                        intros owner Ahead_owner_x₀.
+                        apply ahead₀...
+                      intros owner Active_owner_x₀.
+                      apply active₀...
+                    intros color.
+                    specialize Nat.eq_dec with color used_color as
+                      [->|
+                    color_neq_used_color].
+                      setoid_rewrite Active_MapsTo_iff₁; firstorder.
+                    setoid_rewrite Active_MapsTo_iff₂; [| assumption].
+                    apply not_eq_sym in color_neq_used_color.
+                    transitivity (List.In color s₀.(State.unused_colors));
+                      [simpl; tauto|
+                    apply unused₀].
+                  intros owner owner' color
+                    Active_MapsTo_owner_color Active_MapsTo_owner'_color.
                   specialize Nat.eq_dec with color used_color as
                     [->|
                   color_neq_used_color].
-                    setoid_rewrite Active_MapsTo_iff₁; firstorder.
-                  setoid_rewrite Active_MapsTo_iff₂; [| assumption].
-                  apply not_eq_sym in color_neq_used_color.
-                  transitivity (List.In color s₀.(State.unused_colors));
-                    [simpl; tauto|
-                  apply unused₀].
-                intros owner owner' color
-                  Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-                specialize Nat.eq_dec with color used_color as
-                  [->|
-                color_neq_used_color].
-                  now apply Active_MapsTo_iff₁ in Active_MapsTo_owner_color.
-                now apply proper₀ with color; apply Active_MapsTo_iff₂.
-              now constructor.
+                    now apply Active_MapsTo_iff₁ in Active_MapsTo_owner_color.
+                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
+                now constructor.
+              transitivity (S (Active.count x₀) + length s₀.(State.unused_colors)).
+                now rewrite <- Active.count_Down with p₀ x₀.
+              apply plus_Snm_nSm.
             Qed.
           End Down.
         End Down.
+
+        Add Parametric Morphism : State.Ok.t with signature
+          State.Transition.t ++> impl as Ok_morphism.
+        Proof.
+          intros s t Transition_s_t Ok_s.
+          induction Transition_s_t as [
+              p₀ x₀ colors labeling|
+            p₀ x₀ colors labeling unused_color unused_colors|
+          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+              now apply State.Ok.UpNil.Ok.
+            now apply State.Ok.UpCons.Ok.
+          now apply State.Ok.Down.Ok with (1 := p₀_to_used_color).
+        Qed.
       End Ok.
     End State.
-
-    Add Parametric Morphism : State.Ok.t with signature
-      State.Transition.t ++> impl as Ok_morphism.
-    Proof.
-      intros s t Transition_s_t Ok_s.
-      induction Transition_s_t as [
-          p₀ x₀ colors labeling|
-        p₀ x₀ colors labeling unused_color unused_colors|
-      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
-          now apply State.Ok.UpNil.Ok.
-        now apply State.Ok.UpCons.Ok.
-      now apply State.Ok.Down.Ok with (1 := p₀_to_used_color).
-    Qed.
 
     Definition Transition_Ok
       (s t : State.t) :
@@ -1419,17 +1530,239 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       reflexivity.
     Qed.
 
-    Definition Graph :
-      relation State.t :=
-      clos_refl_trans_1n _ State.Transition.t.
+    Module Graph.
+      Definition t :
+        relation State.t :=
+        ReflexiveTransitive.Closure State.Transition.t.
 
-(*     Add Parametric Morphism : State.Ok.t with signature
-      Graph ++> impl as Graph_morphism.
-    Proof.
-      intros s t Graph_s_t Ok_s.
-      now induction Graph_s_t as [s| s s' t Transition_s_s' Graph_s'_t IHs'_t];
-        [| apply IHs'_t; rewrite <- Transition_s_s'].
-    Qed. *)
+      #[global]
+      Add Parametric Morphism : State.instructions with signature
+        Graph.t ++> (@Skip Instruction.t) as Skip_morphism.
+      Proof.
+        apply ReflexiveTransitive.morphism;
+        [typeclasses eauto| solve_proper].
+      Qed.
+
+      #[global]
+      Add Parametric Morphism : State.Ok.t with signature
+        Graph.t ++> impl as Ok_morphism.
+      Proof.
+        apply ReflexiveTransitive.morphism;
+        [typeclasses eauto| solve_proper].
+      Qed.
+
+      Lemma flip_Skip_impl_eq :
+        forall
+        x y : State.t,
+        Graph.t x y ->
+        Skip y.(State.instructions) x.(State.instructions) ->
+        x = y.
+      Proof.
+        intros x y Graph_x_y Skip_y_x.
+        destruct Graph_x_y as [| x' y Transition_x_x' Graph_x'_y].
+          reflexivity.
+        absurd (Tail x.(State.instructions) x'.(State.instructions)).
+          apply Skip.not_flip_Tail.
+          now transitivity y.(State.instructions); [rewrite Graph_x'_y|].
+        now apply State.Transition.instructions_morphism.
+      Qed.
+
+      #[global]
+      Instance antisymmetric :
+        Antisymmetric State.t eq t.
+      Proof.
+        intros s t Graph_s_t Graph_t_s.
+        apply flip_Skip_impl_eq with (1 := Graph_s_t).
+        now rewrite Graph_t_s.
+      Qed.
+
+      Lemma quasi_connex :
+        forall
+        x y y' : State.t,
+        Graph.t x y ->
+        Graph.t x y' ->
+          Graph.t y y' \/
+          Graph.t y' y.
+      Proof.
+        intros x y y' Graph_x_y; revert y'.
+        induction Graph_x_y as
+          [x|
+        x x' y Transition_x_x' Graph_x'_y IHx'_y];
+        intros y' Graph_x_y'.
+          now left.
+        inversion Graph_x_y' as [
+            x_eq_y'|
+          x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
+          now right; rewrite <- x_eq_y'; constructor 2 with x'.
+        enough (x'_eq_x'' : x' = x'').
+          apply IHx'_y.
+          now rewrite x'_eq_x''.
+        apply functionality with State.Transition.t x;
+        auto with typeclass_instances.
+      Qed.
+
+      Lemma quasi_total :
+        forall
+        x y y' : State.t,
+        Graph.t x y ->
+        Graph.t x y' ->
+          Graph.t y y' /\ ~ Graph.t y' y \/
+          y = y' \/
+          ~ Graph.t y y' /\ Graph.t y' y.
+      Proof.
+        intros x y y' Graph_x_y; revert y'.
+        induction Graph_x_y as
+          [x|
+        x x' y Transition_x_x' Graph_x'_y IHx'_y];
+        intros y' Graph_x_y';
+        inversion Graph_x_y' as [
+          x_eq_y'|
+        x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
+              now right; left.
+            left; split.
+              now transitivity x''; [apply is_subrelation|].
+            enough (x_neq_x'' : x <> x'').
+              contradict x_neq_x''.
+              now apply antisymmetric; [apply is_subrelation| transitivity y'].
+            contradict Transition_x_x''; rewrite Transition_x_x''.
+            apply irreflexivity.
+          rewrite x_eq_y' in *.
+          right; right; split.
+            enough (y'_neq_x' : y' <> x').
+              contradict y'_neq_x'.
+              now apply antisymmetric; [apply is_subrelation| transitivity y].
+            contradict Transition_x_x'; rewrite Transition_x_x'.
+            apply irreflexivity.
+          now transitivity x'; [apply is_subrelation|].
+        apply IHx'_y.
+        enough (x' = x'') as -> by assumption.
+        apply functionality with State.Transition.t x;
+        auto with typeclass_instances.
+      Qed.
+
+(*       Lemma quasi_total :
+        forall
+        x y y' : State.t,
+        Graph.t x y ->
+        Graph.t x y' ->
+          Graph.t y y' /\ ~ Graph.t y' y \/
+          y = y' \/
+          ~ Graph.t y y' /\ Graph.t y' y.
+      Proof.
+        intros s t t' Graph_s_t; revert t'.
+        induction Graph_s_t as
+          [s|
+        s s' t Transition_s_s' Graph_s'_t IHs'_t];
+          intros t' Graph_s_t'.
+          inversion_clear Graph_s_t'.
+            now right; left.
+          left; split.
+            transitivity y.
+              now apply clos_rt1n_step.
+            assumption.
+          change (Graph.t y t') in H0.
+          intros Graph_t'_s.
+          enough (Tail s.(State.instructions) y.(State.instructions)).
+            enough (Skip y.(State.instructions) s.(State.instructions)).
+              revert H1.
+              now apply Skip.Skip_Tail.
+            now rewrite H0, Graph_t'_s.
+          now apply State.Transition.instructions_morphism.
+        inversion Graph_s_t'.
+          rewrite <- H in *.
+          right; right.
+          split.
+            intros Graph_t_s.
+            enough (Tail s.(State.instructions) s'.(State.instructions)).
+              enough (Skip s'.(State.instructions) s.(State.instructions)).
+                revert H0.
+                now apply Skip.Skip_Tail.
+              transitivity t.(State.instructions).
+                now rewrite Graph_s'_t.
+              now rewrite Graph_t_s.
+            now apply State.Transition.instructions_morphism.
+          now constructor 2 with s'.
+        enough (s' = y).
+          apply IHs'_t.
+          now rewrite H2.
+        now apply functionality with (2 := H).
+      Qed. *)
+    End Graph.
+
+    Lemma Skip_inverse :
+      forall
+      (s : State.t)
+      (skip : Instructions.t),
+      State.Ok.t s ->
+      Skip s.(State.instructions) skip ->
+      exists
+      t : State.t,
+      t.(State.instructions) = skip /\
+      Graph.t s t.
+    Proof with State.Ok.Ok_tac.
+      intros [x colors labeling unused_colors].
+      revert colors labeling unused_colors; simpl.
+      induction x as [| u₀ x₀ IHx₀];
+      intros colors labeling unused_colors
+        skip Ok_s Skip_x_skip.
+        apply Skip.nil_inv in Skip_x_skip as ->.
+        exists
+        {|
+          State.instructions := [];
+          State.colors := colors;
+          State.labeling := labeling;
+          State.unused_colors := unused_colors
+        |}; repeat constructor.
+      apply Skip.cons_inv in Skip_x_skip as [->| Skip_x₀_skip].
+        exists
+        {|
+          State.instructions := u₀ :: x₀;
+          State.colors := colors;
+          State.labeling := labeling;
+          State.unused_colors := unused_colors
+        |}; repeat constructor.
+      enough (exists s',
+        s'.(State.instructions) = x₀ /\
+        State.Transition.t
+        {|
+          State.instructions := u₀ :: x₀;
+          State.colors := colors;
+          State.labeling := labeling;
+          State.unused_colors := unused_colors
+        |}
+        s') as ([x colors' labeling' unused_colors'] & <- & Transition_s_s').
+      specialize IHx₀ with colors' labeling' unused_colors' skip
+        as (t & t_eq_skip & Graph_s'_t).
+          now simpl; rewrite <- Transition_s_s'.
+        assumption.
+      now exists t; split; [| constructor 2 with (2 := Graph_s'_t)].
+      destruct u₀ as ([|] & p₀).
+        destruct unused_colors as [| unused_color unused_colors].
+          exists
+          {|
+            State.instructions := x₀;
+            State.colors := S colors;
+            State.labeling := Map.add p₀ colors labeling;
+            State.unused_colors := []
+          |}; repeat constructor.
+        exists
+        {|
+          State.instructions := x₀;
+          State.colors := colors;
+          State.labeling := Map.add p₀ unused_color labeling;
+          State.unused_colors := unused_colors
+        |}; repeat constructor.
+      specialize Ok_s.(State.Ok.active) with p₀ as
+        (used_color & p₀_to_used_color).
+        pose (Ok_s.(State.Ok.instructions))...
+      exists
+      {|
+        State.instructions := x₀;
+        State.colors := colors;
+        State.labeling := labeling;
+        State.unused_colors := used_color :: unused_colors
+      |}; now repeat constructor.
+    Qed.
 
     Lemma regular_body_spec :
       forall
@@ -1445,7 +1778,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Coloring.labeling := s.(State.labeling);
         |}
         s.(State.unused_colors) = Some coloring' /\
-      Graph
+      Graph.t
         s
         {|
           State.instructions := [];
@@ -1481,169 +1814,160 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
     Qed.
 
-    Module M := MSetWeakList.Make Owner.
-    Module Active := Active M.
-    Module M_Properties := MSetProperties.WPropertiesOn Owner M.
-
-    Definition Count_Ok
-      (s : State.t) :
-      Prop :=
-      s.(State.colors) =
-        Active.count s.(State.instructions) +
-        length s.(State.unused_colors).
-
-    Add Parametric Morphism : Count_Ok with signature
-      Transition_Ok ++> impl as Count_morphism.
-    Proof.
-      intros s t (Transition_s_t & Ok_s).
-      pose proof Ok_s.(State.Ok.instructions) as Ok_instructions.
-      unfold Count_Ok.
+    Add Parametric Morphism : (fun x => to_coloring (proj1_sig x)) with signature
+      (@Restriction _ State.Ok.t State.Transition.t ++> Coloring.le) as coloring_morphism'.
+    Proof with State.Ok.Ok_tac.
+      intros (s & Ok_s) (t & Ok_t) Transition_s_t;
+      change (State.Transition.t s t) in Transition_s_t.
       induction Transition_s_t as [
           p₀ x₀ colors labeling|
         p₀ x₀ colors labeling unused_color unused_colors|
-      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
-      intros Count_s;
-          cbv [State.colors State.instructions State.unused_colors] in *.
-          now rewrite Count_s, <- plus_Sn_m, Active.count_Up.
-        change (length (unused_color :: unused_colors)) with (S (length unused_colors)) in Count_s.
-        now rewrite Count_s, <- plus_Snm_nSm, Active.count_Up.
-      now rewrite Count_s, Active.count_Down, plus_Snm_nSm.
+      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+        1, 2:
+          split;
+            [auto with arith|
+          intros owner color owner_to_color;
+          enough (~ Owner.eq p₀ owner)]...
+        1, 2:
+          contradict owner_to_color; rewrite <- owner_to_color;
+          enough (~ Map.In p₀ labeling) by firstorder;
+          apply Ok_s.(State.Ok.ahead)...
+      reflexivity.
     Qed.
 
-    Add Parametric Morphism : State.instructions with signature
-      State.Transition.t ++> Tail (A := Instruction.t) as instructions_morphism.
-    Proof.
-      intros s t Transition_s_t.
-      induction Transition_s_t as [
-          p₀ x₀ colors labeling|
-        p₀ x₀ colors labeling unused_color unused_colors|
-      p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
-      constructor.
+    Add Parametric Morphism : (fun x => to_coloring (proj1_sig x)) with signature
+      (ReflexiveTransitive.Closure (Restriction State.Ok.t State.Transition.t) ++> Coloring.le) as coloring_morphism''.
+    Proof with State.Ok.Ok_tac.
+      apply ReflexiveTransitive.morphism.
+        typeclasses eauto.
+      exact coloring_morphism'.
     Qed.
-
-    Instance Transition_Graph_subrelation :
-      subrelation State.Transition.t Graph.
-    Proof.
-      intros s s' Transition_s_s'.
-      now apply clos_rt1n_step.
-    Qed.
-
-    Generalizable Variables A R f.
-
-    Instance Graph_morphism
-      `{PreOrder_R : @PreOrder A R}
-      `{Proper_f : Proper _ (State.Transition.t ++> R) f} :
-      Proper (Graph ++> R) f.
-    Proof.
-      intros s t Graph_s_t.
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t].
-        reflexivity.
-      now transitivity (f s'); [rewrite Transition_s_s'|].
-    Qed.
-
-    Definition Graph_Ok
-      (s t : State.t) :
-      Prop :=
-      Graph s t /\ State.Ok.t s.
-
-    Instance Graph_Ok_morphism
-      `{PreOrder_R : @PreOrder A R}
-      `{Proper_f : Proper _ (Transition_Ok ++> R) f} :
-      Proper (Graph_Ok ++> R) f.
-    Proof.
-      intros s t (Graph_s_t & Ok_s).
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t].
-        reflexivity.
-      transitivity (f s').
-        now apply Proper_f.
-      now apply IHs'_t; rewrite <- Transition_s_s'.
-    Qed.
-
-    Add Parametric Relation : Prop impl
-      reflexivity proved by impl_Reflexive
-      transitivity proved by impl_Transitive
-      as PreOrder_impl.
 
     Lemma Graph_invariant :
       forall
         s t : State.t,
-        Graph s t ->
+        Graph.t s t ->
         State.Ok.t s ->
-        Count_Ok s ->
         t.(State.instructions) = [] ->
         Skip.Forall
           (fun skip : Instructions.t =>
-          Active.count skip <= State.colors t)
+          State.Ok.Active.count skip <= State.colors t)
           s.(State.instructions).
     Proof.
-      intros s t Graph_s_t.
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s Count_s.
-        intros -> skip Skip_x_skip.
-        apply List.Skip.nil_inv in Skip_x_skip as ->.
-        auto with arith.
-      intros H skip.
+      intros s t Graph_s_t Ok_s finished skip Skip_x_skip.
+      apply Skip_inverse with (1 := Ok_s) in Skip_x_skip as
+        (s' & <- & Graph_s_s').
+      transitivity (s'.(State.colors)).
+        assert (Ok_s' : State.Ok.t s') by
+          now rewrite <- Graph_s_s'.
+        rewrite Ok_s'.(State.Ok.count); apply le_plus_l.
+      enough (Coloring.le (to_coloring s') (to_coloring t)) by firstorder.
+      specialize Graph.quasi_connex with (1 := Graph_s_t) (2 := Graph_s_s') as
+        [Graph_t_s'|
+      Graph_s'_t].
+        specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
+          reflexivity.
+        rewrite finished.
+        rewrite Skip.iff; exists s'.(State.instructions).
+        now rewrite app_nil_r.
+      assert (Ok_s' : State.Ok.t s').
+        now rewrite <- Graph_s_s'.
+      enough (exists Ok_t, ReflexiveTransitive.Closure (Restriction State.Ok.t State.Transition.t) (exist _ s' Ok_s') (exist _ t Ok_t)) as (Ok_t & H).
+      change (Coloring.le (to_coloring (proj1_sig (exist _ s' Ok_s')))  (to_coloring (proj1_sig (exist _ t Ok_t)))).
+      change (Coloring.le ((fun x => to_coloring (proj1_sig x)) (exist _ s' Ok_s')) ((fun y => to_coloring (proj1_sig y)) (exist _ t Ok_t))).
+        now rewrite <- H.
+      apply ReflexiveTransitive.Restriction.
+        exact _.
+      assumption.
+    Qed.
 
-      specialize instructions_morphism with (1 := Transition_s_s') as Tail.
-      apply Tail.inv in Tail as (u₀ & H').
-      rewrite H'.
-      intros Skip_x_skip.
-      apply Skip.cons_inv in Skip_x_skip as
-        [?|
-      ?].
-        rewrite H0.
-        transitivity (s.(State.colors)).
-        rewrite Count_s.
-        rewrite H'.
-        apply le_plus_l.
+    Definition Proper
+      (labeling : Map.t nat)
+      (instructions : Instructions.t) :
+      Prop :=
+      forall
+      (owner owner' : Owner.t)
+      (color : nat),
+      Active owner instructions /\ Map.MapsTo owner color labeling ->
+      Active owner' instructions /\ Map.MapsTo owner' color labeling ->
+      Owner.eq owner owner'.
 
-        enough (Coloring.le (to_coloring s) (to_coloring t)).
-          firstorder.
-        transitivity (to_coloring s').
-          now apply coloring_morphism; split.
-          assert (X : Transition_Ok s s') by
-            now split.
-          assert (Y : Graph_Ok s' t).
-            split.
-              assumption.
-            now rewrite <- Transition_s_s'.
-          now rewrite Y.
-        apply IHs'_t.
-          now rewrite <- Transition_s_s'.
-          assert (X : Transition_Ok s s').
-            now split.
-          now rewrite <- X.
-        assumption.
-        assumption.
+    Lemma helper :
+      forall
+      s t : State.t,
+      Graph.t s t ->
+      State.Ok.t s ->
+      forall
+      (owner : Owner.t)
+      (color : nat),
+      Active owner s.(State.instructions) ->
+      Map.MapsTo owner color t.(State.labeling) ->
+      Map.MapsTo owner color s.(State.labeling).
+    Proof.
+      intros s t Graph_s_t Ok_s owner color Active_owner_s owner_to_color_t.
+      specialize Ok_s.(State.Ok.active) with (1 := Active_owner_s) as
+        (color' & owner_to_color'_s).
+      enough (color = color') as -> by assumption.
+      apply MapsTo_fun with (1 := owner_to_color_t).
+      enough (s_le_t : Coloring.le (to_coloring s) (to_coloring t)).
+        now apply s_le_t.
+      enough (exists Ok_t, ReflexiveTransitive.Closure (Restriction State.Ok.t State.Transition.t) (exist _ s Ok_s) (exist _ t Ok_t)) as (Ok_t & H).
+      change (Coloring.le ((fun x => to_coloring (proj1_sig x)) (exist _ s Ok_s)) ((fun y => to_coloring (proj1_sig y)) (exist _ t Ok_t))).
+        now rewrite <- H.
+      apply ReflexiveTransitive.Restriction.
+        exact _.
+      assumption.
+    Qed.
+
+    Lemma Graph_invariant'' :
+      forall
+        s t : State.t,
+        Graph.t s t ->
+        State.Ok.t s ->
+        t.(State.instructions) = [] ->
+        Skip.Forall
+          (Proper t.(State.labeling))
+          s.(State.instructions).
+    Proof.
+      intros s t Graph_s_t Ok_s finished skip Skip_x_skip.
+      apply Skip_inverse with (1 := Ok_s) in Skip_x_skip as
+        (s' & <- & Graph_s_s').
+      assert (Ok_s' : State.Ok.t s') by now rewrite <- Graph_s_s'.
+      specialize Graph.quasi_connex with (1 := Graph_s_t) (2 := Graph_s_s') as
+        [Graph_t_s'|
+      Graph_s'_t].
+        specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
+          rewrite Graph_s_s' in Ok_s.
+          intros owner owner' color.
+          apply Ok_s.(State.Ok.proper).
+        rewrite finished.
+        rewrite Skip.iff; exists s'.(State.instructions).
+        now rewrite app_nil_r.
+      intros owner owner' color
+        (Active_owner_s' & owner_to_color_t)
+        (Active_owner'_s & owner'_to_color_t).
+      now apply Ok_s'.(State.Ok.proper) with color;
+        (split; [| apply helper with t]).
     Qed.
 
     Lemma Graph_invariant' :
       forall
         s t : State.t,
-        Graph s t ->
+        Graph.t s t ->
         State.Ok.t s ->
-        Count_Ok s ->
         s.(State.colors) = t.(State.colors) \/
         Skip.Exists
           (fun skip : Instructions.t =>
-          Active.count skip = t.(State.colors))
+          State.Ok.Active.count skip = t.(State.colors))
           s.(State.instructions).
     Proof.
       intros s t Graph_s_t.
       induction Graph_s_t as
         [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s Count_s.
+      s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s.
         now left.
       specialize IHs'_t as [e| (skip & Skip_x₀_skip & e)].
             now rewrite <- Transition_s_s'.
-          enough (Transition_Ok_s_s' : Transition_Ok s s') by
-            now rewrite <- Transition_Ok_s_s'.
-          now split.
         enough (s_le_s' : s.(State.colors) <= s'.(State.colors)).
           apply Nat.le_lteq in s_le_s' as
             [s_lt_s'|
@@ -1652,12 +1976,14 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           left].
             enough (s'.(State.unused_colors) = []).
               exists s'.(State.instructions); split.
-                apply List.Skip.Tail_subrelation.
-                now apply instructions_morphism.
-              rewrite <- e; enough (Count_Ok s') as ->.
+                apply ReflexiveTransitive.subrelation.
+                now apply State.Transition.instructions_morphism.
+              rewrite <- e.
+                assert (Ok_s' : State.Ok.t s') by
+                  now rewrite <- Transition_s_s'.
+                rewrite Ok_s'.(State.Ok.count).
                 rewrite H.
                 simpl; auto with arith.
-              now apply Count_morphism with (2 := Count_s).
             induction Transition_s_s' as [
                 p₀ x₀ colors labeling|
               p₀ x₀ colors labeling unused_color unused_colors|
@@ -1676,134 +2002,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       assumption.
     Qed.
 
-    Definition Proper
-      (labeling : Map.t nat)
-      (instructions : Instructions.t) :
-      Prop :=
-      forall
-      (owner owner' : Owner.t)
-      (color : nat),
-      Active owner instructions /\ Map.MapsTo owner color labeling ->
-      Active owner' instructions /\ Map.MapsTo owner' color labeling ->
-      Owner.eq owner owner'.
-
-      Lemma Graph_invariant'' :
-      forall
-        s t : State.t,
-        Graph s t ->
-        State.Ok.t s ->
-        t.(State.instructions) = [] ->
-        Skip.Forall
-          (Proper t.(State.labeling))
-          s.(State.instructions).
-    Proof.
-      intros s t Graph_s_t.
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s.
-        intros e skip Skip_x_skip.
-        rewrite e in Skip_x_skip.
-        apply List.Skip.nil_inv in Skip_x_skip as ->.
-        rewrite <- e.
-        pose  (Ok_s.(State.Ok.proper)).
-        assumption.
-      intros e.
-      intros skip Skip_x_skip owner owner' color
-        Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-      assert (Tail_s_s' : Tail s.(State.instructions) s'.(State.instructions)).
-        now apply instructions_morphism.
-      apply Tail.inv in Tail_s_s' as (u₀ & e').
-      rewrite e' in Skip_x_skip.
-      apply List.Skip.cons_inv in Skip_x_skip as [e''|
-        Skip_x₀_skip].
-        pose (H := Ok_s.(State.Ok.proper)).
-        rewrite e'', <- e' in
-          Active_MapsTo_owner_color,
-          Active_MapsTo_owner'_color.
-        destruct
-          Active_MapsTo_owner_color as
-          (Active_owner_skip & owner_to_color),
-          Active_MapsTo_owner'_color as
-          (Active_owner'_skip & owner'_to_color).
-        apply (H owner owner' color).
-
-        split.
-            easy.
-          apply Ok_s.(State.Ok.active) in Active_owner_skip
-            as (color' & owner_to_color').
-          enough (color = color') as ->.
-            easy.
-          apply MapsTo_fun with (1 := owner_to_color).
-          enough (Coloring.le
-            (to_coloring s)
-            (to_coloring t)).
-            now apply H0.
-          transitivity (to_coloring s').
-            now apply coloring_morphism.
-          change (Graph s' t) in Graph_s'_t.
-          enough (Graph_Ok_s'_t : Graph_Ok s' t).
-            now rewrite Graph_Ok_s'_t.
-          split.
-            assumption.
-          now rewrite <- Transition_s_s'.
-
-          split.
-            easy.
-          apply Ok_s.(State.Ok.active) in Active_owner'_skip
-            as (color' & owner'_to_color').
-          enough (color = color') as ->.
-            easy.
-          apply MapsTo_fun with (1 := owner'_to_color).
-          enough (Coloring.le
-            (to_coloring s)
-            (to_coloring t)).
-            now apply H0.
-          transitivity (to_coloring s').
-            now apply coloring_morphism.
-          change (Graph s' t) in Graph_s'_t.
-          enough (Graph_Ok_s'_t : Graph_Ok s' t).
-            now rewrite Graph_Ok_s'_t.
-          split.
-            assumption.
-          now rewrite <- Transition_s_s'.
-      rewrite Transition_s_s' in Ok_s.
-      now apply (IHs'_t Ok_s e skip Skip_x₀_skip owner owner' color).
-    Qed.
-
-    Lemma start_Ok :
-      forall
-      instructions : Instructions.t,
-      Instructions.Ok instructions ->
-      Instructions.Closed instructions ->
-      State.Ok.t
-        {|
-          State.instructions := instructions;
-          State.colors := 0;
-          State.labeling := Map.empty nat;
-          State.unused_colors := [];
-        |}.
-    Proof.
-      intros instructions Ok_instructions Closed_instructions.
-      specialize Closed_impl_not_Active with (1 := Closed_instructions) as
-        not_Active.
-      constructor.
-                  assumption.
-                apply Coloring.Ok.empty.
-              simpl.
-              intros owner Ahead_owner_instructions.
-              now rewrite empty_in_iff.
-            intros owner Active_owner_instructions.
-            now contradict Active_owner_instructions.
-          intros color.
-          split.
-            contradiction.
-          intros (color_lt_0 & _).
-          contradict color_lt_0; auto with arith.
-        intros owner owner' color (Active_owner_instructions & _);
-        now contradict Active_owner_instructions.
-      constructor.
-    Qed.
-
     Lemma regular_spec :
       forall
       instructions : Instructions.t,
@@ -1818,28 +2016,21 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         instructions /\
       Skip.Forall
         (fun skip : Instructions.t =>
-        Active.count instructions <= coloring.(Coloring.colors))
+        State.Ok.Active.count instructions <= coloring.(Coloring.colors))
         instructions /\
       Skip.Exists
         (fun skip : Instructions.t =>
-        Active.count skip = coloring.(Coloring.colors))
+        State.Ok.Active.count skip = coloring.(Coloring.colors))
         instructions.
     Proof with State.Ok.Ok_tac.
       intros instructions Ok_instructions Closed_instructions.
-      specialize start_Ok with
-        (1 := Ok_instructions)
-        (2 := Closed_instructions) as Ok_s.
-      pose (s :=
-      {|
-        State.instructions := instructions;
-        State.colors := 0;
-        State.labeling := Map.empty nat;
-        State.unused_colors := []
-      |}).
-      assert (Count_s : Count_Ok s).
-        unfold Count_Ok.
+      pose (s := State.empty instructions).
+      assert (Ok_s : State.Ok.t (State.empty instructions)) by
+        now apply State.Ok.Empty.Ok.
+(*       assert (Count_s := Ok_s.(State.Ok.count)).
+        simpl in *.
         simpl.
-        rewrite Active.count_closed; auto with arith.
+        rewrite Active.count_closed; auto with arith. *)
       specialize regular_body_spec with (1 := Ok_s) as
         (coloring' & unused_colors' & e & Graph_s_t).
       exists coloring'.
@@ -1852,13 +2043,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now apply Graph_invariant with (1 := Graph_s_t).
       specialize Graph_invariant' with
         (1 := Graph_s_t)
-        (2 := Ok_s)
-        (3 := Count_s) as
+        (2 := Ok_s) as
         [?| ?]; simpl in *.
         exists instructions.
         split.
           reflexivity.
-        now rewrite Active.count_closed.
+        now rewrite State.Ok.Active.count_closed.
       assumption.
     Qed.
   End Regular'.

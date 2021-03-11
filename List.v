@@ -2,13 +2,12 @@ Set Implicit Arguments.
 
 Require Import Coq.Arith.Arith.
 
-Require Import Coq.Relations.Relation_Operators Coq.Relations.Operators_Properties.
-Require Import Coq.Classes.RelationClasses.
-
 Require Import Coq.Lists.SetoidList.
 Import ListNotations.
 
-Require Import Shuffle.Misc.
+Require Import
+  Shuffle.Misc
+  Shuffle.Relations.
 
 Lemma Forall_cons_iff : forall
   (A : Type)
@@ -87,6 +86,15 @@ Module Tail.
     Qed.
 
     #[global]
+    Instance functional :
+      Functional Tail.
+    Proof.
+      intros x y y' Tail_x_y Tail_x_y'.
+      induction Tail_x_y as (u₀ & x₀).
+      now inversion_clear Tail_x_y' as (u₁).
+    Qed.
+
+    #[global]
     Instance irreflexive :
       Irreflexive Tail.
     Proof.
@@ -159,41 +167,7 @@ Module Skip.
 
     Definition Skip :
       relation (list A) :=
-      clos_refl_trans_1n (list A) (@Tail A).
-
-    #[global]
-    Instance Tail_subrelation :
-      subrelation (@Tail A) Skip.
-    Proof.
-      intros y x.
-      apply clos_rt1n_step.
-    Qed.
-
-    #[global]
-    Instance reflexive :
-      Reflexive Skip.
-    Proof.
-      intros x.
-      apply rt1n_refl.
-    Qed.
-
-    #[global]
-    Instance transitive :
-      Transitive Skip.
-    Proof.
-      intros x y z.
-      unfold Skip.
-      rewrite <- 3!clos_rt_rt1n_iff.
-      now constructor 3 with y.
-    Qed.
-
-    #[global]
-    Instance preorder :
-      PreOrder Skip.
-    Proof.
-      split;
-        auto with typeclass_instances.
-    Qed.
+      ReflexiveTransitive.Closure (@Tail A).
 
     Section Properties.
       Variables
@@ -297,12 +271,22 @@ Module Skip.
       intros (Skip_x_y & Skip_y_x).
       now apply antisymmetric.
     Qed.
-  End Skip.
 
-  Add Parametric Relation (A : Type) : (list A) (Skip (A := A))
-    reflexivity proved by (reflexive (A:=A))
-    transitivity proved by (transitive (A:=A))
-    as Skip_rel.
+    Lemma not_flip_Tail :
+      forall
+      x y : list A,
+      Skip x y ->
+      ~ Tail y x.
+    Proof.
+      intros x y Skip_x_y.
+      assert (not_Tail_x_x : ~ Tail x x) by apply irreflexivity.
+      contradict not_Tail_x_x.
+      enough (x_eq_y : x = y).
+        now rewrite x_eq_y at 1.
+      apply antisymmetry with (1 := Skip_x_y).
+      now rewrite not_Tail_x_x.
+    Qed.
+  End Skip.
 
   Notation Forall P y :=
     (forall
