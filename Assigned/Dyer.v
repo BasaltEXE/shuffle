@@ -1566,166 +1566,183 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           reflexivity.
         Qed.
       End Transition.
-    End State.
 
-    Module Graph.
-      Definition t :
-        relation State.t :=
-        ReflexiveTransitive.Closure State.Transition.t.
+      Module Graph.
+        Definition t :
+          relation State.t :=
+          ReflexiveTransitive.Closure State.Transition.t.
 
-      #[global]
-      Add Parametric Morphism : State.instructions with signature
-        Graph.t ++> (@Skip Instruction.t) as Skip_morphism.
-      Proof.
-        apply ReflexiveTransitive.morphism;
-        [typeclasses eauto| solve_proper].
-      Qed.
+        #[global]
+        Add Parametric Morphism : State.instructions with signature
+          Graph.t ++> (@Skip Instruction.t) as Skip_morphism.
+        Proof.
+          apply ReflexiveTransitive.morphism;
+          [typeclasses eauto| solve_proper].
+        Qed.
 
-      #[global]
-      Add Parametric Morphism : State.Ok.t with signature
-        Graph.t ++> impl as Ok_morphism.
-      Proof.
-        apply ReflexiveTransitive.morphism;
-        [typeclasses eauto| solve_proper].
-      Qed.
+        #[global]
+        Add Parametric Morphism : State.Ok.t with signature
+          Graph.t ++> impl as Ok_morphism.
+        Proof.
+          apply ReflexiveTransitive.morphism;
+          [typeclasses eauto| solve_proper].
+        Qed.
 
-      Lemma flip_Skip_impl_eq :
-        forall
-        x y : State.t,
-        Graph.t x y ->
-        Skip y.(State.instructions) x.(State.instructions) ->
-        x = y.
-      Proof.
-        intros x y Graph_x_y Skip_y_x.
-        destruct Graph_x_y as [| x' y Transition_x_x' Graph_x'_y].
-          reflexivity.
-        absurd (Tail x.(State.instructions) x'.(State.instructions)).
-          apply Skip.not_flip_Tail.
-          now transitivity y.(State.instructions); [rewrite Graph_x'_y|].
-        now apply State.Transition.instructions_morphism.
-      Qed.
+        Lemma flip_Skip_impl_eq :
+          forall
+          x y : State.t,
+          Graph.t x y ->
+          Skip y.(State.instructions) x.(State.instructions) ->
+          x = y.
+        Proof.
+          intros x y Graph_x_y Skip_y_x.
+          destruct Graph_x_y as [| x' y Transition_x_x' Graph_x'_y].
+            reflexivity.
+          absurd (Tail x.(State.instructions) x'.(State.instructions)).
+            apply Skip.not_flip_Tail.
+            now transitivity y.(State.instructions); [rewrite Graph_x'_y|].
+          now apply State.Transition.instructions_morphism.
+        Qed.
 
-      #[global]
-      Instance antisymmetric :
-        Antisymmetric State.t eq t.
-      Proof.
-        intros s t Graph_s_t Graph_t_s.
-        apply flip_Skip_impl_eq with (1 := Graph_s_t).
-        now rewrite Graph_t_s.
-      Qed.
+        #[global]
+        Instance antisymmetric :
+          Antisymmetric State.t eq t.
+        Proof.
+          intros s t Graph_s_t Graph_t_s.
+          apply flip_Skip_impl_eq with (1 := Graph_s_t).
+          now rewrite Graph_t_s.
+        Qed.
 
-      Lemma quasi_connex :
-        forall
-        x y y' : State.t,
-        Graph.t x y ->
-        Graph.t x y' ->
-          Graph.t y y' \/
-          Graph.t y' y.
-      Proof.
-        intros x y y' Graph_x_y; revert y'.
-        induction Graph_x_y as
-          [x|
-        x x' y Transition_x_x' Graph_x'_y IHx'_y];
-        intros y' Graph_x_y'.
-          now left.
-        inversion Graph_x_y' as [
+        Lemma quasi_connex :
+          forall
+          x y y' : State.t,
+          Graph.t x y ->
+          Graph.t x y' ->
+            Graph.t y y' \/
+            Graph.t y' y.
+        Proof.
+          intros x y y' Graph_x_y; revert y'.
+          induction Graph_x_y as
+            [x|
+          x x' y Transition_x_x' Graph_x'_y IHx'_y];
+          intros y' Graph_x_y'.
+            now left.
+          inversion Graph_x_y' as [
+              x_eq_y'|
+            x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
+            now right; rewrite <- x_eq_y'; constructor 2 with x'.
+          enough (x'_eq_x'' : x' = x'').
+            apply IHx'_y.
+            now rewrite x'_eq_x''.
+          apply functionality with State.Transition.t x;
+          auto with typeclass_instances.
+        Qed.
+
+        Lemma quasi_total :
+          forall
+          x y y' : State.t,
+          Graph.t x y ->
+          Graph.t x y' ->
+            Graph.t y y' /\ ~ Graph.t y' y \/
+            y = y' \/
+            ~ Graph.t y y' /\ Graph.t y' y.
+        Proof.
+          intros x y y' Graph_x_y; revert y'.
+          induction Graph_x_y as
+            [x|
+          x x' y Transition_x_x' Graph_x'_y IHx'_y];
+          intros y' Graph_x_y';
+          inversion Graph_x_y' as [
             x_eq_y'|
           x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
-          now right; rewrite <- x_eq_y'; constructor 2 with x'.
-        enough (x'_eq_x'' : x' = x'').
+                now right; left.
+              left; split.
+                now transitivity x''; [apply is_subrelation|].
+              enough (x_neq_x'' : x <> x'').
+                contradict x_neq_x''.
+                now apply antisymmetric; [apply is_subrelation| transitivity y'].
+              contradict Transition_x_x''; rewrite Transition_x_x''.
+              apply irreflexivity.
+            rewrite x_eq_y' in *.
+            right; right; split.
+              enough (y'_neq_x' : y' <> x').
+                contradict y'_neq_x'.
+                now apply antisymmetric; [apply is_subrelation| transitivity y].
+              contradict Transition_x_x'; rewrite Transition_x_x'.
+              apply irreflexivity.
+            now transitivity x'; [apply is_subrelation|].
           apply IHx'_y.
-          now rewrite x'_eq_x''.
-        apply functionality with State.Transition.t x;
-        auto with typeclass_instances.
-      Qed.
+          enough (x' = x'') as -> by assumption.
+          apply functionality with State.Transition.t x;
+          auto with typeclass_instances.
+        Qed.
 
-      Lemma quasi_total :
-        forall
-        x y y' : State.t,
-        Graph.t x y ->
-        Graph.t x y' ->
-          Graph.t y y' /\ ~ Graph.t y' y \/
-          y = y' \/
-          ~ Graph.t y y' /\ Graph.t y' y.
-      Proof.
-        intros x y y' Graph_x_y; revert y'.
-        induction Graph_x_y as
-          [x|
-        x x' y Transition_x_x' Graph_x'_y IHx'_y];
-        intros y' Graph_x_y';
-        inversion Graph_x_y' as [
-          x_eq_y'|
-        x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
+  (*       Lemma quasi_total :
+          forall
+          x y y' : State.t,
+          Graph.t x y ->
+          Graph.t x y' ->
+            Graph.t y y' /\ ~ Graph.t y' y \/
+            y = y' \/
+            ~ Graph.t y y' /\ Graph.t y' y.
+        Proof.
+          intros s t t' Graph_s_t; revert t'.
+          induction Graph_s_t as
+            [s|
+          s s' t Transition_s_s' Graph_s'_t IHs'_t];
+            intros t' Graph_s_t'.
+            inversion_clear Graph_s_t'.
               now right; left.
             left; split.
-              now transitivity x''; [apply is_subrelation|].
-            enough (x_neq_x'' : x <> x'').
-              contradict x_neq_x''.
-              now apply antisymmetric; [apply is_subrelation| transitivity y'].
-            contradict Transition_x_x''; rewrite Transition_x_x''.
-            apply irreflexivity.
-          rewrite x_eq_y' in *.
-          right; right; split.
-            enough (y'_neq_x' : y' <> x').
-              contradict y'_neq_x'.
-              now apply antisymmetric; [apply is_subrelation| transitivity y].
-            contradict Transition_x_x'; rewrite Transition_x_x'.
-            apply irreflexivity.
-          now transitivity x'; [apply is_subrelation|].
-        apply IHx'_y.
-        enough (x' = x'') as -> by assumption.
-        apply functionality with State.Transition.t x;
-        auto with typeclass_instances.
-      Qed.
-
-(*       Lemma quasi_total :
-        forall
-        x y y' : State.t,
-        Graph.t x y ->
-        Graph.t x y' ->
-          Graph.t y y' /\ ~ Graph.t y' y \/
-          y = y' \/
-          ~ Graph.t y y' /\ Graph.t y' y.
-      Proof.
-        intros s t t' Graph_s_t; revert t'.
-        induction Graph_s_t as
-          [s|
-        s s' t Transition_s_s' Graph_s'_t IHs'_t];
-          intros t' Graph_s_t'.
-          inversion_clear Graph_s_t'.
-            now right; left.
-          left; split.
-            transitivity y.
-              now apply clos_rt1n_step.
-            assumption.
-          change (Graph.t y t') in H0.
-          intros Graph_t'_s.
-          enough (Tail s.(State.instructions) y.(State.instructions)).
-            enough (Skip y.(State.instructions) s.(State.instructions)).
-              revert H1.
-              now apply Skip.Skip_Tail.
-            now rewrite H0, Graph_t'_s.
-          now apply State.Transition.instructions_morphism.
-        inversion Graph_s_t'.
-          rewrite <- H in *.
-          right; right.
-          split.
-            intros Graph_t_s.
-            enough (Tail s.(State.instructions) s'.(State.instructions)).
-              enough (Skip s'.(State.instructions) s.(State.instructions)).
-                revert H0.
+              transitivity y.
+                now apply clos_rt1n_step.
+              assumption.
+            change (Graph.t y t') in H0.
+            intros Graph_t'_s.
+            enough (Tail s.(State.instructions) y.(State.instructions)).
+              enough (Skip y.(State.instructions) s.(State.instructions)).
+                revert H1.
                 now apply Skip.Skip_Tail.
-              transitivity t.(State.instructions).
-                now rewrite Graph_s'_t.
-              now rewrite Graph_t_s.
+              now rewrite H0, Graph_t'_s.
             now apply State.Transition.instructions_morphism.
-          now constructor 2 with s'.
-        enough (s' = y).
-          apply IHs'_t.
-          now rewrite H2.
-        now apply functionality with (2 := H).
-      Qed. *)
-    End Graph.
+          inversion Graph_s_t'.
+            rewrite <- H in *.
+            right; right.
+            split.
+              intros Graph_t_s.
+              enough (Tail s.(State.instructions) s'.(State.instructions)).
+                enough (Skip s'.(State.instructions) s.(State.instructions)).
+                  revert H0.
+                  now apply Skip.Skip_Tail.
+                transitivity t.(State.instructions).
+                  now rewrite Graph_s'_t.
+                now rewrite Graph_t_s.
+              now apply State.Transition.instructions_morphism.
+            now constructor 2 with s'.
+          enough (s' = y).
+            apply IHs'_t.
+            now rewrite H2.
+          now apply functionality with (2 := H).
+        Qed. *)
+
+        Lemma coloring_morphism :
+          forall s t : State.t,
+          State.Ok.t s ->
+          Graph.t s t ->
+          Coloring.le (State.to_coloring s) (State.to_coloring t).
+        Proof with State.Ok.Ok_tac.
+          intros s t Ok_s Graph_s_t.
+          induction Graph_s_t as
+            [s|
+          s s' t Transition_s_s' Graph_s'_t IHs'_t].
+            reflexivity.
+          transitivity (State.to_coloring s').
+            now apply State.Transition.coloring_morphism.
+          now apply IHs'_t; rewrite <- Transition_s_s'.
+        Qed.
+      End Graph.
+    End State.
+    Module Graph := State.Graph.
 
     Lemma Skip_inverse :
       forall
@@ -1852,22 +1869,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
     Qed.
 
-    Lemma coloring_morphism :
-      forall s t : State.t,
-      State.Ok.t s ->
-      Graph.t s t ->
-      Coloring.le (State.to_coloring s) (State.to_coloring t).
-    Proof with State.Ok.Ok_tac.
-      intros s t Ok_s Graph_s_t.
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t].
-        reflexivity.
-      transitivity (State.to_coloring s').
-        now apply State.Transition.coloring_morphism.
-      now apply IHs'_t; rewrite <- Transition_s_s'.
-    Qed.
-
     Lemma Graph_invariant :
       forall
         s t : State.t,
@@ -1895,7 +1896,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         rewrite finished.
         rewrite Skip.iff; exists s'.(State.instructions).
         now rewrite app_nil_r.
-      now apply coloring_morphism; [rewrite <- Graph_s_s'|].
+      now apply Graph.coloring_morphism; [rewrite <- Graph_s_s'|].
     Qed.
 
     Definition Proper
@@ -1928,7 +1929,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       apply MapsTo_fun with (1 := owner_to_color_t).
       enough (s_le_t : Coloring.le (State.to_coloring s) (State.to_coloring t)) by
         now apply s_le_t.
-      now apply coloring_morphism.
+      now apply Graph.coloring_morphism.
     Qed.
 
     Lemma Graph_invariant'' :
