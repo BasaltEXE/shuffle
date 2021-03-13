@@ -874,13 +874,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Qed.
 
         #[global]
-        Instance irreflexive :
-          Irreflexive t.
+        Instance asymmetric :
+          Asymmetric t.
         Proof.
-          intros s; unfold complement.
-          assert (not_Tail_s_s : ~ Tail s.(instructions) s.(instructions)) by
-            apply irreflexivity.
-          now contradict not_Tail_s_s; apply instructions_morphism.
+          intros s t Transition_s_t Transition_t_s.
+          apply instructions_morphism in Transition_s_t, Transition_t_s.
+          now apply asymmetry with
+            s.(State.instructions) t.(State.instructions).
         Qed.
       End Transition.
 
