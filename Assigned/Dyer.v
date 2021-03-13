@@ -777,6 +777,45 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           State.unused_colors := [];
         |}).
 
+      Notation up_nil
+        player
+        instructions
+        colors
+        labeling :=
+        ({|
+          State.instructions := instructions;
+          State.colors := S colors;
+          State.labeling := Map.add player colors%nat labeling;
+          State.unused_colors := [];
+        |}).
+
+        Notation up_cons
+          player
+          instructions
+          colors
+          labeling
+          unused_color
+          unused_colors :=
+          ({|
+            State.instructions := instructions;
+            State.colors := colors;
+            State.labeling := Map.add player unused_color labeling;
+            State.unused_colors := unused_colors;
+          |}).
+
+        Notation down
+          instructions
+          colors
+          labeling
+          used_color
+          unused_colors :=
+          ({|
+            State.instructions := instructions;
+            State.colors := colors;
+            State.labeling := labeling;
+            State.unused_colors := used_color :: unused_colors;
+          |}).
+
       Definition to_coloring
         (s : State.t) :
         Coloring.t :=
