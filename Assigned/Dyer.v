@@ -1422,6 +1422,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           End Down.
         End Down.
       End Ok.
+      Import Ok(Active_MapsTo).
 
       Module Transition.
         Inductive t :
@@ -1740,6 +1741,31 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             now apply State.Transition.coloring_morphism.
           now apply IHs'_t; rewrite <- Transition_s_s'.
         Qed.
+
+        Lemma Active_MapsTo_iff :
+          forall
+          s t : State.t,
+          Graph.t s t ->
+          State.Ok.t s ->
+          forall
+          (owner : Owner.t)
+          (color : nat),
+          Active owner s.(State.instructions) ->
+          Map.MapsTo owner color s.(State.labeling) <->
+          Map.MapsTo owner color t.(State.labeling).
+        Proof.
+          intros s t Graph_s_t Ok_s owner color Active_owner_s.
+          assert (s_le_t : Coloring.le (to_coloring s) (to_coloring t)) by
+            now apply coloring_morphism.
+          split.
+            apply s_le_t.
+          intros owner_to_color_t.
+          specialize Ok_s.(State.Ok.active) with (1 := Active_owner_s) as
+            (color' & owner_to_color'_s).
+          enough (color = color') as -> by assumption.
+          apply MapsTo_fun with (1 := owner_to_color_t).
+          now apply s_le_t.
+        Qed.
       End Graph.
     End State.
     Module Graph := State.Graph.
@@ -1869,36 +1895,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
     Qed.
 
-    Lemma Graph_invariant :
-      forall
-        s t : State.t,
-        Graph.t s t ->
-        State.Ok.t s ->
-        t.(State.instructions) = [] ->
-        Skip.Forall
-          (fun skip : Instructions.t =>
-          State.Ok.Active.count skip <= State.colors t)
-          s.(State.instructions).
-    Proof.
-      intros s t Graph_s_t Ok_s finished skip Skip_x_skip.
-      apply Skip_inverse with (1 := Ok_s) in Skip_x_skip as
-        (s' & <- & Graph_s_s').
-      transitivity (s'.(State.colors)).
-        assert (Ok_s' : State.Ok.t s') by
-          now rewrite <- Graph_s_s'.
-        rewrite Ok_s'.(State.Ok.count); apply le_plus_l.
-      enough (Coloring.le (State.to_coloring s') (State.to_coloring t)) by firstorder.
-      specialize Graph.quasi_connex with (1 := Graph_s_t) (2 := Graph_s_s') as
-        [Graph_t_s'|
-      Graph_s'_t].
-        specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
-          reflexivity.
-        rewrite finished.
-        rewrite Skip.iff; exists s'.(State.instructions).
-        now rewrite app_nil_r.
-      now apply Graph.coloring_morphism; [rewrite <- Graph_s_s'|].
-    Qed.
-
     Definition Proper
       (labeling : Map.t nat)
       (instructions : Instructions.t) :
@@ -1910,57 +1906,42 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Active owner' instructions /\ Map.MapsTo owner' color labeling ->
       Owner.eq owner owner'.
 
-    Lemma helper :
-      forall
-      s t : State.t,
-      Graph.t s t ->
-      State.Ok.t s ->
-      forall
-      (owner : Owner.t)
-      (color : nat),
-      Active owner s.(State.instructions) ->
-      Map.MapsTo owner color t.(State.labeling) ->
-      Map.MapsTo owner color s.(State.labeling).
-    Proof.
-      intros s t Graph_s_t Ok_s owner color Active_owner_s owner_to_color_t.
-      specialize Ok_s.(State.Ok.active) with (1 := Active_owner_s) as
-        (color' & owner_to_color'_s).
-      enough (color = color') as -> by assumption.
-      apply MapsTo_fun with (1 := owner_to_color_t).
-      enough (s_le_t : Coloring.le (State.to_coloring s) (State.to_coloring t)) by
-        now apply s_le_t.
-      now apply Graph.coloring_morphism.
-    Qed.
-
-    Lemma Graph_invariant'' :
+    Lemma Graph_Forall :
       forall
         s t : State.t,
         Graph.t s t ->
         State.Ok.t s ->
         t.(State.instructions) = [] ->
         Skip.Forall
-          (Proper t.(State.labeling))
+          (fun skip : Instructions.t =>
+          State.Ok.Active.count skip <= State.colors t /\
+          Proper t.(State.labeling) skip)
           s.(State.instructions).
-    Proof.
+    Proof with auto.
       intros s t Graph_s_t Ok_s finished skip Skip_x_skip.
       apply Skip_inverse with (1 := Ok_s) in Skip_x_skip as
         (s' & <- & Graph_s_s').
-      assert (Ok_s' : State.Ok.t s') by now rewrite <- Graph_s_s'.
+      assert (Ok_s' : State.Ok.t s') by
+        now rewrite <- Graph_s_s'.
+      enough (Graph_s'_t : Graph.t s' t).
+        split.
+          transitivity s'.(State.colors).
+            rewrite Ok_s'.(State.Ok.count); apply le_plus_l.
+          enough (Coloring.le (State.to_coloring s') (State.to_coloring t)) by
+          firstorder.
+          now apply Graph.coloring_morphism.
+        intros owner owner' color
+          (Active_owner_s' & owner_to_color_t)
+          (Active_owner'_s & owner'_to_color_t).
+        now apply Ok_s'.(State.Ok.proper) with color;
+          (split; [| apply Graph.Active_MapsTo_iff with t]).
       specialize Graph.quasi_connex with (1 := Graph_s_t) (2 := Graph_s_s') as
         [Graph_t_s'|
-      Graph_s'_t].
-        specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
-          rewrite Graph_s_s' in Ok_s.
-          intros owner owner' color.
-          apply Ok_s.(State.Ok.proper).
-        rewrite finished.
-        rewrite Skip.iff; exists s'.(State.instructions).
-        now rewrite app_nil_r.
-      intros owner owner' color
-        (Active_owner_s' & owner_to_color_t)
-        (Active_owner'_s & owner'_to_color_t).
-      now apply Ok_s'.(State.Ok.proper) with color;
-        (split; [| apply helper with t]).
+      Graph_s'_t]...
+      specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
+          reflexivity.
+      rewrite finished, Skip.iff.
+      now exists s'.(State.instructions); rewrite app_nil_r.
     Qed.
 
     Lemma Graph_invariant' :
@@ -2044,9 +2025,9 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               now rewrite <- e.
             rewrite Graph_s_t in Ok_s.
             apply Ok_s.
-          now apply Graph_invariant'' with (1 := Graph_s_t).
+          now apply Graph_Forall with (1 := Graph_s_t).
         intros skip Skip_instructions_skip.
-        now apply Graph_invariant with (1 := Graph_s_t).
+        now apply Graph_Forall with (1 := Graph_s_t).
       specialize Graph_invariant' with
         (1 := Graph_s_t)
         (2 := Ok_s) as
