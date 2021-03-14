@@ -1614,31 +1614,6 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           now rewrite Graph_t_s.
         Qed.
 
-        Lemma quasi_connex :
-          forall
-          x y y' : State.t,
-          Graph.t x y ->
-          Graph.t x y' ->
-            Graph.t y y' \/
-            Graph.t y' y.
-        Proof.
-          intros x y y' Graph_x_y; revert y'.
-          induction Graph_x_y as
-            [x|
-          x x' y Transition_x_x' Graph_x'_y IHx'_y];
-          intros y' Graph_x_y'.
-            now left.
-          inversion Graph_x_y' as [
-              x_eq_y'|
-            x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
-            now right; rewrite <- x_eq_y'; constructor 2 with x'.
-          enough (x'_eq_x'' : x' = x'').
-            apply IHx'_y.
-            now rewrite x'_eq_x''.
-          apply functionality with State.Transition.t x;
-          auto with typeclass_instances.
-        Qed.
-
         Lemma quasi_total :
           forall
           x y y' : State.t,
@@ -1678,53 +1653,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           auto with typeclass_instances.
         Qed.
 
-  (*       Lemma quasi_total :
+        Corollary quasi_connex :
           forall
           x y y' : State.t,
           Graph.t x y ->
           Graph.t x y' ->
-            Graph.t y y' /\ ~ Graph.t y' y \/
-            y = y' \/
-            ~ Graph.t y y' /\ Graph.t y' y.
+            Graph.t y y' \/
+            Graph.t y' y.
         Proof.
-          intros s t t' Graph_s_t; revert t'.
-          induction Graph_s_t as
-            [s|
-          s s' t Transition_s_s' Graph_s'_t IHs'_t];
-            intros t' Graph_s_t'.
-            inversion_clear Graph_s_t'.
-              now right; left.
-            left; split.
-              transitivity y.
-                now apply clos_rt1n_step.
-              assumption.
-            change (Graph.t y t') in H0.
-            intros Graph_t'_s.
-            enough (Tail s.(State.instructions) y.(State.instructions)).
-              enough (Skip y.(State.instructions) s.(State.instructions)).
-                revert H1.
-                now apply Skip.Skip_Tail.
-              now rewrite H0, Graph_t'_s.
-            now apply State.Transition.instructions_morphism.
-          inversion Graph_s_t'.
-            rewrite <- H in *.
-            right; right.
-            split.
-              intros Graph_t_s.
-              enough (Tail s.(State.instructions) s'.(State.instructions)).
-                enough (Skip s'.(State.instructions) s.(State.instructions)).
-                  revert H0.
-                  now apply Skip.Skip_Tail.
-                transitivity t.(State.instructions).
-                  now rewrite Graph_s'_t.
-                now rewrite Graph_t_s.
-              now apply State.Transition.instructions_morphism.
-            now constructor 2 with s'.
-          enough (s' = y).
-            apply IHs'_t.
-            now rewrite H2.
-          now apply functionality with (2 := H).
-        Qed. *)
+          intros x y y' Graph_x_y Graph_x_y'.
+          now specialize quasi_total with (1 := Graph_x_y) (2 := Graph_x_y') as
+            [(Graph_y_y' & _)| [->| (_ & Graph_y'_y)]];
+            [left..|right].
+        Qed.
 
         Lemma coloring_morphism :
           forall s t : State.t,
