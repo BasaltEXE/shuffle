@@ -1885,7 +1885,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now exists s'.(State.instructions); rewrite app_nil_r.
     Qed.
 
-    Lemma Graph_invariant' :
+    Lemma Graph_Exists :
       forall
         s t : State.t,
         Graph.t s t ->
@@ -1901,7 +1901,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         [s|
       s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s.
         now left.
-      specialize IHs'_t as [e| (skip & Skip_x₀_skip & e)].
+      specialize IHs'_t as [s'_eq_t| (skip & Skip_x₀_skip & e)].
             now rewrite <- Transition_s_s'.
         enough (s_le_s' : s.(State.colors) <= s'.(State.colors)).
           apply Nat.le_lteq in s_le_s' as
@@ -1909,16 +1909,13 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           s_eq_s'];
             [right|
           left].
-            enough (s'.(State.unused_colors) = []).
+            enough (s'_eq_nil : s'.(State.unused_colors) = []).
               exists s'.(State.instructions); split.
                 apply ReflexiveTransitive.subrelation.
                 now apply State.Transition.instructions_morphism.
-              rewrite <- e.
-                assert (Ok_s' : State.Ok.t s') by
-                  now rewrite <- Transition_s_s'.
-                rewrite Ok_s'.(State.Ok.count).
-                rewrite H.
-                simpl; auto with arith.
+              rewrite <- s'_eq_t, State.Ok.count, s'_eq_nil by
+                now rewrite <- Transition_s_s'.
+              simpl; auto with arith.
             induction Transition_s_s' as [
                 p₀ x₀ colors labeling|
               p₀ x₀ colors labeling unused_color unused_colors|
@@ -1927,7 +1924,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 reflexivity.
               1, 2 :
               contradict s_lt_s'; auto with arith.
-          now rewrite s_eq_s'.
+          now transitivity s'.(State.colors).
         enough (Coloring.le (State.to_coloring s) (State.to_coloring s')) by
           firstorder.
         now apply State.Transition.coloring_morphism.
@@ -1954,7 +1951,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         (fun skip : Instructions.t =>
         State.Ok.Active.count skip = coloring.(Coloring.colors))
         instructions.
-    Proof with State.Ok.Ok_tac.
+    Proof with auto.
       intros instructions Ok_instructions Closed_instructions.
       pose (s := State.empty instructions).
       assert (Ok_s : State.Ok.t (State.empty instructions)) by
@@ -1969,15 +1966,11 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           now apply Graph_Forall with (1 := Graph_s_t).
         intros skip Skip_instructions_skip.
         now apply Graph_Forall with (1 := Graph_s_t).
-      specialize Graph_invariant' with
+      specialize Graph_Exists with
         (1 := Graph_s_t)
         (2 := Ok_s) as
-        [?| ?]; simpl in *.
-        exists instructions.
-        split.
-          reflexivity.
-        now rewrite State.Ok.Active.count_closed.
-      assumption.
+        [O_eq_colors| H]; simpl in *...
+      now exists instructions; split; [| rewrite State.Ok.Active.count_closed].
     Qed.
   End Regular'.
 
