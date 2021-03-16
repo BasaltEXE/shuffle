@@ -619,6 +619,17 @@ Module Make (Operand : DecidableTypeBoth).
           now apply Down_not_In.
         Qed.
       End Count.
+
+      Definition IsChromaticNumber
+        (instructions : t)
+        (χ : nat) :
+        Prop :=
+        Skip.Forall
+          (fun skip : t => count skip <= χ)
+          instructions /\
+        Skip.Exists
+          (fun skip : t => count skip = χ)
+          instructions.
     End Sets.
   End Active.
 
