@@ -99,6 +99,30 @@ Module WFacts_fun' (Key : DecidableTypeOrig) (Map : FMapInterface.WSfun Key).
   Qed.
 End WFacts_fun'.
 
+Module Type LabelledTransitionSystem.
+  Parameter State : Type.
+  Parameter Label : Type.
+  Parameter Transition : Label -> relation State.
+End LabelledTransitionSystem.
+
+Module Graph (Import LTS : LabelledTransitionSystem).
+  Inductive t :
+    list Label ->
+    relation State :=
+    | nil :
+      forall
+      p : State,
+      t [] p p
+    | cons :
+      forall
+      (p₀ p₁ q : State)
+      (u₀ : Label)
+      (x₀ : list Label),
+      Transition u₀ p₀ p₁ ->
+      t x₀ p₁ q ->
+      t (u₀ :: x₀) p₀ q.
+End Graph.
+
 Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Coloring := Coloring.Make Owner Map.
 
@@ -118,7 +142,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       (instructions : list Instruction.t)
       (coloring : Coloring.t)
       (unused_colors : list nat) :
-      option Coloring.t :=
+      option (Coloring.t * list nat) :=
       match instructions, unused_colors with
       | Up owner :: tail, [] =>
         regular_body
@@ -131,143 +155,236 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           (Coloring.add_lt coloring owner color)
           unused_colors
       | Down owner :: tail, unused_colors =>
-          bind(Coloring.find coloring owner) (fun color =>
+          bind (Coloring.find coloring owner) (fun color =>
           regular_body
             tail
             coloring
             (color :: unused_colors))
-      | [], _ => ret coloring
+      | [], _ => ret (coloring, unused_colors)
       end.
 
     Definition regular
       (instructions : list Instruction.t) :
       option Coloring.t :=
-      regular_body
+      bind (regular_body
         instructions
         Coloring.empty
-        [].
+        []) (fun x => Some (fst x)).
 
     Module State.
       Record t :
       Type :=
       new {
-        instructions : Instructions.t;
-        colors : nat;
-        labeling : Map.t nat;
+        coloring : Coloring.t;
         unused_colors : list nat;
       }.
 
-      Notation empty
-        instructions :=
-        ({|
-          State.instructions := instructions;
-          State.colors := 0;
-          State.labeling := Map.empty nat;
-          State.unused_colors := [];
-        |}).
-
-      Notation up_nil
-        player
-        instructions
-        colors
-        labeling :=
-        ({|
-          State.instructions := instructions;
-          State.colors := S colors;
-          State.labeling := Map.add player colors%nat labeling;
-          State.unused_colors := [];
-        |}).
-
-        Notation up_cons
-          player
-          instructions
-          colors
-          labeling
-          unused_color
-          unused_colors :=
-          ({|
-            State.instructions := instructions;
-            State.colors := colors;
-            State.labeling := Map.add player unused_color labeling;
-            State.unused_colors := unused_colors;
-          |}).
-
-        Notation down
-          instructions
-          colors
-          labeling
-          used_color
-          unused_colors :=
-          ({|
-            State.instructions := instructions;
-            State.colors := colors;
-            State.labeling := labeling;
-            State.unused_colors := used_color :: unused_colors;
-          |}).
-
-      Definition to_coloring
-        (s : State.t) :
-        Coloring.t :=
-        Coloring.new
-          s.(State.colors)
-          s.(State.labeling).
-
       Module Ok.
-        Module M := MSetWeakList.Make Owner.
-        Module Sets := Active.Sets M.
-        Module M_Properties := MSetProperties.WPropertiesOn Owner M.
-
         Notation Active_MapsTo
+          xs
           owner
           color
-          s :=
-          (Active owner s.(State.instructions) /\
-          Map.MapsTo owner color s.(State.labeling)).
+          :=
+          (Active owner (fst xs) /\
+          Coloring.MapsTo (snd xs).(State.coloring) owner color).
+
+        Module M := MSetWeakList.Make Owner.
+        Module Fiber := Coloring.Fiber M.
+        Module Sets := Instructions.Active.Sets M.
+
+        Definition Active_MapsTo_dec :
+          forall
+          (x : Instructions.t)
+          (s : State.t)
+          (color : nat),
+          Instructions.Ok x ->
+          (exists owner : Owner.t, State.Ok.Active_MapsTo (x, s) owner color) +
+          (forall owner : Owner.t, ~ State.Ok.Active_MapsTo (x, s) owner color).
+        Proof.
+          intros x s color Ok_x.
+          pose (fiber := Fiber.fiber s.(State.coloring) color).
+          pose (active := Sets.active x).
+          pose (inter := M.inter fiber active).
+          assert (inter_iff : forall p, M.In p inter <-> State.Ok.Active_MapsTo (x, s) p color).
+            intros p.
+            unfold inter; rewrite M.inter_spec, <- Fiber.spec, <- Sets.spec; tauto.
+          destruct (M.choose inter) as [owner|] eqn: choose; [left| right].
+            now exists owner; apply inter_iff, M.choose_spec1.
+          now intros owner; rewrite <- inter_iff; apply M.choose_spec2.
+        Defined.
 
         Record t
+          (x : Instructions.t)
           (s : State.t) :
           Prop :=
           new {
-            instructions : Instructions.Ok s.(State.instructions);
-            lt_iff_MapsTo :
-              forall
-                color : nat,
-                color < s.(State.colors) <->
-                exists
-                  owner : Owner.t,
-                  Map.MapsTo owner color s.(State.labeling);
+            coloring :
+              Coloring.Ok s.(State.coloring);
             ahead :
               forall
-                owner : Owner.t,
-                Ahead owner s.(State.instructions) ->
-                ~ Map.In owner s.(State.labeling);
+              owner : Owner.t,
+              Ahead owner x ->
+              ~ Map.In owner s.(State.coloring).(Coloring.labeling);
             active :
               forall
-                owner : Owner.t,
-                Active owner s.(State.instructions) ->
-                Map.In owner s.(State.labeling);
-            unused :
-              forall
-                color : nat,
-                List.In color s.(State.unused_colors) <->
-                  color < s.(State.colors) /\
-                  forall
-                    owner : Owner.t,
-                    ~ Active_MapsTo owner color s;
+              owner : Owner.t,
+              Active owner x ->
+              Map.In owner s.(State.coloring).(Coloring.labeling);
             proper :
               forall
-                (owner owner' : Owner.t)
-                (color : nat),
-                Active_MapsTo owner color s ->
-                Active_MapsTo owner' color s ->
-                Owner.eq owner owner';
+              (owner owner' : Owner.t)
+              (color : nat),
+              Active_MapsTo (x, s) owner color ->
+              Active_MapsTo (x, s) owner' color ->
+              Owner.eq owner owner';
+            unused :
+              forall
+              color : nat,
+              List.In color s.(State.unused_colors) <->
+              color < s.(State.coloring).(Coloring.colors) /\
+              (forall
+              owner : Owner.t,
+              ~ Active_MapsTo (x, s) owner color);
             nodup :
               NoDup s.(State.unused_colors);
-            count :
-              s.(State.colors) =
-                Sets.count s.(State.instructions) +
-                length s.(State.unused_colors);
           }.
+
+        Lemma InA_eq_iff_In :
+          forall
+          (A : Type)
+          (a : A)
+          (l : list A),
+          InA eq a l <-> List.In a l.
+        Proof.
+          intros A a l.
+          rewrite InA_alt.
+          split.
+            now intros (y & -> & In_y_l).
+          now intros In_a_l; exists a.
+        Qed.
+
+        Lemma NoDupA_eq_iff_NoDup :
+          forall
+          (A : Type)
+          (l : list A),
+          NoDupA eq l <-> NoDup l.
+        Proof.
+          induction l as [| h t IHt].
+            split; constructor.
+          rewrite NoDup_cons_iff.
+          transitivity (~ InA eq h t /\ NoDupA eq t).
+            now split; [inversion 1| constructor].
+          now rewrite InA_eq_iff_In, IHt.
+        Qed.
+
+        Module N := MSetWeakList.Make Nat.
+        Module N_Properties := MSetProperties.WProperties N.
+
+        Lemma active_plus_unused :
+          forall
+          (x : Instructions.t)
+          (s : State.t),
+          Instructions.Ok x ->
+          State.Ok.t x s ->
+          s.(State.coloring).(Coloring.colors) =
+            Sets.count x +
+            length s.(State.unused_colors).
+        Proof.
+          intros x s Ok_x Ok_s.
+          set (colors := s.(State.coloring).(Coloring.colors)).
+          assert (exists p : N.t, N.cardinal p = colors /\ forall color : nat, N.In color p <-> color < colors) as
+            (p & length_p & p_In_iff).
+            eexists {|
+              N.this := seq 0 colors;
+              N.is_ok := ?[ok]
+            |}; split.
+                only [ok]: (apply NoDupA_eq_iff_NoDup, seq_NoDup).
+              apply seq_length.
+            intros color; change (InA eq color (seq 0 colors) <-> color < colors).
+            rewrite InA_eq_iff_In, in_seq.
+            firstorder with arith.
+          assert (exists r : N.t, N.cardinal r = length s.(State.unused_colors) /\ forall color : nat, N.In color r <-> color < colors /\ forall owner : Owner.t, ~ State.Ok.Active_MapsTo (x, s) owner color) as
+            (r & <- & r_In_iff).
+            eexists {|
+              N.this := s.(State.unused_colors);
+              N.is_ok := ?[ok]
+            |}.
+              only [ok]: (apply NoDupA_eq_iff_NoDup, Ok_s.(State.Ok.nodup)).
+            split.
+              reflexivity.
+            intros color.
+            transitivity (List.In color s.(State.unused_colors)).
+              now rewrite <- InA_eq_iff_In.
+            apply Ok_s.(State.Ok.unused).
+          assert (exists q : N.t, N.cardinal q = M.cardinal (Sets.active x) /\ forall color : nat, N.In color q <-> color < s.(State.coloring).(Coloring.colors) /\ exists owner : Owner.t, M.In owner (Sets.active x) /\ State.Ok.Active_MapsTo (x, s) owner color) as (q & <- & q_In_iff).
+            cut (forall owner, M.In owner (Sets.active x) -> Active owner x).
+              2: now intros owner; apply Sets.spec.
+            destruct (Sets.active x) as (l & NoDup_l).
+            induction l as [| h t IHt]; intros H.
+              eexists {|
+                N.this := [];
+                N.is_ok := ?[ok];
+              |}.
+                only [ok]: constructor.
+              split.
+                reflexivity.
+              intros color; split.
+                now intros In_color_q; apply InA_nil in In_color_q.
+              intros (_ & owner & color_in_q & _).
+              now apply InA_nil in color_in_q.
+            inversion_clear NoDup_l as [| ? ? not_In_h_t NoDup_t].
+            specialize IHt with NoDup_t as ((q₀ & NoDup_q₀) & q₀_eq_t & q₀_in_iff).
+              intros owner In_owner_t.
+              now apply H; constructor 2.
+            assert (exists color, color < s.(State.coloring).(Coloring.colors) /\ Coloring.MapsTo s.(State.coloring) h color) as (color & color_lt_colors & h_to_color).
+              assert (Active_h : Active h x) by (now apply H; constructor).
+              specialize Ok_s.(State.Ok.active) with (1 := Active_h) as (color & h_to_color).
+              now exists color; split;
+              [apply Ok_s.(State.Ok.coloring); exists h|].
+            eexists {|
+              N.this := color :: q₀;
+              N.is_ok := ?[ok];
+            |}.
+            split.
+              change (S (length q₀) = S (length t)).
+              now f_equal.
+            intros color'.
+            unfold N.In, N.Raw.In, M.In, M.Raw.In in q₀_in_iff |- *;
+            simpl in q₀_in_iff |- *; setoid_rewrite InA_cons.
+            enough (color' = color <-> color' < s.(State.coloring).(Coloring.colors) /\ exists owner : Owner.t, Owner.eq owner h /\
+            Active owner x /\
+            Map.MapsTo owner color' s.(State.coloring).(Coloring.labeling)) as ->.
+              rewrite q₀_in_iff;
+              firstorder.
+            split.
+              enough (Active_h : Active h x) by
+                (now intros ->; split; [| exists h]).
+              now apply H; constructor.
+            intros (_ & owner & -> & _ & h_to_color').
+            now apply Facts.MapsTo_fun with (1 := h_to_color').
+          Unshelve.
+          2: {
+            constructor; [| assumption].
+            unfold N.In, N.Raw.In in q₀_in_iff; simpl in q₀_in_iff.
+            rewrite q₀_in_iff.
+            enough (forall owner : Owner.t, State.Ok.Active_MapsTo (x, s) owner color -> ~ InA Owner.eq owner t) by firstorder.
+            simpl; intros owner Active_MapsTo_owner_color.
+            enough (Owner.eq h owner) as <- by assumption.
+            apply Ok_s.(State.Ok.proper) with (2 := Active_MapsTo_owner_color).
+            now split; [apply H; constructor|].
+          }
+          rewrite <- N_Properties.union_cardinal, <- length_p by firstorder.
+          apply N_Properties.Equal_cardinal.
+          intros color.
+          rewrite N.union_spec, p_In_iff, q_In_iff, r_In_iff.
+          unfold colors.
+          split; [simpl| tauto].
+          intros color_lt_colors.
+          now specialize (Active_MapsTo_dec s color Ok_x) as [
+            (owner & Active_MapsTo_owner_color)|
+          H];
+          [left; split; [| exists owner; rewrite Sets.spec]| right].
+        Qed.
 
         Ltac Ok_tac :=
           simpl in *; eauto using Nat.lt_neq with arith instructions map.
@@ -275,34 +392,35 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Module Empty.
           Section Empty.
             Variable
-              instructions : Instructions.t.
+              x : Instructions.t.
 
             Let s :
               State.t :=
-              State.empty instructions.
+              {|
+                State.coloring := Coloring.empty;
+                State.unused_colors := [];
+              |}.
 
             Lemma Ok :
-              Instructions.Ok s.(State.instructions) ->
-              Instructions.Closed s.(State.instructions) ->
-              State.Ok.t s.
-            Proof with Ok_tac.
-              intros Ok_instructions Closed_instructions.
+              Instructions.Ok x ->
+              Instructions.Closed x ->
+              State.Ok.t x s.
+            Proof.
+              intros Ok_x Closed_x.
               specialize Closed_impl_not_Active with
-                (1 := Closed_instructions) as
+                (1 := Closed_x) as
                 not_Active.
               constructor.
-                            assumption.
-                          apply Coloring.Ok.empty.
-                        intros owner Ahead_owner_instructions.
-                        specialize Map.empty_1 with nat; firstorder.
-                      intros owner Active_owner_instructions.
-                      now contradict Active_owner_instructions.
-                    intros color.
-                    enough (~ color < 0) by (simpl; tauto)...
-                  intros owner owner' color (Active_owner_instructions & _);
-                  now contradict Active_owner_instructions.
-                constructor.
-              rewrite Sets.count_closed...
+                        apply Coloring.Ok.empty.
+                      intros owner Ahead_owner_x.
+                      specialize Map.empty_1 with nat; firstorder.
+                    intros owner Active_owner_x.
+                    now contradict Active_owner_x.
+                  intros owner owner' color (Active_owner_x & _);
+                  now contradict Active_owner_x.
+                intros color.
+                specialize Nat.nlt_0_r with color; simpl; tauto.
+              constructor.
             Qed.
           End Empty.
         End Empty.
@@ -312,174 +430,84 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Variables
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat).
+              (coloring : Coloring.t).
 
             Let s₀ :
               State.t :=
               {|
-                State.instructions := Up p₀ :: x₀;
-                State.colors := colors;
-                State.labeling := labeling;
+                State.coloring := coloring;
                 State.unused_colors := [];
               |}.
 
             Let s₁ :
               State.t :=
               {|
-                State.instructions := x₀;
-                State.colors := S colors;
-                State.labeling := Map.add p₀ colors labeling;
+                State.coloring := Coloring.add_eq coloring p₀;
                 State.unused_colors := [];
               |}.
 
+            Variable instructions₀ :
+              Instructions.Ok (Up p₀ :: x₀).
             Variable Ok_s₀ :
-              Ok.t s₀.
-            Let instructions₀ :=
-              Ok_s₀.(Ok.instructions).
-            Let lt_iff_MapsTo₀ :=
-              Ok_s₀.(Ok.lt_iff_MapsTo).
-            Let ahead₀ :=
-              Ok_s₀.(Ok.ahead).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
-            Let unused₀ :=
-              Ok_s₀.(Ok.unused).
-            Let proper₀ :=
-              Ok_s₀.(Ok.proper).
-            Let nodup₀ :=
-              Ok_s₀.(Ok.nodup).
-            Let count₀ :=
-              Ok_s₀.(Ok.count).
+              Ok.t (Up p₀ :: x₀) s₀.
 
-            Let not_In_p₀_labeling :
-              ~ Map.In p₀ s₀.(State.labeling).
-            Proof with Ok_tac.
-              apply ahead₀...
-            Qed.
-
-            Let not_owner_to_colors_labeling :
+            Lemma Active_MapsTo_iff :
               forall
-              owner : Owner.t,
-              ~ Map.MapsTo owner colors s₀.(State.labeling).
-            Proof.
-              intros owner.
-              specialize Nat.lt_irrefl with colors as colors_lt_colors.
-              contradict colors_lt_colors; firstorder.
-            Qed.
-
-            Let Active_MapsTo_p₀_colors : Active_MapsTo p₀ colors s₁.
+              (color : nat)
+              (owner : Owner.t),
+              Active_MapsTo (x₀, s₁) owner color <->
+              (color = s₀.(State.coloring).(Coloring.colors) /\
+              Owner.eq p₀ owner) \/
+              (color <> s₀.(State.coloring).(Coloring.colors) /\
+              Active_MapsTo (Up p₀ :: x₀, s₀) owner color). (* TODO /\ p₀ <> owner? *)
             Proof with Ok_tac.
-              split...
-            Qed.
-
-            Let le_lteq :
-              forall color : nat,
-                color < s₁.(State.colors) <->
-                  color < s₀.(State.colors) \/
-                  color = s₀.(State.colors).
-            Proof.
-              intros color.
-              simpl.
-              now unfold lt at 1; rewrite <- Nat.succ_le_mono, Nat.le_lteq.
-            Qed.
-
-            Let MapsTo_iff₁ :
-              forall
-              owner : Owner.t,
-              Map.MapsTo owner s₀.(State.colors) s₁.(State.labeling) <->
-              Owner.eq p₀ owner.
-            Proof with Ok_tac.
-              intros owner.
-              simpl; rewrite add_mapsto_iff; firstorder.
-            Qed.
-
-            Let MapsTo_iff₂ :
-              forall
-              color : nat,
-              color <> s₀.(State.colors) ->
-              forall
-              owner : Owner.t,
-              Map.MapsTo owner color s₁.(State.labeling) <->
-              Map.MapsTo owner color s₀.(State.labeling).
-            Proof with Ok_tac.
-              intros color color_neq_colors owner;
-              apply not_eq_sym in color_neq_colors.
-              enough (Map.MapsTo owner color labeling -> ~ Owner.eq p₀ owner) by
-                (simpl; rewrite add_mapsto_iff; tauto).
-              now intros owner_to_color;
-              contradict not_In_p₀_labeling; rewrite not_In_p₀_labeling;
-              exists color.
-            Qed.
-
-            Lemma Active_MapsTo_iff₁ :
-              forall
-              owner : Owner.t,
-              Active_MapsTo owner s₀.(State.colors) s₁ <->
-              Owner.eq p₀ owner.
-            Proof with Ok_tac.
-              intros owner.
-              enough (Owner.eq p₀ owner -> Active owner x₀) by
-                (simpl; rewrite add_mapsto_iff; firstorder).
+              intros color owner.
+              enough (H₁ : Owner.eq p₀ owner -> Active owner x₀).
+                enough (H₂ : Coloring.MapsTo coloring owner color -> color <> coloring.(Coloring.colors)).
+                  simpl; rewrite add_mapsto_iff, Instructions.Active.cons_Up_iff.
+                  setoid_replace (coloring.(Coloring.colors) = color) with
+                    (color = coloring.(Coloring.colors)) by easy.
+                  tauto.
+                intros owner_to_color.
+                now apply Nat.lt_neq, Ok_s₀.(State.Ok.coloring); exists owner.
               intros <-...
             Qed.
 
-            Lemma Active_MapsTo_iff₂ :
-              forall
-              color : nat,
-              color <> s₀.(State.colors) ->
-              forall
-              owner : Owner.t,
-              Active_MapsTo owner color s₁ <->
-              Active_MapsTo owner color s₀.
-            Proof with Ok_tac.
-              intros color color_neq_colors owner.
-              apply not_eq_sym in color_neq_colors.
-              simpl; rewrite Active.cons_Up_iff, add_mapsto_iff; tauto.
-            Qed.
-
             Lemma Ok :
-              Ok.t s₁.
+              Ok.t x₀ s₁.
             Proof with Ok_tac.
               constructor.
-                            Ok_tac.
-                          intros color; rewrite le_lteq.
-                          specialize Nat.eq_dec with color s₀.(State.colors) as
-                            [->|
-                          color_neq_colors];
-                            [setoid_rewrite MapsTo_iff₁|
-                          setoid_rewrite MapsTo_iff₂ with
-                            (1 := color_neq_colors)].
-                            now intuition exists p₀.
-                          rewrite lt_iff_MapsTo₀; tauto.
-                        simpl; intros owner Ahead_owner_x₀.
-                        enough (~ Owner.eq p₀ owner).
-                          rewrite add_neq_in_iff by assumption; apply ahead₀...
-                        contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
-                      intros owner Active_owner_x₀.
-                      apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
-                        [p₀_eq_owner|
-                      p₀_neq_owner];
-                        [left|
-                      right; apply active₀]...
-                    intros color.
-                    specialize Nat.eq_dec with color s₀.(State.colors) as
-                      [->|
-                    color_neq_colors];
-                      [setoid_rewrite Active_MapsTo_iff₁|
-                    setoid_rewrite Active_MapsTo_iff₂];
-                    firstorder.
-                  intros owner owner' color
-                    Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-                  specialize Nat.eq_dec with color s₀.(State.colors) as
-                    [->|
+                        apply Coloring.Ok.add_eq.
+                          apply Ok_s₀.(Ok.coloring).
+                        apply Ok_s₀.(Ok.ahead)...
+                      intros owner Ahead_owner_x₀.
+                      simpl; rewrite add_neq_in_iff.
+                        apply Ok_s₀.(Ok.ahead)...
+                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
+                    intros owner Active_owner_x₀.
+                    simpl; rewrite add_in_iff;
+                    specialize Owner.eq_dec with p₀ owner as
+                      [<-|
+                    p₀_neq_owner];
+                      [left|
+                    right]...
+                    apply Ok_s₀.(Ok.active)...
+                  setoid_rewrite Active_MapsTo_iff.
+                  intros owner owner' color Active_MapsTo_owner_color Active_MapsTo_owner'_color.
+                  specialize Nat.eq_dec with color coloring.(Coloring.colors) as
+                    [color_eq_colors|
                   color_neq_colors].
-                    now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
-                constructor.
-              rewrite Nat.add_0_r in count₀ |- *.
-              transitivity (S (Sets.count (Up p₀ :: x₀)))...
-              now apply Sets.count_Up.
+                    transitivity p₀; [symmetry|]; tauto.
+                  apply Ok_s₀.(Ok.proper) with color; tauto.
+                intros color.
+                etransitivity; [apply Ok_s₀.(Ok.unused)|].
+                setoid_replace (color < s₁.(State.coloring).(Coloring.colors)) with (color < coloring.(Coloring.colors) \/ color = coloring.(Coloring.colors)) by now rewrite <- Nat.le_lteq, Nat.succ_le_mono.
+                setoid_replace (forall owner : Owner.t, ~ Active_MapsTo (x₀, s₁) owner color) with (color <> coloring.(Coloring.colors) /\ forall owner, ~ Active_MapsTo (Up p₀ :: x₀, s₀) owner color).
+                  firstorder.
+                setoid_rewrite Active_MapsTo_iff;
+                specialize Nat.eq_dec with color coloring.(Coloring.colors);
+                firstorder.
+              constructor.
             Qed.
           End UpNil.
         End UpNil.
@@ -489,188 +517,95 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Variables
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat)
+              (coloring : Coloring.t)
               (unused_color : nat)
               (unused_colors : list nat).
 
             Let s₀ :
               State.t :=
               {|
-                State.instructions := Up p₀ :: x₀;
-                State.colors := colors;
-                State.labeling := labeling;
+                State.coloring := coloring;
                 State.unused_colors := unused_color :: unused_colors;
               |}.
 
             Let s₁ :
               State.t :=
               {|
-                State.instructions := x₀;
-                State.colors := colors;
-                State.labeling := Map.add p₀ unused_color labeling;
+                State.coloring := Coloring.add_lt coloring p₀ unused_color;
                 State.unused_colors := unused_colors;
               |}.
 
             Variable Ok_s₀ :
-              Ok.t s₀.
-            Let instructions₀ :=
-              Ok_s₀.(Ok.instructions).
-            Let lt_iff_MapsTo₀ :=
-              Ok_s₀.(Ok.lt_iff_MapsTo).
-            Let ahead₀ :=
-              Ok_s₀.(Ok.ahead).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
-            Let unused₀ :=
-              Ok_s₀.(Ok.unused).
-            Let proper₀ :=
-              Ok_s₀.(Ok.proper).
-            Let nodup₀ :=
-              Ok_s₀.(Ok.nodup).
-            Let count₀ :=
-              Ok_s₀.(Ok.count).
+              Ok.t (Up p₀ :: x₀) s₀.
+            Variable instructions₀ :
+              Instructions.Ok (Up p₀ :: x₀).
 
-            Let not_In_p₀_labeling :
-              ~ Map.In p₀ s₀.(State.labeling).
+            Lemma Active_MapsTo_iff :
+              forall
+              (color : nat)
+              (owner : Owner.t),
+              Active_MapsTo (x₀, s₁) owner color <->
+              (color = unused_color /\
+              Owner.eq p₀ owner) \/
+              (color <> unused_color /\
+              Active_MapsTo (Up p₀ :: x₀, s₀) owner color).
             Proof with Ok_tac.
-              apply ahead₀...
-            Qed.
-
-            Let color_lt_colors :
-              unused_color < s₁.(State.colors).
-            Proof.
-              now apply unused₀; left.
-            Qed.
-
-            Let not_Active_MapsTo_owner_unused_color :
-              forall
-              owner : Owner.t,
-              ~ Active_MapsTo owner unused_color s₀.
-            Proof.
-              now apply unused₀; left.
-            Qed.
-
-            Let MapsTo_iff₂ :
-              forall
-              color : nat,
-              color <> unused_color ->
-              forall
-              owner : Owner.t,
-              Map.MapsTo owner color s₁.(State.labeling) <->
-              Map.MapsTo owner color s₀.(State.labeling).
-            Proof with Ok_tac.
-              intros color color_neq_unused_color owner;
-              apply not_eq_sym in color_neq_unused_color.
-              enough (Map.MapsTo owner color labeling -> ~ Owner.eq p₀ owner) by
-                (simpl; rewrite add_mapsto_iff; tauto).
-              now intros owner_to_color;
-              contradict not_In_p₀_labeling; rewrite not_In_p₀_labeling;
-              exists color.
-            Qed.
-
-            Let Active_MapsTo_iff₃ :
-              forall
-              owner : Owner.t,
-              ~ Owner.eq p₀ owner ->
-              forall
-              color : nat,
-              Active_MapsTo owner color s₁ <->
-              Active_MapsTo owner color s₀.
-            Proof with Ok_tac.
-              intros owner p₀_neq_owner color.
-              now simpl; rewrite Active.cons_Up_iff, add_neq_mapsto_iff.
-            Qed.
-
-            Lemma Active_MapsTo_iff₁ :
-              forall
-              owner : Owner.t,
-              Active_MapsTo owner unused_color s₁ <->
-              Owner.eq p₀ owner.
-            Proof with Ok_tac.
-              intros owner.
-              specialize Owner.eq_dec with p₀ owner as
-                [<-|
-              p₀_neq_owner].
-                split...
-              specialize not_Active_MapsTo_owner_unused_color with owner.
-              rewrite Active_MapsTo_iff₃; tauto.
-            Qed.
-
-            Lemma Active_MapsTo_iff₂ :
-              forall
-              color : nat,
-              color <> unused_color ->
-              forall
-              owner : Owner.t,
-              Active_MapsTo owner color s₁ <->
-              Active_MapsTo owner color s₀.
-            Proof with Ok_tac.
-              intros color color_neq_unused_color owner.
-              apply not_eq_sym in color_neq_unused_color.
-              simpl; rewrite Active.cons_Up_iff, add_mapsto_iff; tauto.
-            Qed.
-
-            Let not_In_color_unused_colors :
-              ~ List.In unused_color s₁.(State.unused_colors).
-            Proof.
-              now apply NoDup_cons_iff in nodup₀.
-            Qed.
-
-            Let NoDup_unused_colors :
-              NoDup unused_colors.
-            Proof.
-              now apply NoDup_cons_iff in nodup₀.
+              intros color owner.
+              enough (H₁ : Owner.eq p₀ owner -> Active owner x₀).
+                enough (H₂ : Active owner x₀ -> ~ Owner.eq p₀ owner -> Map.MapsTo owner color coloring.(Coloring.labeling) -> color <> unused_color).
+                  simpl; rewrite Instructions.Active.cons_Up_iff, add_mapsto_iff.
+                  setoid_replace (unused_color = color) with
+                    (color = unused_color) by easy.
+                  tauto.
+                enough (color = unused_color -> ~ Active_MapsTo (Up p₀ :: x₀, s₀) owner color) by
+                  (simpl in H; rewrite Active.cons_Up_iff in H; tauto).
+                now intros ->; apply Ok_s₀.(State.Ok.unused); left.
+              intros <-...
             Qed.
 
             Lemma Ok :
-              Ok.t s₁.
+              Ok.t x₀ s₁.
             Proof with Ok_tac.
               constructor.
-                            Ok_tac.
-                          intros color.
-                          specialize Nat.eq_dec with color unused_color as
-                            [->|
-                          color_neq_unused_color].
-                            enough (Map.MapsTo p₀ unused_color s₁.(State.labeling)).
-                              firstorder.
-                            simpl; auto with map.
-                          now setoid_rewrite MapsTo_iff₂.
-                        intros owner Ahead_owner_x₀.
-                        simpl; rewrite add_neq_in_iff;
-                          [apply ahead₀|
-                        contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀]...
-                      intros owner Active_owner_x₀.
-                      apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
-                        [p₀_eq_owner|
-                      p₀_neq_owner];
-                        [left|
-                      right; apply active₀]...
-                    intros color.
-                      specialize Nat.eq_dec with color unused_color as
-                        [->|
-                      color_neq_unused_color].
-                        setoid_rewrite Active_MapsTo_iff₁.
-                        enough (exists owner : Owner.t, Owner.eq p₀ owner) by
-                          firstorder.
-                        now exists p₀.
-                      setoid_rewrite Active_MapsTo_iff₂; [| assumption].
-                      apply not_eq_sym in color_neq_unused_color.
-                      transitivity (List.In color s₀.(State.unused_colors)).
-                        simpl; tauto.
-                      apply unused₀.
-                  intros owner owner' color
-                    Active_MapsTo_owner_color Active_MapsTo_owner'_color.
+                        apply Coloring.Ok.add_lt.
+                            apply Ok_s₀.(Ok.coloring).
+                          apply Ok_s₀.(Ok.ahead)...
+                        now apply Ok_s₀.(Ok.unused); left.
+                      intros owner Ahead_owner_x₀.
+                      simpl; rewrite add_neq_in_iff.
+                        apply Ok_s₀.(Ok.ahead)...
+                      contradict Ahead_owner_x₀; rewrite <- Ahead_owner_x₀...
+                    intros owner Active_owner_x₀.
+                    apply add_in_iff; specialize Owner.eq_dec with p₀ owner as
+                      [p₀_eq_owner|
+                    p₀_neq_owner];
+                      [left|
+                    right; apply Ok_s₀.(Ok.active)]...
+                  setoid_rewrite Active_MapsTo_iff.
+                  intros owner owner' color Active_Maps_To_owner_color Active_MapsTo_owner_color'.
+
                   specialize Nat.eq_dec with color unused_color as
-                    [->|
-                  color_neq_unused_color].
-                    now transitivity p₀; [symmetry|]; apply Active_MapsTo_iff₁.
-                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
-                assumption.
-              transitivity (S (Sets.count (Up p₀ :: x₀)) + length s₁.(State.unused_colors)).
-                now rewrite plus_Snm_nSm.
-              now rewrite Sets.count_Up.
-             Qed.
+                    [color_eq_colors|
+                  color_neq_colors].
+                    transitivity p₀; [symmetry|]; tauto.
+                  apply Ok_s₀.(Ok.proper) with color; tauto.
+                intros color.
+                transitivity (color <> unused_color /\ List.In color s₀.(State.unused_colors)).
+                  setoid_replace (color <> unused_color) with (unused_color <> color) by intuition.
+                  enough (List.In color s₁.(State.unused_colors) -> color <> unused_color).
+                    simpl; intuition.
+                  intros In_color_unused_colors;
+                  contradict In_color_unused_colors;
+                  rewrite In_color_unused_colors.
+                  apply NoDup_cons_iff, Ok_s₀.(Ok.nodup).
+                rewrite Ok_s₀.(Ok.unused).
+                setoid_replace (forall owner : Owner.t, ~ Active_MapsTo (x₀, s₁) owner color) with (color <> unused_color /\ forall owner, ~ Active_MapsTo (Up p₀ :: x₀, s₀) owner color).
+                  tauto.
+                setoid_rewrite Active_MapsTo_iff.
+                specialize Nat.eq_dec with color unused_color;
+                firstorder.
+              apply NoDup_cons_iff with unused_color, Ok_s₀.(Ok.nodup).
+            Qed.
           End UpCons.
         End UpCons.
 
@@ -679,134 +614,83 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Variables
               (p₀ : Owner.t)
               (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat)
+              (coloring : Coloring.t)
               (used_color : nat)
               (unused_colors : list nat)
-              (p₀_to_used_color : Map.MapsTo p₀ used_color labeling).
+              (p₀_to_used_color : Coloring.MapsTo coloring p₀ used_color).
 
             Let s₀ :
               State.t :=
               {|
-                State.instructions := Down p₀ :: x₀;
-                State.colors := colors;
-                State.labeling := labeling;
+                State.coloring := coloring;
                 State.unused_colors := unused_colors;
               |}.
 
             Let s₁ :
               State.t :=
               {|
-                State.instructions := x₀;
-                State.colors := colors;
-                State.labeling := labeling;
+                State.coloring := coloring;
                 State.unused_colors := used_color :: unused_colors;
               |}.
 
             Variable Ok_s₀ :
-              Ok.t s₀.
-            Let instructions₀ :=
-              Ok_s₀.(Ok.instructions).
-            Let lt_iff_MapsTo₀ :=
-              Ok_s₀.(Ok.lt_iff_MapsTo).
-            Let ahead₀ :=
-              Ok_s₀.(Ok.ahead).
-            Let active₀ :=
-              Ok_s₀.(Ok.active).
-            Let unused₀ :=
-              Ok_s₀.(Ok.unused).
-            Let proper₀ :=
-              Ok_s₀.(Ok.proper).
-            Let nodup₀ :=
-              Ok_s₀.(Ok.nodup).
-            Let count₀ :=
-              Ok_s₀.(Ok.count).
+              Ok.t (Down p₀ :: x₀) s₀.
+            Variable instructions₀ :
+              Instructions.Ok (Down p₀ :: x₀).
 
-            Let Active_MapsTo_p₀_used_color_s₀ :
-              Active_MapsTo p₀ used_color s₀.
-            Proof with Ok_tac.
-              split...
-            Qed.
-
-            Let used_color_lt_colors :
-              used_color < s₁.(State.colors).
-            Proof.
-              now apply lt_iff_MapsTo₀; exists p₀.
-            Qed.
-
-            Let not_In_used_color_in_unused_colors :
-              ~ List.In used_color s₀.(State.unused_colors).
-            Proof.
-              contradict Active_MapsTo_p₀_used_color_s₀.
-              now apply unused₀.
-            Qed.
-
-            Let Active_MapsTo_iff₁ :
+            Lemma Active_MapsTo_iff :
               forall
-                owner : Owner.t,
-                Active_MapsTo owner used_color s₁ <->
-                False.
+              (color : nat)
+              (owner : Owner.t),
+              Active_MapsTo (x₀, s₁) owner color <->
+              color <> used_color /\ Active_MapsTo (Down p₀ :: x₀, s₀) owner color.
             Proof with Ok_tac.
-              intros owner.
-              enough (~ Active_MapsTo owner used_color s₁) by tauto.
-              specialize Owner.eq_dec with p₀ owner as
-                [<-|
-              p₀_neq_owner].
-                enough (~ Active p₀ x₀) by tauto...
-              contradict p₀_neq_owner; destruct p₀_neq_owner as
-                (Active_p₀_x₀ & owner_to_used_color).
-              apply proper₀ with used_color...
-            Qed.
-
-            Let Active_MapsTo_iff₂ :
-              forall
-              color : nat,
-              color <> used_color ->
-              forall
-              owner : Owner.t,
-              Active_MapsTo owner color s₁ <->
-              Active_MapsTo owner color s₀.
-            Proof with Ok_tac.
-              intros color color_neq_used_color owner.
-              enough (p₀_neq_owner : Map.MapsTo owner color labeling -> ~ Owner.eq p₀ owner).
-                simpl; rewrite Active.cons_Down_iff; tauto.
-              intros owner_to_color;
-              contradict color_neq_used_color.
-              apply MapsTo_fun with (1 := owner_to_color);
-              now rewrite <- color_neq_used_color.
+              intros color owner.
+              enough (H₁ : Owner.eq p₀ owner -> Coloring.MapsTo coloring owner color -> color = used_color).
+                enough (H₂ : Active owner x₀ -> Coloring.MapsTo coloring owner color -> color <> used_color).
+                  simpl; rewrite Active.cons_Down_iff; tauto.
+                intros Active_owner owner_to_color.
+                enough (p₀_neq_owner : ~ Owner.eq p₀ owner).
+                  contradict p₀_neq_owner;
+                  rewrite p₀_neq_owner in owner_to_color.
+                  apply Ok_s₀.(State.Ok.proper) with used_color...
+                contradict Active_owner; rewrite <- Active_owner...
+              intros <- p₀_to_color.
+              now apply Facts.MapsTo_fun with coloring.(Coloring.labeling) p₀.
             Qed.
 
             Lemma Ok :
-              Ok.t s₁.
+              Ok.t x₀ s₁.
             Proof with Ok_tac.
               constructor.
-                            Ok_tac.
-                          assumption.
+                        apply Ok_s₀.(Ok.coloring).
                         intros owner Ahead_owner_x₀.
-                        apply ahead₀...
-                      intros owner Active_owner_x₀.
-                      apply active₀...
-                    intros color.
-                    specialize Nat.eq_dec with color used_color as
-                      [->|
-                    color_neq_used_color].
-                      setoid_rewrite Active_MapsTo_iff₁; firstorder.
-                    setoid_rewrite Active_MapsTo_iff₂; [| assumption].
-                    apply not_eq_sym in color_neq_used_color.
-                    transitivity (List.In color s₀.(State.unused_colors));
-                      [simpl; tauto|
-                    apply unused₀].
+                      apply Ok_s₀.(Ok.ahead)...
+                    intros owner Active_owner_x₀.
+                    apply Ok_s₀.(Ok.active)...
+                  setoid_rewrite Active_MapsTo_iff.
                   intros owner owner' color
                     Active_MapsTo_owner_color Active_MapsTo_owner'_color.
-                  specialize Nat.eq_dec with color used_color as
-                    [->|
-                  color_neq_used_color].
-                    now apply Active_MapsTo_iff₁ in Active_MapsTo_owner_color.
-                  now apply proper₀ with color; apply Active_MapsTo_iff₂.
-                now constructor.
-              transitivity (S (Sets.count x₀) + length s₀.(State.unused_colors)).
-                now rewrite <- Sets.count_Down with p₀ x₀.
-              apply plus_Snm_nSm.
+                  now apply Ok_s₀.(Ok.proper) with color.
+                intros color.
+                setoid_rewrite Active_MapsTo_iff.
+                transitivity (color = used_color \/ List.In color s₀.(State.unused_colors)).
+                  simpl; intuition.
+                rewrite Ok_s₀.(Ok.unused).
+                setoid_replace ((forall owner : Owner.t,
+                ~ (color <> used_color /\ Active_MapsTo (Down p₀ :: x₀, s₀) owner color))) with (color = used_color \/ (forall owner, ~ Active_MapsTo (Down p₀ :: x₀, s₀) owner color)).
+                  enough (used_color < coloring.(Coloring.colors)) by
+                    (simpl; intuition).
+                  apply Ok_s₀.(Ok.coloring); exists p₀...
+                specialize Nat.eq_dec with color used_color;
+                firstorder.
+              constructor.
+                change (~ List.In used_color s₀.(State.unused_colors)).
+                rewrite Ok_s₀.(Ok.unused).
+                enough (Active_MapsTo (Down p₀ :: x₀, s₀) p₀ used_color).
+                  firstorder.
+                split...
+              apply Ok_s₀.(Ok.nodup).
             Qed.
           End Down.
         End Down.
@@ -815,118 +699,116 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
       Module Transition.
         Inductive t :
+          Instruction.t ->
           relation State.t :=
           | UpNil :
             forall
-              (p₀ : Owner.t)
-              (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat),
-              t
-                {|
-                  instructions := Up p₀ :: x₀;
-                  colors := colors;
-                  labeling := labeling;
-                  unused_colors := []
-                |}
-                {|
-                  instructions := x₀;
-                  colors := S colors;
-                  labeling := Map.add p₀ colors labeling;
-                  unused_colors := []
-                |}
+            (p₀ : Owner.t)
+            (coloring : Coloring.t),
+            t
+              (Up p₀)
+              {|
+                coloring := coloring;
+                unused_colors := []
+              |}
+              {|
+                coloring := Coloring.add_eq coloring p₀;
+                unused_colors := []
+              |}
           | UpCons :
             forall
-              (p₀ : Owner.t)
-              (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat)
-              (unused_color : nat)
-              (unused_colors : list nat),
-              t
-                {|
-                  instructions := Up p₀ :: x₀;
-                  colors := colors;
-                  labeling := labeling;
-                  unused_colors := unused_color :: unused_colors
-                |}
-                {|
-                  instructions := x₀;
-                  colors := colors;
-                  labeling := Map.add p₀ unused_color labeling;
-                  unused_colors := unused_colors
-                |}
+            (p₀ : Owner.t)
+            (coloring : Coloring.t)
+            (unused_color : nat)
+            (unused_colors : list nat),
+            t
+              (Up p₀)
+              {|
+                coloring := coloring;
+                unused_colors := unused_color :: unused_colors
+              |}
+              {|
+                coloring := Coloring.add_lt coloring p₀ unused_color;
+                unused_colors := unused_colors
+              |}
           | Down :
             forall
-              (p₀ : Owner.t)
-              (x₀ : Instructions.t)
-              (colors : nat)
-              (labeling : Map.t nat)
-              (used_color : nat)
-              (unused_colors : list nat),
-              Map.MapsTo p₀ used_color labeling ->
-              t
-                {|
-                  instructions := Notations.Down p₀ :: x₀;
-                  colors := colors;
-                  labeling := labeling;
-                  unused_colors := unused_colors
-                |}
-                {|
-                  instructions := x₀;
-                  colors := colors;
-                  labeling := labeling;
-                  unused_colors := used_color :: unused_colors
-                |}.
+            (p₀ : Owner.t)
+            (coloring : Coloring.t)
+            (used_color : nat)
+            (unused_colors : list nat),
+            Coloring.MapsTo coloring p₀ used_color ->
+            t
+              (Down p₀)
+              {|
+                coloring := coloring;
+                unused_colors := unused_colors
+              |}
+              {|
+                coloring := coloring;
+                unused_colors := used_color :: unused_colors
+              |}.
 
-        #[global]
-        Add Parametric Morphism : State.instructions with signature
-          t ++> Tail (A := Instruction.t) as instructions_morphism.
-        Proof.
-          intros s t Transition_s_t.
-          induction Transition_s_t as [
-              p₀ x₀ colors labeling|
-            p₀ x₀ colors labeling unused_color unused_colors|
-          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
-          constructor.
-        Qed.
-
-        #[global]
-        Instance functional :
-          Functional t.
+        Instance functional (u₀ : Instruction.t) :
+          Functional (t u₀).
         Proof.
           intros s t t' Transition_s_t Transition_s_t'.
           induction Transition_s_t as [
-              p₀ x₀ colors labeling|
-            p₀ x₀ colors labeling unused_color unused_colors|
-          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
+              p₀ coloring|
+            p₀ coloring unused_color unused_colors|
+          p₀ coloring used_color unused_colors p₀_to_used_color];
           inversion_clear Transition_s_t' as [
               |
             |
-          ? ? ? ? used_color' ? p_to_used_color];
+          ? ? used_color' ? p_to_used_color'];
           [reflexivity..|].
           enough (used_color = used_color') as -> by reflexivity.
-          now apply MapsTo_fun with labeling p₀.
+          now apply MapsTo_fun with coloring.(Coloring.labeling) p₀.
         Qed.
 
-        #[global]
-        Instance asymmetric :
-          Asymmetric t.
+        Definition serial :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ : State.t),
+          Instructions.Ok (u₀ :: x₀) ->
+          State.Ok.t (u₀ :: x₀) s₀ ->
+          exists s₁ : State.t,
+          Transition.t u₀ s₀ s₁.
         Proof.
-          intros s t Transition_s_t Transition_t_s.
-          apply instructions_morphism in Transition_s_t, Transition_t_s.
-          now apply asymmetry with
-            s.(State.instructions) t.(State.instructions).
+          intros ([|] & p₀) x₀ (coloring & unused_colors) Ok_x Ok_s₀.
+            destruct unused_colors as [| unused_color unused_colors].
+              exists {|
+                coloring := Coloring.add_eq coloring p₀;
+                unused_colors := []
+              |}; constructor.
+            exists {|
+              coloring := Coloring.add_lt coloring p₀ unused_color;
+              unused_colors := unused_colors
+            |}; constructor.
+          enough (Map.In p₀ coloring.(Coloring.labeling)) as (used_color & p₀_to_used_color).
+            now exists {|
+              coloring := coloring;
+              unused_colors := used_color :: unused_colors;
+            |}; constructor.
+          apply Ok_s₀.(Ok.active); auto with instructions.
         Qed.
 
-        Add Parametric Morphism : State.Ok.t with signature
-          State.Transition.t ++> impl as Ok_morphism.
+        Definition Ok_morphism :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ s₁ : State.t),
+          Instructions.Ok (u₀ :: x₀) ->
+          Transition.t u₀ s₀ s₁ ->
+          State.Ok.t (u₀ :: x₀) s₀ ->
+          State.Ok.t x₀ s₁.
         Proof.
-          intros s t Transition_s_t Ok_s.
-          induction Transition_s_t as [
-              p₀ x₀ colors labeling|
-            p₀ x₀ colors labeling unused_color unused_colors|
-          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+          intros u₀ x₀ s₀ s₁ Ok_x Transition_s₀_s₁ Ok_s₀.
+          induction Transition_s₀_s₁ as [
+              p₀ coloring|
+            p₀ coloring unused_color unused_colors|
+          p₀ coloring used_color unused_colors p₀_to_used_color].
               now apply State.Ok.UpNil.Ok.
             now apply State.Ok.UpCons.Ok.
           now apply State.Ok.Down.Ok with (1 := p₀_to_used_color).
@@ -934,16 +816,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
         Lemma coloring_morphism :
           forall
-          s t : State.t,
-          Ok.t s ->
-          Transition.t s t ->
-          Coloring.le (to_coloring s) (to_coloring t).
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ s₁ : State.t),
+          Instructions.Ok (u₀ :: x₀) ->
+          State.Ok.t (u₀ :: x₀) s₀ ->
+          Transition.t u₀ s₀ s₁ ->
+          Coloring.le s₀.(State.coloring) s₁.(State.coloring).
         Proof with State.Ok.Ok_tac.
-          intros s t Ok_s Transition_s_t.
-          induction Transition_s_t as [
-              p₀ x₀ colors labeling|
-            p₀ x₀ colors labeling unused_color unused_colors|
-          p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color].
+          intros u₀ x₀ s₀ s₁ Ok_x Ok_s₀ Transition_s₀_s₁.
+          induction Transition_s₀_s₁ as [
+              p₀ coloring|
+            p₀ coloring unused_color unused_colors|
+          p₀ coloring used_color unused_colors p₀_to_used_color].
             1, 2:
               split;
                 [auto with arith|
@@ -951,142 +836,148 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               enough (~ Owner.eq p₀ owner)]...
             1, 2:
               contradict owner_to_color; rewrite <- owner_to_color;
-              enough (~ Map.In p₀ labeling) by firstorder;
-              apply Ok_s.(State.Ok.ahead)...
+              enough (~ Map.In p₀ coloring.(Coloring.labeling)) by firstorder;
+              apply Ok_s₀.(State.Ok.ahead)...
           reflexivity.
         Qed.
       End Transition.
 
       Module Graph.
-        Definition t :
+        Inductive t :
+          Instructions.t ->
           relation State.t :=
-          ReflexiveTransitive.Closure State.Transition.t.
-
-        #[global]
-        Add Parametric Morphism : State.instructions with signature
-          Graph.t ++> (@Skip Instruction.t) as Skip_morphism.
-        Proof.
-          apply ReflexiveTransitive.morphism;
-          [typeclasses eauto| solve_proper].
-        Qed.
-
-        #[global]
-        Add Parametric Morphism : State.Ok.t with signature
-          Graph.t ++> impl as Ok_morphism.
-        Proof.
-          apply ReflexiveTransitive.morphism;
-          [typeclasses eauto| solve_proper].
-        Qed.
-
-        Lemma flip_Skip_impl_eq :
+        | Nil :
           forall
-          x y : State.t,
-          Graph.t x y ->
-          Skip y.(State.instructions) x.(State.instructions) ->
-          x = y.
+          s : State.t,
+          t [] s s
+        | Cons :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ s₁ u : State.t),
+          Transition.t u₀ s₀ s₁ ->
+          t x₀ s₁ u ->
+          t (u₀ :: x₀) s₀ u.
+
+        Lemma nil_iff :
+          forall
+          (s t : State.t),
+          Graph.t [] s t <->
+          s = t.
         Proof.
-          intros x y Graph_x_y Skip_y_x.
-          destruct Graph_x_y as [| x' y Transition_x_x' Graph_x'_y].
+          intros s t; split.
+            now inversion 1.
+          intros <-; constructor 1.
+        Qed.
+
+        Lemma cons_iff :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ t : State.t),
+          Graph.t (u₀ :: x₀) s₀ t <->
+          exists
+          s₁ : State.t,
+          Transition.t u₀ s₀ s₁ /\
+          Graph.t x₀ s₁ t.
+        Proof.
+          intros u₀ x₀ s₀ t; split.
+            inversion 1; firstorder.
+          intros (s₁ & Transition_s₀_s₁ & Graph_s₁_t₁).
+          now constructor 2 with s₁.
+        Qed.
+
+        Instance functional (x : Instructions.t) :
+          Functional (t x).
+        Proof.
+          intros s t t' Graph_s_t Graph_s_t'.
+          induction Graph_s_t as [
+            s|
+          u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHGraph_s₁_t];
+          inversion_clear Graph_s_t' as [
+            |
+          ? ? ? s₁' ? Transition_s₀_s₁' Graph_s₁_t'].
             reflexivity.
-          absurd (Tail x.(State.instructions) x'.(State.instructions)).
-            apply Skip.not_flip_Tail.
-            now transitivity y.(State.instructions); [rewrite Graph_x'_y|].
-          now apply State.Transition.instructions_morphism.
+          enough (s₁ = s₁') as <- by now apply IHGraph_s₁_t.
+          now apply Transition.functional with (1 := Transition_s₀_s₁).
         Qed.
 
-        #[global]
-        Instance antisymmetric :
-          Antisymmetric State.t eq t.
-        Proof.
-          intros s t Graph_s_t Graph_t_s.
-          apply flip_Skip_impl_eq with (1 := Graph_s_t).
-          now rewrite Graph_t_s.
-        Qed.
-
-        Lemma quasi_total :
+        Lemma serial :
           forall
-          x y y' : State.t,
-          Graph.t x y ->
-          Graph.t x y' ->
-            Graph.t y y' /\ ~ Graph.t y' y \/
-            y = y' \/
-            ~ Graph.t y y' /\ Graph.t y' y.
+          (x : Instructions.t)
+          (s : State.t),
+          Instructions.Ok x ->
+          State.Ok.t x s ->
+          exists
+          t : State.t,
+          Graph.t x s t.
         Proof.
-          intros x y y' Graph_x_y; revert y'.
-          induction Graph_x_y as
-            [x|
-          x x' y Transition_x_x' Graph_x'_y IHx'_y];
-          intros y' Graph_x_y';
-          inversion Graph_x_y' as [
-            x_eq_y'|
-          x'' y'' Transition_x_x'' Graph_x''_y' y''_eq_y'].
-                now right; left.
-              left; split.
-                now transitivity x''; [apply is_subrelation|].
-              enough (x_neq_x'' : x <> x'').
-                contradict x_neq_x''.
-                now apply antisymmetric; [apply is_subrelation| transitivity y'].
-              contradict Transition_x_x''; rewrite Transition_x_x''.
-              apply irreflexivity.
-            rewrite x_eq_y' in *.
-            right; right; split.
-              enough (y'_neq_x' : y' <> x').
-                contradict y'_neq_x'.
-                now apply antisymmetric; [apply is_subrelation| transitivity y].
-              contradict Transition_x_x'; rewrite Transition_x_x'.
-              apply irreflexivity.
-            now transitivity x'; [apply is_subrelation|].
-          apply IHx'_y.
-          enough (x' = x'') as -> by assumption.
-          apply functionality with State.Transition.t x;
-          auto with typeclass_instances.
+          intros x.
+          induction x as [| u₀ x₀ IHx₀].
+            intros s; exists s; constructor.
+          intros s₀ Ok_x Ok_s₀.
+          specialize State.Transition.serial with (1 := Ok_x) (2 := Ok_s₀) as (s₁ & Transition_s₀_s₁).
+          specialize IHx₀ with s₁ as (t & Graph_s₁_t).
+              eauto with instructions.
+            now apply State.Transition.Ok_morphism with u₀ s₀.
+          now exists t; apply Graph.Cons with s₁.
         Qed.
 
-        Corollary quasi_connex :
+        Lemma Ok_morphism :
           forall
-          x y y' : State.t,
-          Graph.t x y ->
-          Graph.t x y' ->
-            Graph.t y y' \/
-            Graph.t y' y.
-        Proof.
-          intros x y y' Graph_x_y Graph_x_y'.
-          now specialize quasi_total with (1 := Graph_x_y) (2 := Graph_x_y') as
-            [(Graph_y_y' & _)| [->| (_ & Graph_y'_y)]];
-            [left..|right].
+          (x y : Instructions.t)
+          (s t : State.t),
+          Instructions.Ok (x ++ y) ->
+          State.Ok.t (x ++ y) s ->
+          Graph.t x s t ->
+          State.Ok.t y t.
+        Proof with State.Ok.Ok_tac.
+          induction x as [| u₀ x₀ IHx₀]; intros y s t Ok_x Ok_s Graph_s_t.
+            now apply nil_iff in Graph_s_t as <-.
+          apply cons_iff in Graph_s_t as (s' & Transition_s_s' & Graph_s'_t).
+          apply (@IHx₀ y s' t).
+              eauto with instructions.
+            now apply State.Transition.Ok_morphism with (2 := Transition_s_s').
+          assumption.
         Qed.
 
         Lemma coloring_morphism :
-          forall s t : State.t,
-          State.Ok.t s ->
-          Graph.t s t ->
-          Coloring.le (State.to_coloring s) (State.to_coloring t).
+          forall
+          (x : Instructions.t)
+          (s t : State.t),
+          Instructions.Ok x ->
+          State.Ok.t x s ->
+          Graph.t x s t ->
+          Coloring.le s.(State.coloring) t.(State.coloring).
         Proof with State.Ok.Ok_tac.
-          intros s t Ok_s Graph_s_t.
-          induction Graph_s_t as
-            [s|
-          s s' t Transition_s_s' Graph_s'_t IHs'_t].
+          intros x s t Ok_x Ok_s Graph_s_t.
+          induction Graph_s_t as [
+            s|
+          u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHs₁_t].
             reflexivity.
-          transitivity (State.to_coloring s').
-            now apply State.Transition.coloring_morphism.
-          now apply IHs'_t; rewrite <- Transition_s_s'.
+          transitivity s₁.(State.coloring).
+            now apply (@State.Transition.coloring_morphism u₀ x₀ s₀ s₁).
+          apply IHs₁_t...
+          now apply (@State.Transition.Ok_morphism u₀ x₀ s₀).
         Qed.
 
         Lemma Active_MapsTo_iff :
           forall
-          s t : State.t,
-          Graph.t s t ->
-          State.Ok.t s ->
+          (x : Instructions.t)
+          (s t : State.t),
+          Instructions.Ok x ->
+          Graph.t x s t ->
+          State.Ok.t x s ->
           forall
           (owner : Owner.t)
           (color : nat),
-          Active owner s.(State.instructions) ->
-          Map.MapsTo owner color s.(State.labeling) <->
-          Map.MapsTo owner color t.(State.labeling).
+          Active owner x ->
+          Coloring.MapsTo s.(State.coloring) owner color <->
+          Coloring.MapsTo t.(State.coloring) owner color.
         Proof.
-          intros s t Graph_s_t Ok_s owner color Active_owner_s.
-          assert (s_le_t : Coloring.le (to_coloring s) (to_coloring t)) by
-            now apply coloring_morphism.
+          intros x s t Ok_x Graph_s_t Ok_s owner color Active_owner_s.
+          assert (s_le_t : Coloring.le s.(State.coloring) t.(State.coloring)) by
+            now apply coloring_morphism with (3 := Graph_s_t).
           split.
             apply s_le_t.
           intros owner_to_color_t.
@@ -1096,135 +987,63 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           apply MapsTo_fun with (1 := owner_to_color_t).
           now apply s_le_t.
         Qed.
+
+        Lemma split :
+          forall
+          (x : Instructions.t)
+          (s t : State.t),
+          Graph.t x s t ->
+          forall
+          left right : Instructions.t,
+          left ++ right = x ->
+          exists
+          s' : State.t,
+          Graph.t left s s' /\ Graph.t right s' t.
+        Proof.
+          intros x s t Graph_s_t.
+          induction Graph_s_t as [
+            s|
+          u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHs₁_t].
+            intros left right H; apply app_eq_nil in H as (-> & ->).
+            exists s; split; constructor.
+          intros [| head_left tail_left] right H.
+            exists s₀; split.
+              constructor.
+            simpl in H.
+            rewrite H.
+            now apply Graph.Cons with s₁.
+          simpl in H.
+          inversion H.
+          specialize IHs₁_t with (1 := H2) as (s' & Graph_s₁_s' & Graph_s'_t).
+          exists s'; split.
+            now apply Graph.Cons with s₁.
+          assumption.
+        Qed.
       End Graph.
     End State.
-    Import State.Ok.Sets(IsChromaticNumber).
+    Module Sets := State.Ok.Sets.
     Module Graph := State.Graph.
-
-    Lemma Skip_inverse :
-      forall
-      (s : State.t)
-      (skip : Instructions.t),
-      State.Ok.t s ->
-      Skip s.(State.instructions) skip ->
-      exists
-      t : State.t,
-      t.(State.instructions) = skip /\
-      Graph.t s t.
-    Proof with State.Ok.Ok_tac.
-      intros [x colors labeling unused_colors].
-      revert colors labeling unused_colors; simpl.
-      induction x as [| u₀ x₀ IHx₀];
-      intros colors labeling unused_colors
-        skip Ok_s Skip_x_skip.
-        apply Skip.nil_inv in Skip_x_skip as ->.
-        exists
-        {|
-          State.instructions := [];
-          State.colors := colors;
-          State.labeling := labeling;
-          State.unused_colors := unused_colors
-        |}; repeat constructor.
-      apply Skip.cons_inv in Skip_x_skip as [->| Skip_x₀_skip].
-        exists
-        {|
-          State.instructions := u₀ :: x₀;
-          State.colors := colors;
-          State.labeling := labeling;
-          State.unused_colors := unused_colors
-        |}; repeat constructor.
-      enough (exists s',
-        s'.(State.instructions) = x₀ /\
-        State.Transition.t
-        {|
-          State.instructions := u₀ :: x₀;
-          State.colors := colors;
-          State.labeling := labeling;
-          State.unused_colors := unused_colors
-        |}
-        s') as ([x colors' labeling' unused_colors'] & <- & Transition_s_s').
-      specialize IHx₀ with colors' labeling' unused_colors' skip
-        as (t & t_eq_skip & Graph_s'_t).
-          now simpl; rewrite <- Transition_s_s'.
-        assumption.
-      now exists t; split; [| constructor 2 with (2 := Graph_s'_t)].
-      destruct u₀ as ([|] & p₀).
-        destruct unused_colors as [| unused_color unused_colors].
-          exists
-          {|
-            State.instructions := x₀;
-            State.colors := S colors;
-            State.labeling := Map.add p₀ colors labeling;
-            State.unused_colors := []
-          |}; repeat constructor.
-        exists
-        {|
-          State.instructions := x₀;
-          State.colors := colors;
-          State.labeling := Map.add p₀ unused_color labeling;
-          State.unused_colors := unused_colors
-        |}; repeat constructor.
-      specialize Ok_s.(State.Ok.active) with p₀ as
-        (used_color & p₀_to_used_color).
-        pose (Ok_s.(State.Ok.instructions))...
-      exists
-      {|
-        State.instructions := x₀;
-        State.colors := colors;
-        State.labeling := labeling;
-        State.unused_colors := used_color :: unused_colors
-      |}; now repeat constructor.
-    Qed.
 
     Lemma regular_body_spec :
       forall
-      s : State.t,
-      State.Ok.t s ->
-      exists
-      (coloring' : Coloring.t)
-      (unused_colors' : list nat),
-      regular_body
-        s.(State.instructions)
-        {|
-          Coloring.colors := s.(State.colors);
-          Coloring.labeling := s.(State.labeling);
-        |}
-        s.(State.unused_colors) = Some coloring' /\
-      Graph.t
-        s
-        {|
-          State.instructions := [];
-          State.labeling := coloring'.(Coloring.labeling);
-          State.colors := coloring'.(Coloring.colors);
-          State.unused_colors := unused_colors'
-        |}.
-    Proof with State.Ok.Ok_tac.
-      intros [instructions colors labeling unused_colors];
-      revert colors labeling unused_colors.
-      induction instructions as [| [[|] p₀] x₀ IHx₀];
-      intros colors labeling unused_colors Ok_s; simpl.
-          exists (Coloring.new colors labeling), unused_colors;
-          split; [reflexivity| constructor].
-        destruct unused_colors as [| unused_color unused_colors];
-          [apply State.Ok.UpNil.Ok in Ok_s as Ok_s'|
-        apply State.Ok.UpCons.Ok in Ok_s as Ok_s'].
-        1, 2 :
-        specialize IHx₀ with (1 := Ok_s') as
-          (coloring' & unused_colors' & H & Graph_s'_t);
-        exists coloring', unused_colors';
-        now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
-      assert (exists used_color : nat, Map.MapsTo p₀ used_color labeling) as
-        (used_color & p₀_to_used_color).
-        pose proof Ok_s.(State.Ok.instructions) as Ok_x;
-        apply Ok_s.(State.Ok.active)...
-      move Ok_s before p₀_to_used_color;
-      apply State.Ok.Down.Ok with (1 := p₀_to_used_color) in Ok_s as Ok_s'.
-      specialize Map.find_1 with (1 := p₀_to_used_color) as ->.
-      specialize IHx₀ with (1 := Ok_s') as
-        (coloring' & unused_colors' & H & Graph_s'_t).
-      exists coloring', unused_colors'.
-      now split; [| constructor 2 with (2 := Graph_s'_t); constructor].
-    Qed.
+      (x : Instructions.t)
+      (s t : State.t),
+      Graph.t x s t ->
+      regular_body x s.(State.coloring) s.(State.unused_colors) =
+      Some (t.(State.coloring), t.(State.unused_colors)).
+    Proof.
+      intros x s t Graph_s_t.
+      induction Graph_s_t as [
+        s|
+      u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHGraph_s₁_t].
+        reflexivity.
+      induction Transition_s₀_s₁ as [
+          p₀ coloring|
+        p₀ coloring unused_color unused_colors|
+      p₀ coloring used_color unused_colors p₀_to_used_color];
+      [..| simpl; rewrite Map.find_1 with (1 := p₀_to_used_color)];
+      apply IHGraph_s₁_t.
+    Defined.
 
     Definition Proper
       (labeling : Map.t nat)
@@ -1239,86 +1058,71 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
     Lemma Graph_Forall :
       forall
-        s t : State.t,
-        Graph.t s t ->
-        State.Ok.t s ->
-        t.(State.instructions) = [] ->
-        Skip.Forall
-          (fun skip : Instructions.t =>
-          State.Ok.Sets.count skip <= State.colors t /\
-          Proper t.(State.labeling) skip)
-          s.(State.instructions).
+      (x : Instructions.t)
+      (s t : State.t),
+      Instructions.Ok x ->
+      Graph.t x s t ->
+      State.Ok.t x s ->
+      Skip.Forall
+        (fun skip : Instructions.t =>
+        Sets.count skip <= t.(State.coloring).(Coloring.colors) /\
+        Proper t.(State.coloring).(Coloring.labeling) skip)
+        x.
     Proof with auto.
-      intros s t Graph_s_t Ok_s finished skip Skip_x_skip.
-      apply Skip_inverse with (1 := Ok_s) in Skip_x_skip as
-        (s' & <- & Graph_s_s').
-      assert (Ok_s' : State.Ok.t s') by
-        now rewrite <- Graph_s_s'.
-      enough (Graph_s'_t : Graph.t s' t).
-        split.
-          transitivity s'.(State.colors).
-            rewrite Ok_s'.(State.Ok.count); apply le_plus_l.
-          enough (Coloring.le (State.to_coloring s') (State.to_coloring t)) by
-          firstorder.
-          now apply Graph.coloring_morphism.
-        intros owner owner' color
-          (Active_owner_s' & owner_to_color_t)
-          (Active_owner'_s & owner'_to_color_t).
-        now apply Ok_s'.(State.Ok.proper) with color;
-          (split; [| apply Graph.Active_MapsTo_iff with t]).
-      specialize Graph.quasi_connex with (1 := Graph_s_t) (2 := Graph_s_s') as
-        [Graph_t_s'|
-      Graph_s'_t]...
-      specialize Graph.flip_Skip_impl_eq with (x := t) (1 := Graph_t_s') as ->.
-          reflexivity.
-      rewrite finished, Skip.iff.
-      now exists s'.(State.instructions); rewrite app_nil_r.
+      intros x s u Ok_x Graph_s_u Ok_s right Skip_x_right.
+      apply Skip.inv in Skip_x_right as (left & H); symmetry in H.
+      specialize Graph.split with (1 := Graph_s_u) (2 := H) as
+        (t & Graph_s_t & Graph_t_u).
+      assert (Ok_right : Instructions.Ok right) by
+        (now apply Instructions.Ok.split with left; rewrite H).
+      assert (Ok_t : State.Ok.t right t).
+        rewrite <- H in *.
+        now apply Graph.Ok_morphism with (3 := Graph_s_t).
+      split.
+        transitivity (t.(State.coloring).(Coloring.colors)).
+          rewrite
+            <- Nat.add_sub with (Sets.count right) (length t.(State.unused_colors)),
+            <- State.Ok.active_plus_unused with right t by assumption.
+          apply Nat.le_sub_l.
+        enough (Coloring.le t.(State.coloring) u.(State.coloring)) by firstorder.
+        now apply Graph.coloring_morphism with (3 := Graph_t_u).
+      intros owner owner' color
+        Active_MapsTo_owner_color Active_MapsTo_owner'_color.
+      now apply Ok_t.(State.Ok.proper) with color;
+      rewrite Graph.Active_MapsTo_iff with (2 := Graph_t_u).
     Qed.
 
     Lemma Graph_Exists :
       forall
-        s t : State.t,
-        Graph.t s t ->
-        State.Ok.t s ->
-        s.(State.colors) = t.(State.colors) \/
-        Skip.Exists
-          (fun skip : Instructions.t =>
-          State.Ok.Sets.count skip = t.(State.colors))
-          s.(State.instructions).
-    Proof.
-      intros s t Graph_s_t.
-      induction Graph_s_t as
-        [s|
-      s s' t Transition_s_s' Graph_s'_t IHs'_t]; intros Ok_s.
+      (x : Instructions.t)
+      (s t : State.t),
+      Instructions.Ok x ->
+      Graph.t x s t ->
+      State.Ok.t x s ->
+      s.(State.coloring).(Coloring.colors) = t.(State.coloring).(Coloring.colors) \/
+      Skip.Exists
+        (fun skip : Instructions.t =>
+        Sets.count skip = t.(State.coloring).(Coloring.colors))
+        x.
+    Proof with auto.
+      intros x s t Ok_x Graph_s_t Ok_s.
+      induction Graph_s_t as [
+        s|
+      u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHGraph_s₁_t].
         now left.
-      specialize IHs'_t as [s'_eq_t| (skip & Skip_x₀_skip & e)].
-            now rewrite <- Transition_s_s'.
-        enough (s_le_s' : s.(State.colors) <= s'.(State.colors)).
-          apply Nat.le_lteq in s_le_s' as
-            [s_lt_s'|
-          s_eq_s'];
-            [right|
-          left].
-            enough (s'_eq_nil : s'.(State.unused_colors) = []).
-              exists s'.(State.instructions); split.
-                apply ReflexiveTransitive.subrelation.
-                now apply State.Transition.instructions_morphism.
-              rewrite <- s'_eq_t, State.Ok.count, s'_eq_nil by
-                now rewrite <- Transition_s_s'.
-              simpl; auto with arith.
-            induction Transition_s_s' as [
-                p₀ x₀ colors labeling|
-              p₀ x₀ colors labeling unused_color unused_colors|
-            p₀ x₀ colors labeling used_color unused_colors p₀_to_used_color];
-            simpl in *.
-                reflexivity.
-              1, 2 :
-              contradict s_lt_s'; auto with arith.
-          now transitivity s'.(State.colors).
-        enough (Coloring.le (State.to_coloring s) (State.to_coloring s')) by
-          firstorder.
-        now apply State.Transition.coloring_morphism.
-      now right; exists skip; split; [rewrite Transition_s_s'|].
+      assert (Ok_x₀ : Instructions.Ok x₀) by eauto with instructions.
+      assert (Ok_s₁ : State.Ok.t x₀ s₁) by
+        now apply State.Transition.Ok_morphism with (2 := Transition_s₀_s₁).
+      specialize IHGraph_s₁_t as [e₁| H]...
+        enough (s₀.(State.coloring).(Coloring.colors) = s₁.(State.coloring).(Coloring.colors) \/ S s₀.(State.coloring).(Coloring.colors) = s₁.(State.coloring).(Coloring.colors) /\ s₁.(State.unused_colors) = []) as [e₀| (e₀ & ?)].
+            now left; transitivity s₁.(State.coloring).(Coloring.colors).
+          right.
+          exists x₀; split; [now constructor 2 with x₀|].
+          rewrite <- e₁, <- Nat.add_0_r at 1.
+          change 0 with (@length nat []); rewrite <- H.
+          symmetry; apply State.Ok.active_plus_unused...
+        now destruct Transition_s₀_s₁; [right| left..].
+      now right; apply Skip.Exists.cons.
     Qed.
 
     Lemma regular_spec :
@@ -1333,29 +1137,36 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Skip.Forall
         (Proper coloring.(Coloring.labeling))
         instructions /\
-      IsChromaticNumber
-        instructions
-        coloring.(Coloring.colors).
+        Sets.IsChromaticNumber
+          instructions
+          coloring.(Coloring.colors).
     Proof with auto.
       intros instructions Ok_instructions Closed_instructions.
-      pose (s := State.empty instructions).
-      assert (Ok_s : State.Ok.t (State.empty instructions)) by
+      pose (s := {|
+        State.coloring := Coloring.empty;
+        State.unused_colors := []
+      |}).
+      assert (Ok_s : State.Ok.t instructions s) by
         now apply State.Ok.Empty.Ok.
-      specialize regular_body_spec with (1 := Ok_s) as
-        (coloring' & unused_colors' & e & Graph_s_t).
-      exists coloring'.
+      specialize Graph.serial with (1 := Ok_instructions) (2 := Ok_s) as (t & Graph_s_t).
+      assert (Ok_t : State.Ok.t [] t).
+        now apply (@Graph.Ok_morphism instructions [] s t); [rewrite app_nil_r..|].
+      exists t.(State.coloring).
+      change (regular instructions) with (bind (regular_body instructions s.(State.coloring) s.(State.unused_colors)) (fun x => Some (fst x))).
+      specialize regular_body_spec with (1 := Graph_s_t) as ->; simpl.
       split_left.
-              now rewrite <- e.
-            rewrite Graph_s_t in Ok_s.
-            apply Ok_s.
-          now apply Graph_Forall with (1 := Graph_s_t).
-        intros skip Skip_instructions_skip.
-        now apply Graph_Forall with (1 := Graph_s_t).
+              reflexivity.
+            apply Ok_t.(State.Ok.coloring).
+          1,2 :
+            (intros skip Skip_instructions_skip;
+            now specialize Graph_Forall with
+              (2 := Graph_s_t)
+              (4 := Skip_instructions_skip) as (? & ?)).
       specialize Graph_Exists with
-        (1 := Graph_s_t)
-        (2 := Ok_s) as
+        (2 := Graph_s_t)
+        (3 := Ok_s) as
         [O_eq_colors| H]; simpl in *...
-      now exists instructions; split; [| rewrite State.Ok.Sets.count_closed].
+      now exists instructions; split; [| rewrite Sets.count_closed].
     Qed.
   End Regular.
 

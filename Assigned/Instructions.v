@@ -260,6 +260,18 @@ Module Make (Operand : DecidableTypeBoth).
       Qed.
     End Ok.
 
+    Lemma split :
+      forall
+      x y : t,
+      Ok (x ++ y) ->
+      Ok y.
+    Proof.
+      intros x y; move y after x.
+      induction x as [| u₀ x₀ IHx₀]; intros Ok_z.
+        exact Ok_z.
+      apply IHx₀, cons_inv with (1 := Ok_z).
+    Qed.
+
     Module Hints.
       #[export]
       Hint Constructors Ok : instructions.
