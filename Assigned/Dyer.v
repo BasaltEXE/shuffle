@@ -173,11 +173,17 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
     Module State.
       Record t :
-      Type :=
-      new {
-        coloring : Coloring.t;
-        unused_colors : list nat;
-      }.
+        Type :=
+        new {
+          coloring : Coloring.t;
+          unused_colors : list nat;
+        }.
+
+      Notation initial_state :=
+        {|
+          coloring := Coloring.empty;
+          unused_colors := [];
+        |}.
 
       Module Ok.
         Notation Active_MapsTo
@@ -1130,28 +1136,12 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       x : Instructions.t,
       Instructions.Ok x ->
       Instructions.Closed x ->
-      State.Ok.t
-        x
-        {|
-          State.coloring := Coloring.empty;
-          State.unused_colors := []
-        |} /\
       exists
       t : State.t,
-      Graph.t
-        x
-        {|
-          State.coloring := Coloring.empty;
-          State.unused_colors := []
-        |}
-        t /\
+      Graph.t x State.initial_state t /\
       Coloring.Ok t.(State.coloring) /\
-      Skip.Forall
-        (Proper t.(State.coloring).(Coloring.labeling))
-        x /\
-        Sets.IsChromaticNumber
-          x
-          t.(State.coloring).(Coloring.colors).
+      Skip.Forall (Proper t.(State.coloring).(Coloring.labeling)) x /\
+      Sets.IsChromaticNumber x t.(State.coloring).(Coloring.colors).
     Proof with auto.
       intros x Ok_x Closed_x.
       pose (s := {|
@@ -1163,7 +1153,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       specialize Graph.serial with (1 := Ok_x) (2 := Ok_s) as (t & Graph_s_t).
       assert (Ok_t : State.Ok.t [] t) by
         now apply (@Graph.Ok_morphism x [] s t); [rewrite app_nil_r..|].
-      split; [assumption| exists t].
+      exists t.
       split_left.
               assumption.
             apply Ok_t.(State.Ok.coloring).
@@ -1197,7 +1187,7 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Proof with auto.
       intros instructions Ok_instructions Closed_instructions.
       specialize (graph_spec Ok_instructions Closed_instructions) as
-        (Ok_s & t & Graph_s_t & Ok_coloring & proper & is_chromatic_number).
+        (t & Graph_s_t & Ok_coloring & proper & is_chromatic_number).
       exists t.(State.coloring).
       split_left...
           pose (s := {|
@@ -1294,15 +1284,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Import Pred(pred_error, pred_error_spec, Pred).
 
   Module Counter.
-    Module Opcode := Instructions.Opcode.
-
     Module State.
       Record t :
-      Type :=
-      new {
-        active : nat;
-        colors : nat;
-      }.
+        Type :=
+        new {
+          active : nat;
+          colors : nat;
+        }.
+
+      Notation initial_state :=
+        {|
+          State.active := 0;
+          State.colors := 0;
+        |}.
 
       Definition from_regular
         (s : Regular.State.t) :
@@ -1316,52 +1310,52 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
       Module Transition.
         Inductive t :
-        Instruction.t ->
-        relation State.t :=
-        | Up_lt :
-          forall
-          (p₀ : Owner.t)
-          (active colors : nat),
-          active < colors ->
-          t
-            (Up p₀)
-            {|
-              State.active := active;
-              State.colors := colors
-            |}
-            {|
-              State.active := S active;
-              State.colors := colors
-            |}
-        | Up_ge :
-          forall
-          (p₀ : Owner.t)
-          (active colors : nat),
-          active >= colors ->
-          t
-            (Up p₀)
-            {|
-              State.active := active;
-              State.colors := colors
-            |}
-            {|
-              State.active := S active;
-              State.colors := S active
-            |}
-        | Down :
-          forall
-          (p₀ : Owner.t)
-          (active colors : nat),
-          t
-            (Down p₀)
-            {|
-              State.active := S active;
-              State.colors := colors
-            |}
-            {|
-              State.active := active;
-              State.colors := colors
-            |}.
+          Instruction.t ->
+          relation State.t :=
+          | Up_lt :
+            forall
+            (p₀ : Owner.t)
+            (active colors : nat),
+            active < colors ->
+            t
+              (Up p₀)
+              {|
+                State.active := active;
+                State.colors := colors
+              |}
+              {|
+                State.active := S active;
+                State.colors := colors
+              |}
+          | Up_ge :
+            forall
+            (p₀ : Owner.t)
+            (active colors : nat),
+            active >= colors ->
+            t
+              (Up p₀)
+              {|
+                State.active := active;
+                State.colors := colors
+              |}
+              {|
+                State.active := S active;
+                State.colors := S active
+              |}
+          | Down :
+            forall
+            (p₀ : Owner.t)
+            (active colors : nat),
+            t
+              (Down p₀)
+              {|
+                State.active := S active;
+                State.colors := colors
+              |}
+              {|
+                State.active := active;
+                State.colors := colors
+              |}.
 
         Lemma from_regular_morphism :
           forall
@@ -1404,18 +1398,18 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Inductive t :
           Instructions.t ->
           relation State.t :=
-        | Nil :
-          forall
-          s : State.t,
-          t [] s s
-        | Cons :
-          forall
-          (u₀ : Instruction.t)
-          (x₀ : Instructions.t)
-          (s₀ s₁ u : State.t),
-          Transition.t u₀ s₀ s₁ ->
-          t x₀ s₁ u ->
-          t (u₀ :: x₀) s₀ u.
+          | Nil :
+            forall
+            s : State.t,
+            t [] s s
+          | Cons :
+            forall
+            (u₀ : Instruction.t)
+            (x₀ : Instructions.t)
+            (s₀ s₁ u : State.t),
+            Transition.t u₀ s₀ s₁ ->
+            t x₀ s₁ u ->
+            t (u₀ :: x₀) s₀ u.
 
         Lemma from_regular_morphism :
           forall
@@ -1435,6 +1429,29 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             now apply Transition.from_regular_morphism with x₀.
           apply IHGraph_s₁_t...
           now apply Regular.State.Transition.Ok_morphism with (3 := Ok_s).
+        Qed.
+
+        Lemma spec :
+          forall
+          instructions : Instructions.t,
+          Instructions.Ok instructions ->
+          Instructions.Closed instructions ->
+          exists
+          t : State.t,
+          State.Graph.t instructions State.initial_state t /\
+          Regular.State.Ok.Sets.IsChromaticNumber instructions t.(State.colors).
+        Proof with auto with arith.
+          intros x Ok_x Closed_x.
+          pose (s := Regular.State.initial_state).
+          assert (Ok_s : Regular.State.Ok.t x s) by
+            now apply Regular.State.Ok.Empty.Ok.
+          specialize (Regular.graph_spec Ok_x Closed_x) as
+            (t & Graph_s_t & Ok_coloring & _ & is_chromatic_number).
+          exists (State.from_regular t).
+          split.
+            change (State.Graph.t x (State.from_regular s) (State.from_regular t)).
+            now apply State.Graph.from_regular_morphism.
+          apply is_chromatic_number.
         Qed.
       End Graph.
     End State.
@@ -1496,27 +1513,14 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       exists
       colors : nat,
       counter instructions = Some colors /\
-      Skip.Forall
-        (fun skip : Instructions.t =>
-        Regular.State.Ok.Sets.count skip <= colors)
-        instructions /\
-      Skip.Exists
-        (fun skip : Instructions.t =>
-        Regular.State.Ok.Sets.count skip = colors)
-        instructions.
+      Regular.State.Ok.Sets.IsChromaticNumber instructions colors.
     Proof with auto with arith.
       intros x Ok_x Closed_x.
-      pose (s := {| Regular.State.coloring := Coloring.empty; Regular.State.unused_colors := []|}).
-      specialize (Regular.graph_spec Ok_x Closed_x) as
-        (Ok_s & t & Graph_s_t & Ok_coloring & _ & is_chromatic_number).
-      exists t.(Regular.State.coloring).(Coloring.colors).
-      split_left.
-          change (counter_body x (State.from_regular s).(State.active) (State.from_regular s).(State.colors) = Some (State.from_regular t).(State.colors)).
-          rewrite counter_body_spec with (t := State.from_regular t).
-            reflexivity.
-          now apply State.Graph.from_regular_morphism.
-        apply is_chromatic_number.
-      apply is_chromatic_number.
+      specialize (State.Graph.spec Ok_x Closed_x) as
+        (t & Graph_s_t & is_chromatic_number_x_t).
+      exists t.(State.colors).
+      split; [| assumption].
+      apply counter_body_spec with (1 := Graph_s_t).
     Qed.
   End Counter.
 
