@@ -1125,6 +1125,60 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now right; apply Skip.Exists.cons.
     Qed.
 
+    Lemma graph_spec :
+      forall
+      x : Instructions.t,
+      Instructions.Ok x ->
+      Instructions.Closed x ->
+      State.Ok.t
+        x
+        {|
+          State.coloring := Coloring.empty;
+          State.unused_colors := []
+        |} /\
+      exists
+      t : State.t,
+      Graph.t
+        x
+        {|
+          State.coloring := Coloring.empty;
+          State.unused_colors := []
+        |}
+        t /\
+      Coloring.Ok t.(State.coloring) /\
+      Skip.Forall
+        (Proper t.(State.coloring).(Coloring.labeling))
+        x /\
+        Sets.IsChromaticNumber
+          x
+          t.(State.coloring).(Coloring.colors).
+    Proof with auto.
+      intros x Ok_x Closed_x.
+      pose (s := {|
+        State.coloring := Coloring.empty;
+        State.unused_colors := []
+      |}).
+      assert (Ok_s : State.Ok.t x s) by
+        now apply State.Ok.Empty.Ok.
+      specialize Graph.serial with (1 := Ok_x) (2 := Ok_s) as (t & Graph_s_t).
+      assert (Ok_t : State.Ok.t [] t) by
+        now apply (@Graph.Ok_morphism x [] s t); [rewrite app_nil_r..|].
+      split; [assumption| exists t].
+      split_left.
+              assumption.
+            apply Ok_t.(State.Ok.coloring).
+          1,2 :
+            (intros skip Skip_instructions_skip;
+            now specialize Graph_Forall with
+              (2 := Graph_s_t)
+              (4 := Skip_instructions_skip) as (? & ?)).
+      specialize Graph_Exists with
+        (2 := Graph_s_t)
+        (3 := Ok_s) as
+        [O_eq_colors| H]; simpl in *...
+      now exists x; split; [| rewrite Sets.count_closed].
+    Qed.
+
     Lemma regular_spec :
       forall
       instructions : Instructions.t,
@@ -1142,31 +1196,19 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           coloring.(Coloring.colors).
     Proof with auto.
       intros instructions Ok_instructions Closed_instructions.
-      pose (s := {|
-        State.coloring := Coloring.empty;
-        State.unused_colors := []
-      |}).
-      assert (Ok_s : State.Ok.t instructions s) by
-        now apply State.Ok.Empty.Ok.
-      specialize Graph.serial with (1 := Ok_instructions) (2 := Ok_s) as (t & Graph_s_t).
-      assert (Ok_t : State.Ok.t [] t).
-        now apply (@Graph.Ok_morphism instructions [] s t); [rewrite app_nil_r..|].
+      specialize (graph_spec Ok_instructions Closed_instructions) as
+        (Ok_s & t & Graph_s_t & Ok_coloring & proper & is_chromatic_number).
       exists t.(State.coloring).
-      change (regular instructions) with (bind (regular_body instructions s.(State.coloring) s.(State.unused_colors)) (fun x => Some (fst x))).
-      specialize regular_body_spec with (1 := Graph_s_t) as ->; simpl.
-      split_left.
-              reflexivity.
-            apply Ok_t.(State.Ok.coloring).
-          1,2 :
-            (intros skip Skip_instructions_skip;
-            now specialize Graph_Forall with
-              (2 := Graph_s_t)
-              (4 := Skip_instructions_skip) as (? & ?)).
-      specialize Graph_Exists with
-        (2 := Graph_s_t)
-        (3 := Ok_s) as
-        [O_eq_colors| H]; simpl in *...
-      now exists instructions; split; [| rewrite Sets.count_closed].
+      split_left...
+          pose (s := {|
+            State.coloring := Coloring.empty;
+            State.unused_colors := []
+          |}).
+          change (regular instructions) with (bind (regular_body instructions s.(State.coloring) s.(State.unused_colors)) (fun x => Some (fst x))).
+          change (Graph.t instructions s t) in Graph_s_t.
+          now rewrite regular_body_spec with (1 := Graph_s_t).
+        apply is_chromatic_number.
+      apply is_chromatic_number.
     Qed.
   End Regular.
 
@@ -1254,8 +1296,148 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Counter.
     Module Opcode := Instructions.Opcode.
 
-    Module M := MSetWeakList.Make Owner.
-    Module Active := Instructions.Active.Sets M.
+    Module State.
+      Record t :
+      Type :=
+      new {
+        active : nat;
+        colors : nat;
+      }.
+
+      Definition from_regular
+        (s : Regular.State.t) :
+        State.t :=
+        {|
+          State.active :=
+            s.(Regular.State.coloring).(Coloring.colors) -
+            length s.(Regular.State.unused_colors);
+          State.colors := s.(Regular.State.coloring).(Coloring.colors)
+        |}.
+
+      Module Transition.
+        Inductive t :
+        Instruction.t ->
+        relation State.t :=
+        | Up_lt :
+          forall
+          (p₀ : Owner.t)
+          (active colors : nat),
+          active < colors ->
+          t
+            (Up p₀)
+            {|
+              State.active := active;
+              State.colors := colors
+            |}
+            {|
+              State.active := S active;
+              State.colors := colors
+            |}
+        | Up_ge :
+          forall
+          (p₀ : Owner.t)
+          (active colors : nat),
+          active >= colors ->
+          t
+            (Up p₀)
+            {|
+              State.active := active;
+              State.colors := colors
+            |}
+            {|
+              State.active := S active;
+              State.colors := S active
+            |}
+        | Down :
+          forall
+          (p₀ : Owner.t)
+          (active colors : nat),
+          t
+            (Down p₀)
+            {|
+              State.active := S active;
+              State.colors := colors
+            |}
+            {|
+              State.active := active;
+              State.colors := colors
+            |}.
+
+        Lemma from_regular_morphism :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ s₁ : Regular.State.t),
+          Instructions.Ok (u₀ :: x₀) ->
+          Regular.State.Ok.t (u₀ :: x₀) s₀ ->
+          Regular.State.Transition.t u₀ s₀ s₁ ->
+          State.Transition.t u₀ (from_regular s₀) (from_regular s₁).
+        Proof with auto with arith.
+          assert (S_minus_m_S_n : forall m n : nat, m > n -> S (m - S n) = m - n).
+            intros m n m_gt_n.
+            now rewrite <- Nat.sub_succ_l, Nat.sub_succ.
+          intros u₀ x₀ s₀ s₁ Ok_x Ok_s₀ Transition_s₀_s₁.
+          specialize (Regular.State.Ok.active_plus_unused Ok_x Ok_s₀) as H.
+          induction Transition_s₀_s₁ as [
+              p₀ coloring|
+            p₀ coloring unused_color unused_colors|
+          p₀ coloring used_color unused_colors p₀_to_used_color];
+          unfold from_regular; simpl.
+              rewrite Nat.sub_0_r; constructor...
+            assert (unused_le_colors : S (length unused_colors) <= coloring.(Coloring.colors)).
+              apply Nat.le_le_add_le with
+                0 (Regular.State.Ok.Sets.count (Up p₀ :: x₀))...
+              rewrite Nat.add_0_r, Nat.add_comm; apply Nat.eq_le_incl...
+            rewrite <- S_minus_m_S_n with (n := length unused_colors);
+              [constructor|]...
+          assert (unused_lt_colors : length unused_colors < coloring.(Coloring.colors)).
+              apply Nat.lt_le_add_lt with
+                0 (Regular.State.Ok.Sets.count (Notations.Down p₀ :: x₀)).
+              rewrite Regular.State.Ok.Sets.count_Down...
+            rewrite Nat.add_0_r, Nat.add_comm; apply Nat.eq_le_incl...
+          now rewrite <- S_minus_m_S_n with (n := length unused_colors);
+            [constructor|].
+        Qed.
+      End Transition.
+
+      Module Graph.
+        Inductive t :
+          Instructions.t ->
+          relation State.t :=
+        | Nil :
+          forall
+          s : State.t,
+          t [] s s
+        | Cons :
+          forall
+          (u₀ : Instruction.t)
+          (x₀ : Instructions.t)
+          (s₀ s₁ u : State.t),
+          Transition.t u₀ s₀ s₁ ->
+          t x₀ s₁ u ->
+          t (u₀ :: x₀) s₀ u.
+
+        Lemma from_regular_morphism :
+          forall
+          (x : Instructions.t)
+          (s t : Regular.State.t),
+          Instructions.Ok x ->
+          Regular.State.Ok.t x s ->
+          Regular.State.Graph.t x s t ->
+          State.Graph.t x (from_regular s) (from_regular t).
+        Proof with eauto with instructions.
+          intros x s t Ok_x Ok_s Graph_s_t.
+          induction Graph_s_t as [
+            s|
+          u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHGraph_s₁_t].
+            constructor.
+          constructor 2 with (from_regular s₁).
+            now apply Transition.from_regular_morphism with x₀.
+          apply IHGraph_s₁_t...
+          now apply Regular.State.Transition.Ok_morphism with (3 := Ok_s).
+        Qed.
+      End Graph.
+    End State.
 
     Fixpoint counter_body
       (x : Instructions.t)
@@ -1283,279 +1465,58 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       option nat :=
       counter_body x O O.
 
-    Module State.
-      Definition t :
-        Type :=
-        Instructions.t *
-        nat *
-        nat.
-
-      Definition instructions
-        (self : t) :
-        Instructions.t :=
-        let '(instructions, _, _) := self in
-        instructions.
-
-      Definition active
-        (self : t) :
-        nat :=
-        let '(_, active, _) := self in
-        active.
-
-      Definition colors
-        (self : t) :
-        nat :=
-        let '(_, _, colors) := self in
-        colors.
-
-      Definition Ok
-        (state : t) :
-        Prop :=
-        (Instructions.Ok (instructions state) /\
-        active state = Active.count (instructions state) /\
-        active state <= colors state).
-    End State.
-
-    Inductive Max (active colors : nat) : nat -> Prop :=
-    | Max_ge :
-      active >= colors ->
-      Max active colors (S active)
-    | Max_lt :
-      active < colors ->
-      Max active colors colors.
-
-    Lemma max_spec :
-      forall
-        active colors : nat,
-        Max active colors (max (S active) colors).
-    Proof.
-      intros active colors.
-      destruct (le_gt_dec colors active) as
-        [active_ge_colers| active_lt_colors].
-        now rewrite Nat.max_l; [constructor| apply le_S].
-      now rewrite Nat.max_r; [constructor|].
-    Qed.
-
-    Inductive Counter :
-      relation State.t :=
-    | Counter_Up :
-      forall
-        (p₀ : Owner.t)
-        (x₀ : Instructions.t)
-        (active colors colors' : nat),
-        Max active colors colors' ->
-        Counter
-          (x₀, S active, colors')
-          (Up p₀ :: x₀, active, colors)
-    | Counter_Down :
-      forall
-        (p₀ : Owner.t)
-        (x₀ : Instructions.t)
-        (active colors : nat),
-        Counter
-          (x₀, active, colors)
-          (Down p₀ :: x₀, S active, colors).
-
-    Add Parametric Morphism : State.instructions with signature
-      Counter --> Tail (A := Instruction.t) as instructions_morphism.
-    Proof.
-      intros v₀ v₁ Counter_v₁_v₀.
-      induction Counter_v₁_v₀ as
-        [p₀ x₀ active₀ colors₀ colors₁ Ok_colors₁| p₀ x₀ active₀ colors₀];
-        constructor.
-    Qed.
-
-    Add Parametric Morphism : (fun state => State.colors state) with signature
-      Counter --> le as colors_morphism.
-    Proof with auto with arith.
-      intros v₀ v₁ Counter_v₁_v₀.
-      induction Counter_v₁_v₀ as
-        [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀];
-        simpl;
-        [destruct Max_colors₁|]...
-    Qed.
-
-    Add Parametric Morphism : State.Ok with signature
-      Counter --> impl as Ok_morphism.
-    Proof with auto with arith instructions.
-      intros v₀ v₁
-        [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀]
-        (Ok_instructions₀ & Ok_active₀ & Ok_colors₀).
-        apply Instructions.Ok.cons_Up_iff in Ok_instructions₀ as
-          (Active_p₀_x₀ & Ok_x₀).
-        split_left...
-          simpl in *; rewrite <- Active.count_Up with p₀ x₀...
-        destruct Max_colors₁...
-      apply Instructions.Ok.cons_Down_iff in Ok_instructions₀ as
-          (Absent_p₀_x₀ & Ok_x₀).
-      split_left...
-      simpl in *; rewrite
-        <- Nat.succ_inj_wd,
-        <- Active.count_Down with (p₀ := p₀)...
-    Qed.
-
-    Definition Graph :=
-      clos_refl_trans_n1 _ Counter.
-
     Lemma counter_body_spec :
       forall
-        (instructions : Instructions.t)
-        (active : nat)
-        (colors : nat),
-        OptionSpec
-          (fun colors' : nat =>
-            exists
-              active' : nat ,
-              Graph
-                ([], active', colors')
-                (instructions, active, colors))
-          (exists
-            (p₀' : Owner.t)
-            (x₀' : Instructions.t)
-            (colors' : nat),
-            Graph
-              (Down p₀' :: x₀', O, colors')
-              (instructions, active, colors))
-          (counter_body instructions active colors).
+      (x : Instructions.t)
+      (s t : State.t),
+      State.Graph.t x s t ->
+      counter_body x s.(State.active) s.(State.colors) =
+      Some t.(State.colors).
     Proof.
-      induction instructions as [| [[|] p₀] x₀ IHx₀]; intros active colors.
-          constructor; exists active; constructor.
-        specialize IHx₀ with (S active) (max (S active) colors).
-        specialize max_spec with active colors as Max_active_colors.
-        assert (H : Counter (x₀, S active, Init.Nat.max (S active) colors) (Up p₀ :: x₀, active, colors)) by
-          now constructor.
-        apply OptionSpec_map with (3 := IHx₀).
-          intros colors' (active' & graph).
-          now exists active';
-            constructor 2 with (x₀, S active, Init.Nat.max (S active) colors).
-        intros (p₀' & x₀' & colors' & graph).
-        now exists p₀', x₀', colors';
-          constructor 2 with (x₀, S active, max (S active) colors).
-      simpl.
-      destruct active as [| pred_active].
-        constructor.
-        exists p₀, x₀, colors; constructor.
-      specialize IHx₀ with pred_active colors.
-      assert (H : Counter (x₀, pred_active, colors) (Down p₀ :: x₀, S pred_active, colors)) by
-        now constructor.
-      apply OptionSpec_map with (3 := IHx₀).
-        intros colors' (active' & graph).
-        now exists active';
-          constructor 2 with (x₀, pred_active, colors).
-      intros (p₀' & x₀' & colors' & graph).
-      now exists p₀', x₀', colors';
-        constructor 2 with (x₀, pred_active, colors).
-    Qed.
-
-    Lemma Graph_invariant :
-      forall
-        state' state : State.t,
-        Graph state' state ->
-        State.Ok state ->
-          State.Ok state' /\
-          (State.instructions state' = [] ->
-          (State.colors state <= State.colors state' /\
-          Skip.Forall
-            (fun instructions : Instructions.t =>
-            Active.count instructions <= State.colors state')
-            (State.instructions state)) /\
-          (State.colors state' = State.colors state \/
-          Skip.Exists
-            (fun instructions : Instructions.t =>
-            Active.count instructions = State.colors state')
-            (State.instructions state))).
-    Proof with auto with arith.
-      intros u v.
-      induction 1 as [| v₁ v₀ Counter_v₁_v₀ R_u_v₁ IHv₁];
-        intros Ok_v₀.
-        split; [| intros ->]...
-        split;
-          [split; [| apply Skip.Forall.nil]| left]...
-      assert (Ok_v₁ : State.Ok v₁) by
-        now rewrite Counter_v₁_v₀.
-      split; [apply IHv₁| intros instructions'_eq_nil]...
-      specialize IHv₁ with (1 := Ok_v₁) as (_ & IHv₁);
-        specialize IHv₁ with (1 := instructions'_eq_nil)
-        as ((colors_v₁_le_u & active_v₁_le_u) & IHv₁).
-      destruct
-        Ok_v₀ as (Ok_instructions₀ & Ok_active₀ & Ok_colors₀),
-        Ok_v₁ as (Ok_instructions₁ & Ok_active₁ & Ok_colors₁).
-      split.
-        split.
-          now rewrite <- Counter_v₁_v₀.
-        intros instructions.
-        assert (
-          exists w z,
-            State.instructions v₀ = w :: z /\
-            State.instructions v₁ = z)
-          as (w & z & H₀ & H₁).
-          enough (Tail (State.instructions v₀) (State.instructions v₁))
-            as (w & z)
-            by now exists w, z.
-          now apply instructions_morphism.
-        rewrite H₀, H₁ in *; intros Skip_v₀_instructions.
-        apply Skip.cons_iff in Skip_v₀_instructions as [->| Suffix_tail].
-          rewrite <- Ok_active₀.
-          transitivity (State.colors v₀); [assumption|].
-          now transitivity (State.colors v₁);
-            [rewrite Counter_v₁_v₀|].
-        now apply active_v₁_le_u.
-      destruct IHv₁ as
-        [u_eq_v₁| (instructions & Skip_instructions_v₁ & u_eq_instructions)];
-        [| right].
-        enough (State.colors v₁ = State.colors v₀ \/ State.colors v₁ = State.active v₁)
-          as [<-| H];
-          [left| right|]...
-          now exists (State.instructions v₁); split;
-            [rewrite Counter_v₁_v₀| rewrite H, Ok_active₁ in u_eq_v₁].
-        destruct Counter_v₁_v₀ as
-          [p₀ x₀ active₀ colors₀ colors₁ Max_colors₁| p₀ x₀ active₀ colors₀];
-          simpl in *;
-          [destruct Max_colors₁|]...
-      now exists instructions; split;
-        [rewrite <- Counter_v₁_v₀|].
-    Qed.
+      intros x s t Graph_s_t.
+      induction Graph_s_t as [
+        s|
+      u₀ x₀ s₀ s₁ t Transition_s₀_s₁ Graph_s₁_t IHGraph_s₁_t].
+        reflexivity.
+      induction Transition_s₀_s₁ as [
+          p₀ active colors active_lt_colors|
+        p₀ active colors active_ge_colors|
+      p₀ active colors]; [
+        change (counter_body x₀ (S active) (max (S active) colors) = Some t.(State.colors))..|
+      assumption].
+        now rewrite max_r.
+      now rewrite max_l; [| apply le_S].
+    Defined.
 
     Lemma counter_spec :
       forall
-        instructions : Instructions.t,
-        Instructions.Ok instructions ->
-        Instructions.Closed instructions ->
-        OptionSpec
-          (fun colors' : nat =>
-            Skip.Forall
-              (fun instructions' : Instructions.t =>
-              Active.count instructions' <= colors')
-              instructions /\
-            Skip.Exists
-              (fun instructions' : Instructions.t =>
-              Active.count instructions' = colors')
-              instructions)
-          False
-          (counter instructions).
+      instructions : Instructions.t,
+      Instructions.Ok instructions ->
+      Instructions.Closed instructions ->
+      exists
+      colors : nat,
+      counter instructions = Some colors /\
+      Skip.Forall
+        (fun skip : Instructions.t =>
+        Regular.State.Ok.Sets.count skip <= colors)
+        instructions /\
+      Skip.Exists
+        (fun skip : Instructions.t =>
+        Regular.State.Ok.Sets.count skip = colors)
+        instructions.
     Proof with auto with arith.
       intros x Ok_x Closed_x.
-      assert (Ok_state : State.Ok (x, 0, 0)).
-        split_left;
-          [| symmetry; apply Active.count_closed|]...
-      specialize counter_body_spec with x 0 0 as spec.
-      apply OptionSpec_map with (3 := spec).
-        intros colors' (active' & graph).
-        specialize Graph_invariant with (1 := graph) (2 := Ok_state) as
-          (_ & H).
-        specialize H with (1 := eq_refl) as (H_Forall & H_Exists).
-        split; [apply H_Forall|].
-        destruct H_Exists as
-          [H_Exists| H_Exists];
-          simpl in *...
-        exists x; split; [reflexivity| rewrite Active.count_closed]...
-      intros (p₀ & x₀ & colors & graph).
-      absurd (State.Ok (Down p₀ :: x₀, 0, colors)).
-        intros (Ok_instructions' & Ok_active' & _);
-          contradict Ok_active'.
-        change (O <> Active.count (Down p₀ :: x₀)).
-        rewrite Active.count_Down with p₀ x₀...
-      apply Graph_invariant with (1 := graph) (2 := Ok_state).
+      pose (s := {| Regular.State.coloring := Coloring.empty; Regular.State.unused_colors := []|}).
+      specialize (Regular.graph_spec Ok_x Closed_x) as
+        (Ok_s & t & Graph_s_t & Ok_coloring & _ & is_chromatic_number).
+      exists t.(Regular.State.coloring).(Coloring.colors).
+      split_left.
+          change (counter_body x (State.from_regular s).(State.active) (State.from_regular s).(State.colors) = Some (State.from_regular t).(State.colors)).
+          rewrite counter_body_spec with (t := State.from_regular t).
+            reflexivity.
+          now apply State.Graph.from_regular_morphism.
+        apply is_chromatic_number.
+      apply is_chromatic_number.
     Qed.
   End Counter.
 
