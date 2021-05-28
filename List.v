@@ -880,8 +880,7 @@ Module Type NthAOn (E : DecidableType).
 
   Section Specification.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -912,8 +911,7 @@ Module FromNth (E : DecidableType) <: NthAOn E.
 
   Section Properties.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -945,8 +943,7 @@ End FromNth.
 Module NthAFactsOn (E : DecidableType) (Import NthA : NthAOn E).
   Section Properties.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -1073,8 +1070,7 @@ Module Type RNthAOn (E : DecidableType).
 
   Section Specification.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -1104,8 +1100,7 @@ Module FromNthA (E : DecidableType) (NthA : NthAOn E) <: RNthAOn E.
 
   Section Properties.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -1157,8 +1152,7 @@ End RFromNth.
 Module RNthAFactsOn (E : DecidableType) (Import RNthA : RNthAOn E).
   Section Properties.
     Variables
-      (v : E.t)
-      (u₀ : E.t)
+      (v u₀ : E.t)
       (x₀ : list E.t)
       (n : nat).
 
@@ -1274,5 +1268,23 @@ Module RNthAFactsOn (E : DecidableType) (Import RNthA : RNthAOn E).
     intros v v' v_eq_v' x x' x_eq_x' n.
     rewrite <- 2!RFromNth_iff; unfold RFromNth.t.
     now rewrite v_eq_v', eqlistA_length with (1 := x_eq_x'), x_eq_x'.
+  Qed.
+
+  Lemma cons_iff :
+    forall
+    (v u₀ : E.t)
+    (x₀ : list E.t)
+    (n : nat),
+    t v (u₀ :: x₀) n <->
+    n = length x₀ /\ E.eq v u₀ \/
+    t v x₀ n.
+  Proof.
+    intros v u₀ x₀ n.
+    enough (H : t v x₀ n -> n <> length x₀).
+      specialize Nat.eq_dec with n (length x₀) as [->| n_neq_x₀];
+      [rewrite cons_eq_iff| rewrite cons_neq_iff];
+      firstorder.
+    intros n_to_v.
+    now apply Nat.lt_neq, n_lt_x_iff; exists v.
   Qed.
 End RNthAFactsOn.
