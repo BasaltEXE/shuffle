@@ -498,8 +498,10 @@ Module NthError.
     Qed.
 
     Lemma pointwise_eq :
-        (forall n : nat, nth_error x n = nth_error y n) ->
-        x = y.
+      (forall
+      n : nat,
+      nth_error x n = nth_error y n) ->
+      x = y.
     Proof.
       revert y.
       induction x as [| u₀ x₀]; intros [| v₀ y₀] x_eq_y.
@@ -510,7 +512,46 @@ Module NthError.
         now specialize x_eq_y with 0 as [=].
       now specialize IHx₀ with (1 := fun n => x_eq_y (S n)).
     Qed.
+
+    Lemma app_lt :
+      n < length x ->
+      nth_error (x ++ y) n = nth_error x n.
+    Proof with auto with arith.
+      revert y n; induction x as [| u₀ x₀ IHx₀]; intros y n n_lt_x.
+        contradict n_lt_x...
+      destruct n as [| n']; [| apply IHx₀]...
+    Qed.
+
+    Lemma app_ge :
+      n >= length x ->
+      nth_error (x ++ y) n = nth_error y (n - length x).
+    Proof with auto with arith.
+      revert y n; induction x as [| u₀ x₀ IHx₀]; intros y n n_ge_x.
+        now rewrite PeanoNat.Nat.sub_0_r.
+      destruct n as [| n'].
+        contradict n_ge_x; unfold ge; simpl...
+      apply IHx₀...
+    Qed.
   End Misc.
+
+  Lemma nth_error_rev :
+    forall
+    (A : Type)
+    (x : list A)
+    (n : nat),
+    n < length x ->
+    nth_error (rev x) n = nth_error x (length x - S n).
+  Proof.
+    induction x as [| u₀ x₀ IHx₀]; intros n n_lt_x.
+      contradict n_lt_x; auto with arith.
+    simpl in *; apply le_S_n, Nat.lt_eq_cases in n_lt_x as [n_lt_x₀| ->].
+      rewrite app_lt by now rewrite rev_length.
+      replace (length x₀ - n) with (S (length x₀ - S n)) by
+      now apply Minus.minus_Sn_m.
+      now rewrite IHx₀.
+    rewrite app_ge; rewrite rev_length;
+    [rewrite PeanoNat.Nat.sub_diag|]; constructor.
+  Qed.
 End NthError.
 
 Module Replace.
