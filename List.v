@@ -1288,3 +1288,143 @@ Module RNthAFactsOn (E : DecidableType) (Import RNthA : RNthAOn E).
     now apply Nat.lt_neq, n_lt_x_iff; exists v.
   Qed.
 End RNthAFactsOn.
+
+Module LocallySorted.
+  Section Properties.
+    Variables
+      (A : Type)
+      (R : A -> A -> Prop)
+      (u₀ u₁ : A)
+      (x₁ : list A).
+
+    Lemma nil_iff :
+      LocallySorted R [] <->
+      True.
+    Proof.
+      split; constructor.
+    Qed.
+
+    Lemma cons1_iff :
+      LocallySorted R [u₀] <->
+      True.
+    Proof.
+      split; constructor.
+    Qed.
+
+    Lemma consn_iff :
+      LocallySorted R (u₀ :: u₁ :: x₁) <->
+      R u₀ u₁ /\
+      LocallySorted R (u₁ :: x₁).
+    Proof.
+      split.
+        now inversion_clear 1 as [| | ? ? ? LSorted_x₀ R_u₀_u₁].
+      now intros (R_u₀_u₁ & LSorted_x₀); constructor.
+    Qed.
+  End Properties.
+End LocallySorted.
+
+Module HdRel.
+  Section HdRel.
+    Variables
+      (A : Type)
+      (R : A -> A -> Prop).
+
+    Section Properties.
+      Variables
+        (v u₀ : A)
+        (x₀ y : list A).
+
+      Lemma nil_iff :
+        HdRel R v [] <->
+        True.
+      Proof.
+        split; constructor.
+      Qed.
+
+      Lemma cons_iff :
+        HdRel R v (u₀ :: x₀) <->
+        R v u₀.
+      Proof.
+        split.
+          now inversion_clear 1.
+        now intros R_v_u₀; constructor.
+      Qed.
+    End Properties.
+
+    Lemma app :
+      forall
+      (w v : A)
+      (x y : list A),
+      HdRel R w (x ++ v :: y) <->
+      HdRel R w (x ++ [v]).
+    Proof.
+      intros w v x y.
+      now destruct x as [| u₀ x₀];
+      simpl; rewrite 2!HdRel.cons_iff.
+    Qed.
+  End HdRel.
+End HdRel.
+
+Module Sorted.
+  Section Properties.
+    Variables
+      (A : Type)
+      (R : A -> A -> Prop)
+      (u₀ : A)
+      (x₀ : list A).
+
+    Lemma nil_iff :
+      Sorted R [] <->
+      True.
+    Proof.
+      split; constructor.
+    Qed.
+
+    Lemma cons_iff :
+      Sorted R (u₀ :: x₀) <->
+      HdRel R u₀ x₀ /\
+      Sorted R x₀.
+    Proof.
+      split.
+        now inversion_clear 1; constructor.
+      now intros (HdRel_u₀_x₀ & Sorted_x₀); constructor.
+    Qed.
+  End Properties.
+
+  Section Misc.
+    Variables
+      (A : Type)
+      (R : A -> A -> Prop).
+
+    Lemma app :
+      forall
+      (v : A)
+      (y x : list A),
+      Sorted R (x ++ v :: y) <->
+      Sorted R x /\
+      HdRel (flip R) v (rev x) /\
+      Sorted R (v :: y).
+    Proof.
+      induction x as [| u₀ x₀ IHx₀].
+        rewrite nil_iff, HdRel.nil_iff; tauto.
+      simpl; rewrite 2!cons_iff, IHx₀.
+      enough (HdRel R u₀ (x₀ ++ v :: y) /\ HdRel (flip R) v (rev x₀)
+      <-> HdRel R u₀ x₀ /\ HdRel (flip R) v (rev x₀ ++ [u₀])) by tauto.
+      destruct x₀ as [| u₁ x₁]; simpl; rewrite 2!HdRel.cons_iff.
+        rewrite 2!HdRel.nil_iff; tauto.
+      now rewrite <- app_assoc, <- HdRel.app with (y := [u₀]).
+    Qed.
+
+    Lemma rev :
+      forall
+      x : list A,
+      Sorted R (rev x) <->
+      Sorted (flip R) x.
+    Proof.
+      induction x as [| u₀ x₀ IHx₀].
+        now rewrite 2!nil_iff.
+      simpl; rewrite app, rev_involutive, IHx₀, 2!cons_iff, HdRel.nil_iff, nil_iff;
+      tauto.
+    Qed.
+  End Misc.
+End Sorted.
