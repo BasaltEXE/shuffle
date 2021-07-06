@@ -1,317 +1,316 @@
 Set Implicit Arguments.
 
-Require Import Coq.Structures.Equalities.
-Require Import Coq.Structures.Orders.
+Require Import
+  Coq.Structures.OrdersFacts
+  Coq.Structures.GenericMinMax
+  Coq.Program.Program.
 
-Require Import Coq.Arith.Arith.
-Require Import Coq.Program.Program.
-Require Import Coq.Bool.Bool.
-Require Import Coq.Logic.Decidable.
+Import Coq.Bool.Bool(
+  not_true_iff_false,
+  orb_true_iff,
+  andb_true_iff,
+  andb_false_iff).
 
-Module Type Lt := Typ <+ HasLt.
-Module Type HasLtDec (Import E : Lt).
-  Parameter lt_dec : forall x y : t, {lt x y} + {~ lt x y}.
-End HasLtDec.
+Require Import
+  Shuffle.Misc
+  Shuffle.Orders.
 
-Module Type Le := Typ <+ HasLe.
-Module Type HasLeDec (Import E : Le).
-  Parameter le_dec : forall x y : t, {le x y} + {~ le x y}.
-End HasLeDec.
+Module Type IntervalType :=
+  StrOrder <+
+  HasLe <+
+  LeIsLtEq <+
+  IsPartialOrder <+
+  HasBoolOrdFuns <+
+  BoolOrdSpecs <+
+  HasPartialCompare.
 
-Module Type IsPartialOrder (Import E:EqLe).
-  Declare Instance le_preorder : PreOrder le.
-  Declare Instance le_compat : Proper (eq==>eq==>iff) le.
-End IsPartialOrder.
-Module Type PartialOrder := EqualityType <+ HasLe <+ IsPartialOrder.
+Module Interval
+  (O : OrderedTypeFull)
+  (F : HasBoolOrdFuns' O)
+  (S : BoolOrdSpecs O F)
+  (M : HasMinMax O) <:
+  IntervalType.
 
-Module Type IntervalType.
-  Include EqLtLe.
-  Include IsEq <+ IsStrOrder <+ IsPartialOrder.
-  Include HasEqDec <+ HasLtDec <+ HasLeDec.
-  Include LeIsLtEq.
+  Module Facts :=
+    O <+ OrderedTypeFullFacts O.
+  Module MinMaxProperties :=
+    GenericMinMax.MinMaxProperties O M.
+  Module BoolOrderFacts.
+    Include OrdersFacts.BoolOrderFacts O O F Facts S.
+  End BoolOrderFacts.
 
-  Include HasBoolOrdFuns.
-  Include BoolOrdSpecs.
-End IntervalType.
+  Record Interval :
+    Type := {
+      left_endpoint : O.t;
+      right_endpoint : O.t;
+      ok : O.le left_endpoint right_endpoint;
+    }.
 
-Module Interval <: IntervalType.
-  Import PeanoNat Peano_dec Compare_dec.
+  Definition t :
+    Type :=
+    Interval.
 
-  Arguments Nat.le_trans [n] [m] [p].
-  Arguments leb_complete [m] [n].
+  Definition eq
+    (self other : t) :
+    Prop :=
+    O.eq self.(left_endpoint) other.(left_endpoint) /\
+    O.eq self.(right_endpoint) other.(right_endpoint).
 
-  Definition t : Type :=
-    {(left, right) : nat * nat | left <= right}.
-
-  Program Definition left_endpoint (self : t) : nat :=
-    fst self.
-
-  Program Definition right_endpoint (self : t) : nat :=
-    snd self.
-
-  Definition ok (self : t) : left_endpoint self <= right_endpoint self :=
-    let 'exist _ (_, _) x_le_y := self in x_le_y.
-
-  Include HasUsualEq.
-  Include UsualIsEq.
-
-  Lemma eq_spec : forall self other : t,
-    eq self other <->
-    left_endpoint self = left_endpoint other /\
-    right_endpoint self = right_endpoint other.
-  Proof.
-    intros self other.
-    destruct self as [(self_left & self_right) self_ok], other as [(other_left & other_right) other_ok]; simpl.
-    unfold left_endpoint, right_endpoint; simpl. (* TODO *)
-    split.
-      now inversion 1.
-    intros [eq_left eq_right].
-    revert self_ok.
-    rewrite eq_left, eq_right; intros self_le.
-    now rewrite le_unique with (le_mn1 := self_le) (le_mn2 := other_ok).
+  Instance eq_equiv :
+    Equivalence eq.
+  Proof with Facts.iorder.
+    unfold eq; split.
+        intros x...
+      intros x y x_eq_y...
+    intros x y z x_eq_y y_eq_z...
   Qed.
 
-  Definition eqb (self other : t) : bool :=
-    ((left_endpoint self =? left_endpoint other) && (right_endpoint self =? right_endpoint other)) %bool.
-
-  Lemma eqb_eq : forall self other : t, eqb self other = true <-> eq self other.
+  Add Parametric Morphism : left_endpoint
+    with signature eq ==> O.eq as left_endpoint_compat.
   Proof.
-    intros self other.
-    symmetry.
-    unfold eqb, eq; rewrite Bool.andb_true_iff, ?PeanoNat.Nat.eqb_eq.
-    apply eq_spec.
+    now unfold eq; intros x y x_eq_y.
   Qed.
-  Include HasEqBool2Dec.
 
-  Definition ltb (self other : t) :=
-    right_endpoint self <? left_endpoint other.
-  Definition lt (self other : t) : Prop := right_endpoint self < left_endpoint other.
-  Lemma ltb_lt : forall self other, ltb self other = true <-> lt self other.
+  Add Parametric Morphism : right_endpoint
+    with signature eq ==> O.eq as right_endpoint_compat.
   Proof.
-    intros self other.
-    now unfold ltb; rewrite Nat.ltb_lt.
+    now unfold eq; intros x y x_eq_y.
   Qed.
-  Definition lt_dec : forall x y : t, {lt x y} + {~ lt x y}.
+
+  Definition lt
+    (self other : t) :
+    Prop :=
+    O.lt self.(right_endpoint) other.(left_endpoint).
+
+  Instance lt_strorder :
+    StrictOrder lt.
+  Proof with Facts.iorder.
+    unfold lt; split.
+      intros [x_left x_right Ok_x];
+      change (~ O.lt x_right x_left)...
+    intros [x_left x_right Ok_x] [y_left y_right Ok_y] [z_left z_right Ok_z]...
+  Qed.
+
+  Add Parametric Morphism : lt
+    with signature (eq ==> eq ==>iff) as lt_compat.
+  Proof with Facts.iorder.
+    unfold eq, lt; intros x x' x_eq_x' y y' y_eq_y'...
+  Qed.
+
+  Include GenericPartialOrder.
+
+  Definition eqb
+    (self other : t) :
+    bool :=
+    (F.eqb self.(left_endpoint) other.(left_endpoint) &&
+    F.eqb self.(right_endpoint) other.(right_endpoint))%bool.
+
+  Lemma eqb_eq :
+    forall
+    x y : t,
+    eqb x y = true <->
+    eq x y.
+  Proof.
+    now intros x y; unfold eqb; rewrite andb_true_iff, 2! S.eqb_eq.
+  Qed.
+
+  Lemma eq_dec :
+    forall
+    x y : t,
+    {eq x y} + {~ eq x y}.
   Proof.
     intros x y.
-    destruct (ltb x y) eqn: H; [left| right].
-      now apply ltb_lt.
-    rewrite <- ltb_lt.
-    now rewrite Bool.not_true_iff_false.
+    now destruct (eqb x y) eqn: eqb_x_y; [left| right];
+    rewrite <- eqb_eq, ?not_true_iff_false.
+  Qed.
+
+  Definition ltb
+    (self other : t) :
+    bool :=
+    F.ltb self.(right_endpoint) other.(left_endpoint).
+
+  Lemma ltb_lt :
+    forall
+    x y : t,
+    ltb x y = true <->
+    lt x y.
+  Proof.
+    now intros x y; unfold ltb; rewrite S.ltb_lt.
+  Qed.
+
+  Definition leb
+    (self other : t) :
+    bool :=
+    ltb self other || eqb self other.
+
+  Lemma leb_le :
+    forall
+    x y : t,
+    leb x y = true <->
+    le x y.
+  Proof.
+    now intros x y; unfold leb; rewrite orb_true_iff, ltb_lt, eqb_eq.
+  Qed.
+
+  Definition partial_compare
+    (x y : t) :
+    option comparison :=
+    if ltb x y then Some Lt else
+    if ltb y x then Some Gt else
+    if eqb x y then Some Eq else
+    None.
+
+  Lemma partial_compare_spec :
+    forall
+    x y : t,
+    OptionSpec
+      (CompareSpec (eq x y) (lt x y) (lt y x))
+      (~ eq x y /\ ~ lt x y /\ ~ lt y x)
+      (partial_compare x y).
+  Proof.
+    intros x y; unfold partial_compare.
+    destruct (ltb x y) eqn: ltb_x_y;
+    [| destruct (ltb y x) eqn: ltb_y_x;
+    [| destruct (eqb x y) eqn: eqb_x_y]];
+    rewrite <- ?not_true_iff_false, ?eqb_eq, ?ltb_lt in * |-;
+    now do 2 constructor.
+  Qed.
+
+  Program Definition replace_left_endpoint
+    (self : t)
+    (x : O.t | O.le x self.(right_endpoint)) :
+    t :=
+    {|
+      left_endpoint := x;
+      right_endpoint := self.(right_endpoint);
+    |}.
+
+  Program Definition replace_right_endpoint
+    (self : t)
+    (y : O.t | O.le self.(left_endpoint) y) :
+    t :=
+    {|
+      left_endpoint := self.(left_endpoint);
+      right_endpoint := y;
+    |}.
+
+  Notation Contains
+    self
+    n :=
+    (O.le self.(left_endpoint) n /\ O.le n self.(right_endpoint))
+    (only parsing).
+
+  Add Parametric Morphism : (fun (self : t) (n : O.t) => Contains self n)
+    with signature eq ==> O.eq ==> iff as Contains_compat.
+  Proof.
+    intros self other self_eq_other n m m_eq_n.
+    now rewrite m_eq_n, self_eq_other.
+  Qed.
+
+  Lemma Contains_left_endpoint :
+    forall
+    self : t,
+    Contains self (left_endpoint self).
+  Proof.
+    intros self; split; (reflexivity || apply ok).
+  Qed.
+
+  Lemma Contains_right_endpoint :
+    forall
+    self : t,
+    Contains self (right_endpoint self).
+  Proof.
+    intros self; split; (reflexivity || apply ok).
+  Qed.
+
+  Program Definition contains
+    (self : t)
+    (n : O.t) :
+    {b : bool | Contains self n <-> b = true} :=
+    (F.leb self.(left_endpoint) n && F.leb n self.(right_endpoint))%bool.
+  Next Obligation.
+    now rewrite andb_true_iff, 2!S.leb_le.
   Defined.
 
-  Definition leb (self other : t) :=
-    ((ltb self other) || (eqb self other))%bool.
-  Definition le (self other : t) : Prop := lt self other \/ eq self other.
-  Lemma leb_le : forall self other, leb self other = true <-> le self other.
+  Definition Contains_dec :
+    forall
+    (self : t)
+    (n : O.t),
+    {Contains self n} + {~ Contains self n}.
+  Proof.
+    intros self n.
+    now specialize contains with self n as ([|] & H); [left| right]; rewrite H.
+  Qed.
+
+  Lemma not_Contains_iff :
+    forall
+    (self : t)
+    (n : O.t),
+    ~ Contains self n <->
+    O.lt n self.(left_endpoint) \/ O.lt self.(right_endpoint) n.
+  Proof.
+    intros self n.
+    specialize Facts.le_or_gt with self.(left_endpoint) n as [H| H];
+    Facts.iorder.
+  Qed.
+
+  Lemma iff_Contains_iff :
+    forall
+    self other : t,
+    (forall
+    n : O.t,
+    Contains self n <-> Contains other n) <->
+    eq self other.
   Proof.
     intros self other.
-    unfold leb.
-    now rewrite Bool.orb_true_iff, eqb_eq, ltb_lt.
-  Qed.
-  Definition le_dec : forall x y : t, {le x y} + {~ le x y}.
-  Proof.
-    intros x y.
-    destruct (eq_dec x y) as [x_eq_y| x_neq_y].
-      now left; right.
-    destruct (lt_dec x y) as [x_lt_y| x_nlt_y].
-      now left; left.
-    right.
-    now intros [x_eq_y| x_lt_y].
-  Defined.
-
-  Instance lt_strorder : StrictOrder lt.
-  Proof.
     split.
-      intros [(self_left & self_right) self_le].
-      change (~ self_right < self_left).
-      now apply Nat.nlt_ge.
-    intros [(x_left & x_right) x_le] [(y_left & y_right) y_le] [(z_left & z_right) z_le].
-    unfold lt; simpl.
-    intros x_lt_y y_lt_z.
-    rewrite x_lt_y.
-    now apply Nat.le_lt_trans with y_right.
-  Qed.
-  Instance lt_compat : Proper (eq ==> eq ==> iff) lt.
-  Proof.
-    intros x₁ x₂ -> y₁ y₂ ->.
-    reflexivity.
+      intros H; split; apply antisymmetry;
+      (apply H; split; (reflexivity || apply ok)).
+    now intros (H₁ & H₂) n; rewrite H₁, H₂.
   Qed.
 
-  Instance le_preorder : PreOrder le :=
-    StrictOrder_PreOrder _ _ _.
-  Instance le_partialorder : PartialOrder eq le :=
-    StrictOrder_PartialOrder _ _ _.
-  Instance le_compat : Proper (eq ==> eq ==> iff) le :=
-    PartialOrder_proper le_partialorder.
-
-  Lemma le_lteq : forall self other : t, le self other <-> lt self other \/ eq self other.
-  Proof.
-    reflexivity.
-  Qed.
-
-  Program Definition new (x : nat) (y : nat | x <= y) : t :=
-    (x, y).
-
-  Program Definition replace_left_endpoint (self : t) (x : nat | x <= left_endpoint self) : t * {left : nat | left = left_endpoint self} :=
-    ((x, right_endpoint self), left_endpoint self).
-  Next Obligation.
-    pose (ok self).
-    now transitivity (left_endpoint self).
-  Defined.
-
-  Program Definition replace_right_endpoint (self : t) (y : nat | right_endpoint self <= y) : t * {right : nat | right = right_endpoint self} :=
-    ((left_endpoint self, y), right_endpoint self).
-  Next Obligation.
-    pose (ok self).
-    now transitivity (right_endpoint self).
-  Defined.
-
-  Definition In : nat -> t -> Prop :=
-    fun n interval => left_endpoint interval <= n <= right_endpoint interval.
-
-  Add Parametric Morphism : In with signature Logic.eq ==> eq ==> iff as In_compat.
-  Proof.
-    intros n self other eq.
-    unfold In.
-    now apply eq_spec in eq as (-> & ->).
-  Qed.
-
-  Lemma In_left_endpoint : forall self : t, In (left_endpoint self) self.
-  Proof.
-    firstorder using ok.
-  Qed.
-
-  Lemma In_right_endpoint : forall self : t, In (right_endpoint self) self.
-  Proof.
-    firstorder using ok.
-  Qed.
-
-  Lemma eq_iff_In : forall self other : t, eq self other <-> (forall n : nat, In n self <-> In n other).
-  Proof.
-    intros self other.
-    rewrite eq_spec.
-    split.
-      unfold In.
-      now intros [-> ->] n.
-    intros In_iff.
-    assert (In_left_self : In (left_endpoint other) self) by apply In_iff, In_left_endpoint.
-    assert (In_right_self : In (right_endpoint other) self) by apply In_iff, In_right_endpoint.
-    assert (In_left_other : In (left_endpoint self) other) by apply In_iff, In_left_endpoint.
-    assert (In_right_other : In (right_endpoint self) other) by apply In_iff, In_right_endpoint.
-    split; apply Nat.le_antisymm; firstorder.
-  Qed.
-
-  Lemma not_In_iff : forall (n : nat) (interval : t), ~ In n interval <-> left_endpoint interval > n \/ n > right_endpoint interval.
-  Proof.
-    intros n interval.
-    unfold In, gt.
-    rewrite ?Nat.lt_nge.
-    split; intros H.
-      apply not_and in H.
-        assumption.
-      unfold decidable.
-      destruct (Compare_dec.le_dec (left_endpoint interval) n) as [?| ?]; [left| right]; assumption.
-    destruct H as [H| H]; easy.
-  Qed.
-
-  Definition In_dec : forall (n : nat) (interval : t), {In n interval} + {~ In n interval}.
-  Proof.
-    intros n interval.
-    destruct (le_lt_dec (left_endpoint interval) n) as [left_le_n| left_gt_n].
-      destruct (le_lt_dec n (right_endpoint interval)) as [n_le_right| n_gt_right].
-        now left.
-      right; firstorder.
-      apply not_In_iff.
-      firstorder.
-    right; apply not_In_iff.
-    firstorder.
-  Defined.
-
-  Program Definition contains (self : t) (n : nat) : {b : bool | In n self <-> b = true} :=
-    ((left_endpoint self <=? n) && (n <=? right_endpoint self)).
-  Next Obligation.
-    unfold In.
-    now rewrite Bool.andb_true_iff, ?Nat.leb_le.
-  Defined.
-
-  Lemma and_In_iff : forall self other n, In n self /\ In n other <-> max (left_endpoint self) (left_endpoint other) <= n <= min (right_endpoint self) (right_endpoint other).
-  Proof.
-    intros self other n.
-    unfold In.
-    rewrite Nat.max_lub_iff, ?Nat.min_glb_iff.
-    firstorder.
-  Qed.
-
-  Lemma intersection_test : forall self other : t, BoolSpec
-    (max (left_endpoint self) (left_endpoint other) <= min (right_endpoint self) (right_endpoint other))
-    (max (left_endpoint self) (left_endpoint other) > min (right_endpoint self) (right_endpoint other))
-    (negb (ltb self other) && negb (ltb other self)).
-  Proof.
-    intros self other.
-    assert (true_gt : negb (ltb self other) && negb (ltb other self) = false <-> max (left_endpoint self) (left_endpoint other) > min (right_endpoint self) (right_endpoint other)).
-      pose (Ok_self := ok self).
-      pose (Ok_other := ok other).
-      rewrite <- negb_orb, negb_false_iff, orb_true_iff, ?ltb_lt.
-      unfold gt.
-      rewrite Nat.max_lt_iff, 2!Nat.min_lt_iff.
-      firstorder.
-        absurd (left_endpoint self < left_endpoint self).
-          apply Nat.lt_irrefl.
-        now apply Nat.le_lt_trans with (right_endpoint self).
-      absurd (right_endpoint other < right_endpoint other).
-        apply Nat.lt_irrefl.
-      now apply Nat.lt_le_trans with (left_endpoint other).
-    assert (false_le : negb (ltb self other) && negb (ltb other self) = true <-> max (left_endpoint self) (left_endpoint other) <= min (right_endpoint self) (right_endpoint other)).
-      rewrite Nat.le_ngt, <- not_false_iff_true.
-      firstorder.
-    destruct (negb (ltb self other) && negb (ltb other self)) eqn: e; [left| right].
-      now apply false_le.
-    now apply true_gt.
-  Qed.
-
-  Inductive OptionSpec (A : Type) (P : A -> Prop) (Q : Prop) : option A -> Prop :=
-  | OptionSpecSome : forall a : A, P a -> OptionSpec P Q (Some a)
-  | OptionSpecNone : Q -> OptionSpec P Q None.
-
-  Lemma BoolSpec_true : forall (P Q : Prop) (b : bool), b = true -> BoolSpec P Q b -> P.
-    intros P Q b ->.
-    now inversion 1.
-  Qed.
-
-  Lemma BoolSpec_false : forall (P Q : Prop) (b : bool), b = false -> BoolSpec P Q b -> Q.
-    intros P Q b ->.
-    now inversion 1.
-  Qed.
-
-  Definition  intersection_spec (self other : t) : option (nat * nat) -> Prop := OptionSpec
-    (fun interval : nat * nat => let (left, right) := interval in left <= right /\ forall n : nat, left <= n <= right <-> In n self /\ In n other)
-    (forall n : nat, ~ In n self \/ ~ In n other).
-
-  Program Definition intersection (self other : t) : {interval : option (nat * nat) | intersection_spec self other interval} :=
+  Program Definition intersection
+    (self other : t) :
+    {result : option t |
+      OptionSpec
+        (fun interval : t =>
+        forall n : O.t,
+        Contains interval n <->
+        Contains self n /\ Contains other n)
+        (forall n : O.t,
+        ~ Contains self n \/ ~ Contains other n)
+        result} :=
     if dec (negb (ltb self other) && negb (ltb other self))%bool then
-    Some (max (left_endpoint self) (left_endpoint other), min (right_endpoint self) (right_endpoint other)) else
+    Some {|
+      left_endpoint := M.max self.(left_endpoint) other.(left_endpoint);
+      right_endpoint := M.min self.(right_endpoint) other.(right_endpoint);
+    |} else
     None.
   Next Obligation.
-    pose (Ok_self := ok self).
-    pose (Ok_other := ok other).
-    assert (Nat.max (left_endpoint self) (left_endpoint other) <= Nat.min (right_endpoint self) (right_endpoint other)).
-      now eapply BoolSpec_true, intersection_test.
-    constructor.
-    split.
-      assumption.
-    intros n.
-    now rewrite and_In_iff.
+    pose (Ok_self := self.(ok)); pose (Ok_other := other.(ok)).
+    enough (O.le (left_endpoint other) (right_endpoint self) /\
+    O.le (left_endpoint self) (right_endpoint other)) by
+      (rewrite MinMaxProperties.max_lub_iff, 2!MinMaxProperties.min_glb_iff;
+      Facts.iorder).
+    now rewrite <- !S.leb_le, 2!BoolOrderFacts.leb_antisym,
+      <- andb_true_iff.
   Defined.
   Next Obligation.
-    constructor.
-    intros n.
-    assert (Nat.max (left_endpoint self) (left_endpoint other) > Nat.min (right_endpoint self) (right_endpoint other)).
-      now eapply BoolSpec_false, intersection_test.
-    enough (~ (In n self /\ In n other)).
-      firstorder using In_dec.
-    rewrite and_In_iff.
-    apply Nat.nle_gt in H; contradict H.
-    now transitivity n.
+    constructor; intros n; simpl.
+    enough (O.le (left_endpoint other) (right_endpoint self) /\
+    O.le (left_endpoint self) (right_endpoint other)) by
+      (rewrite MinMaxProperties.max_lub_iff, MinMaxProperties.min_glb_iff;
+      tauto).
+    now rewrite <- !S.leb_le, 2!BoolOrderFacts.leb_antisym,
+      <- andb_true_iff.
+  Defined.
+  Next Obligation.
+    constructor; intros n.
+    assert (O.lt self.(right_endpoint) other.(left_endpoint) \/ O.lt other.(right_endpoint) self.(left_endpoint)) as H.
+      now rewrite <- 2!BoolOrderFacts.leb_gt, 2!BoolOrderFacts.leb_antisym,
+        <- andb_false_iff.
+    enough (~ (Contains self n /\ Contains other n)) as H'.
+      specialize Contains_dec with self n; tauto.
+    intros (Contains_self_n & Contains_other_n); Facts.iorder.
   Defined.
 End Interval.
