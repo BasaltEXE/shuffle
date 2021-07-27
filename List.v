@@ -912,7 +912,9 @@ Module ForNth2.
 End ForNth2.
 Export ForNth2(ForNth2).
 
-Module Type NthAOn (E : DecidableType).
+Module Type NthAOn
+  (E : DecidableType).
+
   Parameter t :
     E.t ->
     list E.t ->
@@ -925,21 +927,24 @@ Module Type NthAOn (E : DecidableType).
       (x₀ : list E.t)
       (n : nat).
 
-    Parameter nil_iff :
+    Axiom nil_iff :
       t v [] n <->
       False.
 
-    Parameter cons_O_iff :
+    Axiom cons_O_iff :
       t v (u₀ :: x₀) O <->
       E.eq v u₀.
 
-    Parameter cons_S_iff :
+    Axiom cons_S_iff :
       t v (u₀ :: x₀) (S n) <->
       t v x₀ n.
   End Specification.
 End NthAOn.
 
-Module FromNth (E : DecidableType) <: NthAOn E.
+Module FromNth
+  (E : DecidableType) <:
+  NthAOn E.
+
   Definition t
     (v : E.t)
     (x : list E.t)
@@ -981,7 +986,10 @@ Module FromNth (E : DecidableType) <: NthAOn E.
   End Properties.
 End FromNth.
 
-Module NthAFactsOn (E : DecidableType) (Import NthA : NthAOn E).
+Module NthAFactsOn
+  (E : DecidableType)
+  (Import NthA : NthAOn E).
+
   Section Properties.
     Variables
       (v u₀ : E.t)
@@ -1071,7 +1079,8 @@ Module NthAFactsOn (E : DecidableType) (Import NthA : NthAOn E).
     now exists n'; apply cons_S_inv with u₀.
   Qed.
 
-  Module FromNth := FromNth E.
+  Module FromNth :=
+    FromNth E.
 
   Lemma FromNth_iff :
     forall
@@ -1102,7 +1111,9 @@ Module NthAFactsOn (E : DecidableType) (Import NthA : NthAOn E).
   Qed.
 End NthAFactsOn.
 
-Module Type RNthAOn (E : DecidableType).
+Module Type RNthAOn
+  (E : DecidableType).
+
   Parameter t :
     E.t ->
     list E.t ->
@@ -1115,22 +1126,26 @@ Module Type RNthAOn (E : DecidableType).
       (x₀ : list E.t)
       (n : nat).
 
-    Parameter nil_iff :
+    Axiom nil_iff :
       t v [] n <->
       False.
 
-    Parameter cons_eq_iff :
+    Axiom cons_eq_iff :
       t v (u₀ :: x₀) (length x₀) <->
       E.eq v u₀.
 
-    Parameter cons_neq_iff :
+    Axiom cons_neq_iff :
       n <> length x₀ ->
       t v (u₀ :: x₀) n <->
       t v x₀ n.
   End Specification.
 End RNthAOn.
 
-Module FromNthA (E : DecidableType) (NthA : NthAOn E) <: RNthAOn E.
+Module FromNthA
+  (E : DecidableType)
+  (NthA : NthAOn E) <:
+  RNthAOn E.
+
   Definition t
     (v : E.t)
     (x : list E.t)
@@ -1184,13 +1199,22 @@ Module FromNthA (E : DecidableType) (NthA : NthAOn E) <: RNthAOn E.
   End Properties.
 End FromNthA.
 
-Module RFromNth (E : DecidableType) <: RNthAOn E.
-  Module FromNth := FromNth E.
-  Module FromNthA := FromNthA E FromNth.
+Module RFromNth
+  (E : DecidableType) <:
+  RNthAOn E.
+
+  Module FromNth :=
+    FromNth E.
+  Module FromNthA :=
+    FromNthA E FromNth.
+
   Include FromNthA.
 End RFromNth.
 
-Module RNthAFactsOn (E : DecidableType) (Import RNthA : RNthAOn E).
+Module RNthAFactsOn
+  (E : DecidableType)
+  (Import RNthA : RNthAOn E).
+
   Section Properties.
     Variables
       (v u₀ : E.t)
@@ -1244,8 +1268,10 @@ Module RNthAFactsOn (E : DecidableType) (Import RNthA : RNthAOn E).
   End Hints.
   Import Hints.
 
-  Module RFromNth := RFromNth E.
-  Module FromNth_Facts := NthAFactsOn E RFromNth.FromNth.
+  Module RFromNth :=
+    RFromNth E.
+  Module FromNth_Facts :=
+    NthAFactsOn E RFromNth.FromNth.
 
   Lemma RFromNth_iff :
     forall
