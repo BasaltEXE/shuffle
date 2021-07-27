@@ -912,6 +912,316 @@ Module ForNth2.
 End ForNth2.
 Export ForNth2(ForNth2).
 
+Module Type EqAOn
+  (E : EqualityType).
+
+  Parameter eq :
+    list E.t ->
+    list E.t ->
+    Prop.
+
+  Section Specification.
+    Variables
+      (u₀ : E.t)
+      (x₀ : list E.t)
+      (v₀ : E.t)
+      (y₀ : list E.t).
+
+    Axiom eq_nil_nil_iff :
+      eq [] [] <->
+      True.
+
+    Axiom eq_nil_cons_iff :
+      eq [] (v₀ :: y₀) <->
+      False.
+
+    Axiom eq_cons_nil_iff :
+      eq (u₀ :: x₀) [] <->
+      False.
+
+    Axiom eq_cons_cons_iff :
+      eq (u₀ :: x₀) (v₀ :: y₀) <->
+      E.eq u₀ v₀ /\ eq x₀ y₀.
+  End Specification.
+End EqAOn.
+
+Module FromEqListA
+  (E : EqualityType) <:
+  EqAOn E.
+
+  Definition eq :
+    list E.t ->
+    list E.t ->
+    Prop :=
+    eqlistA E.eq.
+
+  Section Specification.
+    Variables
+      (u₀ : E.t)
+      (x₀ : list E.t)
+      (v₀ : E.t)
+      (y₀ : list E.t).
+
+    Lemma eq_nil_nil_iff :
+      eq [] [] <->
+      True.
+    Proof.
+      split; constructor.
+    Qed.
+
+    Lemma eq_nil_cons_iff :
+      eq [] (v₀ :: y₀) <->
+      False.
+    Proof.
+      split; [inversion 1| easy].
+    Qed.
+
+    Lemma eq_cons_nil_iff :
+      eq (u₀ :: x₀) [] <->
+      False.
+    Proof.
+      split; [easy| inversion 1].
+    Qed.
+
+    Lemma eq_cons_cons_iff :
+      eq (u₀ :: x₀) (v₀ :: y₀) <->
+      E.eq u₀ v₀ /\ eq x₀ y₀.
+    Proof.
+      split.
+        inversion_clear 1 as [| ? ? ? ? u₀_eq_v₀ x₀_eq_y₀]; now split.
+      intros (u₀_eq_v₀ & x₀_eq_y₀); now constructor.
+    Qed.
+  End Specification.
+End FromEqListA.
+
+Module EqAFactsOn
+  (E : EqualityType)
+  (Import EqA : EqAOn E).
+
+  Module EqListA :=
+    FromEqListA E.
+
+  Lemma eq_altdef :
+    forall
+    x y : list E.t,
+    eq x y <->
+    EqListA.eq x y.
+  Proof.
+    induction x as [| u₀ x₀ IHx₀]; intros [| v₀ y₀].
+          now rewrite eq_nil_nil_iff, EqListA.eq_nil_nil_iff.
+        now rewrite eq_nil_cons_iff, EqListA.eq_nil_cons_iff.
+      now rewrite eq_cons_nil_iff, EqListA.eq_cons_nil_iff.
+    now rewrite eq_cons_cons_iff, EqListA.eq_cons_cons_iff, IHx₀.
+  Qed.
+
+  Instance eq_equiv :
+    Equivalence eq.
+  Proof.
+    pose (equiv := eqlistA_equiv E.eq_equiv).
+    constructor.
+        intros x; now setoid_rewrite eq_altdef.
+      intros x y; now setoid_rewrite eq_altdef.
+    intros x y z; now setoid_rewrite eq_altdef; transitivity y.
+  Qed.
+
+  Add Parametric Morphism : (@cons E.t) with
+    signature (E.eq ==> eq ==> eq) as cons_morphism.
+  Proof.
+    intros u u' u_eq_u' x x' x_eq_x'.
+    now rewrite eq_cons_cons_iff.
+  Qed.
+
+  Add Parametric Morphism : (@app E.t) with
+    signature (eq ==> eq ==> eq) as app_morphism.
+  Proof.
+    intros x x' x_eq_x' y y' y_eq_y'.
+    rewrite eq_altdef in x_eq_x', y_eq_y' |- *.
+    now rewrite x_eq_x', y_eq_y'.
+  Qed.
+
+  Add Parametric Morphism : (@length E.t) with
+    signature (eq ==> Logic.eq) as length_morphism.
+  Proof.
+    intros x x' x_eq_x'.
+    rewrite eq_altdef in x_eq_x'; apply eqlistA_length with (1 := x_eq_x').
+  Qed.
+
+  Lemma eq_app_app_iff :
+    forall
+    y y' x x' : list E.t,
+    length x = length x' \/ length y = length y' ->
+    eq (x ++ y) (x' ++ y') <->
+    eq x x' /\ eq y y'.
+  Proof.
+    intros y y' x.
+    enough (G :
+      forall
+      x' : list E.t,
+      length x = length x' ->
+      eq (x ++ y) (x' ++ y') ->
+      eq x x' /\ eq y y').
+      intros x' H.
+      split.
+        intros e; enough (length x = length x') by (now apply G).
+        destruct H as [x_eq_x'| y_eq_y']; [assumption|].
+          apply plus_reg_l with (length y); rewrite y_eq_y' at 2.
+          setoid_rewrite Nat.add_comm; setoid_rewrite <- app_length.
+          now apply length_morphism.
+      now intros (-> & ->).
+    induction x as [| u₀ x₀]; intros [| u₀' x₀'] [=] e.
+      enough (eq [] []) by tauto.
+      now apply eq_nil_nil_iff.
+    apply eq_cons_cons_iff in e as (u₀_eq_u₀' & e);
+    specialize IHx₀ with (1 := H0) (2 := e) as (x₀_eq_x₀' & y_eq_y');
+    change (eq (x₀ ++ y) (x₀' ++ y')) in e.
+    now rewrite eq_cons_cons_iff.
+  Qed.
+
+  Lemma app_eq_nil :
+    forall
+    x y : list E.t,
+    eq (x ++ y) [] ->
+    eq x [] /\ eq y [].
+  Proof.
+    intros x y e.
+    apply eq_app_app_iff; [| assumption].
+    enough (length x = 0 /\ length y = 0) by tauto.
+    rewrite <- Nat.eq_add_0, <- app_length.
+    apply length_morphism with (1 := e).
+  Qed.
+
+  Lemma app_inv_head:
+    forall
+    x y y' : list E.t,
+    eq (x ++ y) (x ++ y') ->
+    eq y y'.
+  Proof.
+    now intros x y y'; apply eq_app_app_iff; left.
+  Qed.
+
+  Lemma app_inv_tail :
+    forall
+    x x' y : list E.t,
+    eq (x ++ y) (x' ++ y) ->
+    eq x x'.
+  Proof.
+    now intros y x x'; apply eq_app_app_iff; right.
+  Qed.
+End EqAFactsOn.
+
+Module Type LeAOn
+  (E : EqualityType)
+  (EqA : EqAOn E).
+
+  Parameter le :
+    list E.t ->
+    list E.t ->
+    Prop.
+
+  Axiom le_iff :
+    forall
+    x y : list E.t,
+    le x y <->
+    EqA.eq x y \/
+    exists
+    (v₀ : E.t)
+    (y₀ : list E.t),
+    y = v₀ :: y₀ /\
+    le x y₀.
+End LeAOn.
+
+Module FromLeListA
+  (E : EqualityType)
+  (EqA : EqAOn E) <:
+  LeAOn E EqA.
+
+  Definition le
+    (x y : list E.t) :
+    Prop :=
+    exists
+    x' : list E.t,
+    EqA.eq (x' ++ x) y.
+
+  Lemma le_iff :
+    forall
+    x y : list E.t,
+    le x y <->
+    EqA.eq x y \/
+    exists
+    (v₀ : E.t)
+    (y₀ : list E.t),
+    y = v₀ :: y₀ /\
+    le x y₀.
+  Proof.
+    intros x y.
+    split.
+      intros ([| u₀' x₀'] & e); [now left| right].
+      destruct y as [| v₀ y₀]; [now apply EqA.eq_cons_nil_iff in e|];
+      apply EqA.eq_cons_cons_iff in e as (u₀'_eq_v₀ & e);
+      change (EqA.eq (x₀' ++ x) y₀) in e.
+        now exists v₀, y₀; split; [| exists x₀'].
+    intros [x_eq_y| (v₀ & y₀ & -> & x' & e)].
+      now exists [].
+    now exists (v₀ :: x'); apply EqA.eq_cons_cons_iff.
+  Qed.
+End FromLeListA.
+
+Module LeAFactsOn
+  (E : EqualityType)
+  (EqA : EqAOn E)
+  (Import LeA : LeAOn E EqA).
+
+  Module EqA_Facts :=
+    EqAFactsOn E EqA.
+
+  Module LeListA :=
+    FromLeListA E EqA.
+
+  Lemma le_altdef :
+    forall
+    x y : list E.t,
+    le x y <->
+    LeListA.le x y.
+  Proof.
+    intros x; induction y as [| v₀ y₀ IHy₀]; rewrite le_iff, LeListA.le_iff.
+      enough (forall (v₀ : E.t) y₀, [] <> v₀ :: y₀);
+      [firstorder| intros v₀ y₀ [=]].
+    now split; (intros [e| (v₀' & y₀' & [= -> ->] & x_le_y₀')];
+    [left| right; exists v₀', y₀'; split; [| apply IHy₀]]).
+  Qed.
+
+  Instance le_preorder :
+    PreOrder le.
+  Proof.
+    constructor.
+      now intros x; rewrite le_altdef; exists [].
+    intros x y z; setoid_rewrite le_altdef; intros (x' & H) (y' & G).
+    now exists (y' ++ x'); rewrite <- app_assoc, H.
+  Qed.
+
+  Instance le_compat :
+    Proper (EqA.eq ==> EqA.eq ==> iff) le.
+  Proof.
+    intros x x' x_eq_x' y y' y_eq_y'; setoid_rewrite le_altdef.
+    enough (forall z : list E.t, EqA.eq (z ++ x) y <-> EqA.eq (z ++ x') y') by
+      firstorder.
+    now intros z; rewrite x_eq_x', y_eq_y'.
+  Qed.
+
+  Instance le_order :
+    PartialOrder EqA.eq le.
+  Proof.
+    change (forall x y : list E.t, EqA.eq x y <-> le x y /\ le y x);
+    intros x y; split.
+      now intros ->.
+    setoid_rewrite le_altdef; intros ((x' & H) & y' & G).
+    enough (EqA.eq x' [] /\ EqA.eq y' []) as (x'_eq_nil & y'_eq_nil).
+      now rewrite x'_eq_nil in H.
+    enough (I : EqA.eq (x' ++ y') []) by now apply  EqA_Facts.app_eq_nil.
+    apply  EqA_Facts.app_inv_tail with y; now rewrite <- app_assoc, G.
+  Qed.
+End LeAFactsOn.
+
 Module Type NthAOn
   (E : DecidableType).
 
