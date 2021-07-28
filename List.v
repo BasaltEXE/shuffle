@@ -1001,6 +1001,24 @@ Module EqAFactsOn
   Module EqListA :=
     FromEqListA E.
 
+  Lemma eq_nil :
+    eq [] [].
+  Proof.
+    now apply eq_nil_nil_iff.
+  Qed.
+
+  Lemma eq_cons :
+    forall
+    (u₀ v₀ : E.t)
+    (x₀ y₀ : list E.t),
+    E.eq u₀ v₀ ->
+    eq x₀ y₀ ->
+    eq (u₀ :: x₀) (v₀ :: y₀).
+  Proof.
+    intros u₀ v₀ x₀ y₀ u₀_eq_v₀ x₀_eq_y₀.
+    now apply eq_cons_cons_iff.
+  Qed.
+
   Lemma eq_altdef :
     forall
     x y : list E.t,
@@ -1111,7 +1129,7 @@ End EqAFactsOn.
 
 Module Type LeAOn
   (E : EqualityType)
-  (EqA : EqAOn E).
+  (Import EqA : EqAOn E).
 
   Parameter le :
     list E.t ->
@@ -1122,7 +1140,7 @@ Module Type LeAOn
     forall
     x y : list E.t,
     le x y <->
-    EqA.eq x y \/
+    eq x y \/
     exists
     (v₀ : E.t)
     (y₀ : list E.t),
@@ -1132,7 +1150,7 @@ End LeAOn.
 
 Module FromLeListA
   (E : EqualityType)
-  (EqA : EqAOn E) <:
+  (Import EqA : EqAOn E) <:
   LeAOn E EqA.
 
   Definition le
@@ -1140,13 +1158,13 @@ Module FromLeListA
     Prop :=
     exists
     x' : list E.t,
-    EqA.eq (x' ++ x) y.
+    eq (x' ++ x) y.
 
   Lemma le_iff :
     forall
     x y : list E.t,
     le x y <->
-    EqA.eq x y \/
+    eq x y \/
     exists
     (v₀ : E.t)
     (y₀ : list E.t),
@@ -1156,19 +1174,19 @@ Module FromLeListA
     intros x y.
     split.
       intros ([| u₀' x₀'] & e); [now left| right].
-      destruct y as [| v₀ y₀]; [now apply EqA.eq_cons_nil_iff in e|];
-      apply EqA.eq_cons_cons_iff in e as (u₀'_eq_v₀ & e);
-      change (EqA.eq (x₀' ++ x) y₀) in e.
+      destruct y as [| v₀ y₀]; [now apply eq_cons_nil_iff in e|];
+      apply eq_cons_cons_iff in e as (u₀'_eq_v₀ & e);
+      change (eq (x₀' ++ x) y₀) in e.
         now exists v₀, y₀; split; [| exists x₀'].
     intros [x_eq_y| (v₀ & y₀ & -> & x' & e)].
       now exists [].
-    now exists (v₀ :: x'); apply EqA.eq_cons_cons_iff.
+    now exists (v₀ :: x'); apply eq_cons_cons_iff.
   Qed.
 End FromLeListA.
 
 Module LeAFactsOn
   (E : EqualityType)
-  (EqA : EqAOn E)
+  (Import EqA : EqAOn E)
   (Import LeA : LeAOn E EqA).
 
   Module EqA_Facts :=
@@ -1176,6 +1194,26 @@ Module LeAFactsOn
 
   Module LeListA :=
     FromLeListA E EqA.
+
+  Lemma le_eq :
+    forall
+    x y : list E.t,
+    eq x y ->
+    le x y.
+  Proof.
+    intros x y x_eq_y; now apply le_iff; left.
+  Qed.
+
+  Lemma le_cons :
+    forall
+    (x : list E.t)
+    (v₀ : E.t)
+    (y₀ : list E.t),
+    le x y₀ ->
+    le x (v₀ :: y₀).
+  Proof.
+    intros x v₀ y₀ x_le_y₀; now apply le_iff; right; exists v₀, y₀.
+  Qed.
 
   Lemma le_altdef :
     forall
@@ -1200,24 +1238,24 @@ Module LeAFactsOn
   Qed.
 
   Instance le_compat :
-    Proper (EqA.eq ==> EqA.eq ==> iff) le.
+    Proper (eq ==> eq ==> iff) le.
   Proof.
     intros x x' x_eq_x' y y' y_eq_y'; setoid_rewrite le_altdef.
-    enough (forall z : list E.t, EqA.eq (z ++ x) y <-> EqA.eq (z ++ x') y') by
+    enough (forall z : list E.t, eq (z ++ x) y <-> eq (z ++ x') y') by
       firstorder.
     now intros z; rewrite x_eq_x', y_eq_y'.
   Qed.
 
   Instance le_order :
-    PartialOrder EqA.eq le.
+    PartialOrder eq le.
   Proof.
-    change (forall x y : list E.t, EqA.eq x y <-> le x y /\ le y x);
+    change (forall x y : list E.t, eq x y <-> le x y /\ le y x);
     intros x y; split.
       now intros ->.
     setoid_rewrite le_altdef; intros ((x' & H) & y' & G).
-    enough (EqA.eq x' [] /\ EqA.eq y' []) as (x'_eq_nil & y'_eq_nil).
+    enough (eq x' [] /\ eq y' []) as (x'_eq_nil & y'_eq_nil).
       now rewrite x'_eq_nil in H.
-    enough (I : EqA.eq (x' ++ y') []) by now apply  EqA_Facts.app_eq_nil.
+    enough (I : eq (x' ++ y') []) by now apply  EqA_Facts.app_eq_nil.
     apply  EqA_Facts.app_inv_tail with y; now rewrite <- app_assoc, G.
   Qed.
 End LeAFactsOn.
