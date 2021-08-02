@@ -3,7 +3,9 @@ Set Implicit Arguments.
 Require Import
   Coq.Arith.Arith
   Coq.Structures.Equalities
-  Coq.Lists.SetoidList.
+  Coq.Lists.SetoidList
+  Lia.
+
 Import ListNotations.
 
 Require Import
@@ -461,8 +463,8 @@ Module NthError.
       clear v; split.
         intros [v n_to_v].
         now apply nth_error_Some; rewrite n_to_v.
-      now destruct (nth_error x n) as [v|] eqn: nth;
-        [exists v| apply None_ge, Lt.le_not_lt in nth].
+      intros n_lt_x%nth_error_Some.
+      now destruct (nth_error x n) as [v|]; [exists v|].
     Qed.
 
     Lemma Some_lt :
@@ -516,21 +518,15 @@ Module NthError.
     Lemma app_lt :
       n < length x ->
       nth_error (x ++ y) n = nth_error x n.
-    Proof with auto with arith.
-      revert y n; induction x as [| u₀ x₀ IHx₀]; intros y n n_lt_x.
-        contradict n_lt_x...
-      destruct n as [| n']; [| apply IHx₀]...
+    Proof.
+      apply nth_error_app1.
     Qed.
 
     Lemma app_ge :
       n >= length x ->
       nth_error (x ++ y) n = nth_error y (n - length x).
-    Proof with auto with arith.
-      revert y n; induction x as [| u₀ x₀ IHx₀]; intros y n n_ge_x.
-        now rewrite PeanoNat.Nat.sub_0_r.
-      destruct n as [| n'].
-        contradict n_ge_x; unfold ge; simpl...
-      apply IHx₀...
+    Proof.
+      apply nth_error_app2.
     Qed.
   End Misc.
 
@@ -542,15 +538,12 @@ Module NthError.
     n < length x ->
     nth_error (rev x) n = nth_error x (length x - S n).
   Proof.
-    induction x as [| u₀ x₀ IHx₀]; intros n n_lt_x.
+    intros A [| u₀ x₀] n n_lt_x.
       contradict n_lt_x; auto with arith.
-    simpl in *; apply le_S_n, Nat.lt_eq_cases in n_lt_x as [n_lt_x₀| ->].
-      rewrite app_lt by now rewrite rev_length.
-      replace (length x₀ - n) with (S (length x₀ - S n)) by
-      now apply Minus.minus_Sn_m.
-      now rewrite IHx₀.
-    rewrite app_ge; rewrite rev_length;
-    [rewrite PeanoNat.Nat.sub_diag|]; constructor.
+    setoid_rewrite nth_error_nth' with (d := u₀).
+        f_equal; now apply rev_nth.
+      now rewrite rev_length.
+    lia.
   Qed.
 End NthError.
 
