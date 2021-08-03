@@ -1659,15 +1659,19 @@ Module FromNthA
   (NthA : NthAOn E) <:
   RNthAOn E.
 
+  Module EqA :=
+    FromEqListA E.
+  Module NthA_Facts :=
+    NthAFactsOn E EqA NthA.
+
   Definition t
     (v : E.t)
     (x : list E.t)
     (n : nat) :
     Prop :=
-    n < length x /\
-    NthA.t v x (length x - S n).
+    NthA.t v (rev x) n.
 
-  Section Properties.
+  Section Specification.
     Variables
       (v u₀ : E.t)
       (x₀ : list E.t)
@@ -1680,20 +1684,12 @@ Module FromNthA
       now unfold t; rewrite NthA.nil_iff.
     Qed.
 
-    Lemma n_lt_x_iff :
-      n < length (u₀ :: x₀) <->
-      n < length x₀ \/ n = length x₀.
-    Proof.
-      change (length (u₀ :: x₀)) with (S (length x₀)).
-      now rewrite Nat.lt_succ_r, Nat.le_lteq.
-    Qed.
-
     Lemma cons_eq_iff :
       t v (u₀ :: x₀) (length x₀) <->
       E.eq v u₀.
     Proof.
-      unfold t; rewrite Nat.sub_diag, NthA.cons_O_iff.
-      enough (length x₀ < length (u₀ :: x₀)); [tauto| auto with arith].
+      change (NthA.t v (rev x₀ ++ u₀ :: []) (length x₀) <-> E.eq v u₀).
+      now rewrite <- rev_length with E.t x₀, NthA_Facts.middle_iff.
     Qed.
 
     Lemma cons_neq_iff :
@@ -1701,15 +1697,15 @@ Module FromNthA
       t v (u₀ :: x₀) n <->
       t v x₀ n.
     Proof.
-      intros n_neq_x₀; unfold t; rewrite n_lt_x_iff.
-      enough (n < length x₀ -> NthA.t v (u₀ :: x₀) (length (u₀ :: x₀) - S n) <-> NthA.t v x₀ (length x₀ - S n)) by tauto.
-      intros n_lt_x₀.
-      replace (length (u₀ :: x₀) - S n) with (S (length x₀ - S n)).
-        now rewrite NthA.cons_S_iff.
-      simpl; rewrite Nat.sub_succ_r.
-      now apply Nat.succ_pred, Nat.sub_gt.
+      intros n_neq_x₀.
+      change (NthA.t v (rev x₀ ++ [u₀]) n <-> NthA.t v (rev x₀) n);
+      rewrite NthA_Facts.app_iff.
+      enough (n >= length (rev x₀) -> ~ NthA.t v [u₀] (n - length (rev x₀)))
+        by firstorder using NthA_Facts.lt_iff.
+      intros n_ge_x₀; apply NthA_Facts.ge_iff; simpl;
+      rewrite rev_length in n_ge_x₀ |- *; lia.
     Qed.
-  End Properties.
+  End Specification.
 End FromNthA.
 
 Module RFromNth
@@ -1726,9 +1722,10 @@ End RFromNth.
 
 Module RNthAFactsOn
   (E : DecidableType)
+  (EqA : EqAOn E)
   (Import RNthA : RNthAOn E).
 
-  Section Properties.
+  Section Constructors.
     Variables
       (v u₀ : E.t)
       (x₀ : list E.t)
@@ -1769,7 +1766,17 @@ Module RNthAFactsOn
     Proof.
       apply cons_neq_iff.
     Qed.
-  End Properties.
+
+    Lemma cons_iff :
+      t v (u₀ :: x₀) n <->
+      n = length x₀ /\ E.eq v u₀ \/
+      n <> length x₀ /\ t v x₀ n.
+    Proof.
+      specialize Nat.eq_dec with n (length x₀) as [->| n_neq_x₀];
+        [rewrite cons_eq_iff| rewrite cons_neq_iff];
+        firstorder.
+    Qed.
+  End Constructors.
 
   Module Hints.
     #[export]
@@ -1783,8 +1790,8 @@ Module RNthAFactsOn
 
   Module RFromNth :=
     RFromNth E.
-  Module EqA :=
-    FromEqListA E.
+  Module EqA_Facts :=
+    EqAFactsOn E EqA.
   Module FromNth_Facts :=
     NthAFactsOn E EqA RFromNth.FromNth.
 
@@ -1805,70 +1812,141 @@ Module RNthAFactsOn
     now rewrite RFromNth.cons_neq_iff, cons_neq_iff.
   Qed.
 
-  Lemma n_lt_x_iff:
-    forall
-    (x : list E.t)
-    (n : nat),
-    n < length x <->
-    (exists
-    v : E.t,
-    RNthA.t v x n).
-  Proof.
-    intros x n; setoid_rewrite <- RFromNth_iff.
-    enough (n < length x -> exists v : E.t, RFromNth.FromNth.t v x (length x - S n)) by firstorder.
-    intros n_lt_x; apply FromNth_Facts.lt_iff; auto with arith.
-  Qed.
-
-  Lemma InA_iff:
+  Lemma rev_split :
     forall
     (v : E.t)
-    (x : list E.t),
-    InA E.eq v x <->
-    (exists
-    n : nat,
-    RNthA.t v x n).
+    (y z : list E.t),
+    rev (y ++ v :: z) = rev z ++ v :: rev y.
   Proof.
-    intros v x; rewrite FromNth_Facts.InA_iff;
+    intros v y z; now rewrite rev_app_distr; simpl; rewrite <- app_assoc.
+  Qed.
+
+  Ltac rewrite_RFromNth :=
     setoid_rewrite <- RFromNth_iff; unfold RFromNth.t.
-    split.
-      intros (n & n_to_v).
-      assert (n_lt_x : n < length x).
-        now apply FromNth_Facts.lt_iff; exists v.
-      exists (length x - S n); split.
-        apply Nat.sub_lt; auto with arith.
-      enough (length x - S (length x - S n) = n) as -> by assumption.
-      replace (S (length x - S n)) with (length x - n).
-        symmetry; apply Minus.plus_minus.
-        symmetry; apply Nat.sub_add; auto with arith.
-      apply Nat.sub_succ_l with (1 := n_lt_x).
-    now intros (n & n_lt_x & x_minus_n_to_v); exists (length x - S n).
+
+  Add Parametric Morphism : t
+    with signature E.eq ==> EqA.eq ==> eq ==> iff as NthA_morphism.
+  Proof.
+    intros v v' v_eq_v' x x' x_eq_x' n; rewrite_RFromNth.
+    now rewrite v_eq_v', x_eq_x'.
   Qed.
 
-  Add Parametric Morphism : RNthA.t
-    with signature E.eq ==> eqlistA E.eq ==> eq ==> iff as RNthA_morphism.
-  Proof.
-    intros v v' v_eq_v' x x' x_eq_x' n.
-    rewrite <- 2!RFromNth_iff; unfold RFromNth.t.
-    now rewrite v_eq_v', eqlistA_length with (1 := x_eq_x'), x_eq_x'.
-  Qed.
+  Section Properties.
+    Variables
+      (u v : E.t)
+      (x y : list E.t)
+      (n : nat).
 
-  Lemma cons_iff :
-    forall
-    (v u₀ : E.t)
-    (x₀ : list E.t)
-    (n : nat),
-    t v (u₀ :: x₀) n <->
-    n = length x₀ /\ E.eq v u₀ \/
-    t v x₀ n.
-  Proof.
-    intros v u₀ x₀ n.
-    enough (H : t v x₀ n -> n <> length x₀).
-      specialize Nat.eq_dec with n (length x₀) as [->| n_neq_x₀];
-      [rewrite cons_eq_iff| rewrite cons_neq_iff];
-      firstorder.
-    intros n_to_v.
-    now apply Nat.lt_neq, n_lt_x_iff; exists v.
-  Qed.
+    Lemma eq_iff :
+      EqA.eq x y <->
+      (forall
+      (n : nat)
+      (v : E.t),
+      t v x n <->
+      t v y n).
+    Proof.
+      rewrite <- EqA_Facts.eq_rev_rev_iff; rewrite_RFromNth.
+      apply FromNth_Facts.eq_iff.
+    Qed.
+
+    Lemma lt_iff:
+      n < length x <->
+      (exists
+      v : E.t,
+      t v x n).
+    Proof.
+      rewrite_RFromNth; rewrite <- rev_length with E.t x.
+      apply FromNth_Facts.lt_iff.
+    Qed.
+
+    Lemma ge_iff:
+      n >= length x <->
+      (forall
+      v : E.t,
+      ~ t v x n).
+    Proof.
+      rewrite_RFromNth; rewrite <- rev_length with E.t x.
+      apply FromNth_Facts.ge_iff.
+    Qed.
+
+    Lemma InA_iff:
+      InA E.eq v x <->
+      (exists
+      n : nat,
+      t v x n).
+    Proof.
+      clear n.
+      rewrite <- InA_rev; rewrite_RFromNth.
+      apply FromNth_Facts.InA_iff.
+    Qed.
+
+    Lemma middle_iff :
+      t u (x ++ v :: y) (length y) <->
+      E.eq u v.
+    Proof.
+      rewrite_RFromNth; rewrite rev_split, <- rev_length with E.t y.
+      apply FromNth_Facts.middle_iff.
+    Qed.
+
+    Lemma split_iff :
+      (exists
+      y z : list E.t,
+      EqA.eq x (y ++ v :: z) /\
+      length z = n) <->
+      t v x n.
+    Proof.
+      clear y; rewrite_RFromNth; rewrite <- FromNth_Facts.split_iff.
+      assert (H :
+        forall
+        y z : list E.t,
+        rev z ++ v :: rev y = rev (y ++ v :: z)).
+        intros y z; now rewrite rev_app_distr; simpl; rewrite <- app_assoc.
+      split;
+        intros (y & z & e & e'); exists (rev z), (rev y); (split;
+        [rewrite H; apply EqA_Facts.eq_rev_rev_iff| now rewrite rev_length]).
+        assumption.
+      now rewrite rev_involutive.
+    Qed.
+
+    Lemma app_lt :
+      n < length y ->
+      t v (x ++ y) n <-> t v y n.
+    Proof.
+      intros n_lt_y.
+      rewrite_RFromNth; rewrite rev_app_distr, <- rev_length with E.t y in *.
+      now apply FromNth_Facts.app_lt.
+    Qed.
+
+    Lemma app_ge :
+      n >= length y ->
+      t v (x ++ y) n <-> t v x (n - length y).
+    Proof.
+      intros n_ge_y.
+      rewrite_RFromNth; rewrite rev_app_distr, <- rev_length with E.t y in *.
+      now apply FromNth_Facts.app_ge.
+    Qed.
+
+    Lemma app_iff :
+      t v (x ++ y) n <->
+      (n < length y /\ t v y n) \/
+      (n >= length y /\ t v x (n - length y)).
+    Proof.
+      specialize app_lt;
+      specialize app_ge;
+      specialize le_gt_dec with (length y) n;
+      tauto.
+    Qed.
+
+    Lemma rev_iff :
+      n < length x ->
+      t v (rev x) n <->
+      t v x (length x - S n).
+    Proof.
+      intros n_lt_x.
+      rewrite_RFromNth; rewrite <- rev_length with E.t x in *.
+      now apply FromNth_Facts.rev_iff.
+    Qed.
+  End Properties.
 End RNthAFactsOn.
 
 Module LocallySorted.
