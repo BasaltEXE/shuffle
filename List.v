@@ -1022,23 +1022,46 @@ Module EqAFactsOn
   Module EqListA :=
     FromEqListA E.
 
-  Lemma eq_nil :
-    eq [] [].
-  Proof.
-    now apply eq_nil_nil_iff.
-  Qed.
+  Section Constructors.
+    Variables
+      (u₀ v₀ : E.t)
+      (x₀ y₀ : list E.t).
 
-  Lemma eq_cons :
-    forall
-    (u₀ v₀ : E.t)
-    (x₀ y₀ : list E.t),
-    E.eq u₀ v₀ ->
-    eq x₀ y₀ ->
-    eq (u₀ :: x₀) (v₀ :: y₀).
-  Proof.
-    intros u₀ v₀ x₀ y₀ u₀_eq_v₀ x₀_eq_y₀.
-    now apply eq_cons_cons_iff.
-  Qed.
+    Lemma eq_nil_nil :
+      eq [] [].
+    Proof.
+      now apply eq_nil_nil_iff.
+    Qed.
+
+    Lemma eq_nil_cons_inv :
+      ~ eq [] (v₀ :: y₀).
+    Proof.
+      unfold not; apply eq_nil_cons_iff.
+    Qed.
+
+    Lemma eq_cons_nil_inv :
+      ~ eq (u₀ :: x₀) [].
+    Proof.
+      unfold not; apply eq_cons_nil_iff.
+    Qed.
+
+    Lemma eq_cons_cons :
+      E.eq u₀ v₀ ->
+      eq x₀ y₀ ->
+      eq (u₀ :: x₀) (v₀ :: y₀).
+    Proof.
+      intros u₀_eq_v₀ x₀_eq_y₀.
+      now apply eq_cons_cons_iff.
+    Qed.
+
+    Lemma eq_cons_inv :
+      eq (u₀ :: x₀) (v₀ :: y₀) ->
+      E.eq u₀ v₀ /\ eq x₀ y₀.
+    Proof.
+      intros x_eq_y.
+      now apply eq_cons_cons_iff.
+    Qed.
+  End Constructors.
 
   Lemma eq_altdef :
     forall
@@ -1078,11 +1101,20 @@ Module EqAFactsOn
     now rewrite x_eq_x', y_eq_y'.
   Qed.
 
+  Add Parametric Morphism : (@rev E.t) with
+    signature (eq ==> eq) as rev_morphism.
+  Proof.
+    intros x x' x_eq_x'.
+    rewrite eq_altdef in x_eq_x' |- *.
+    now rewrite x_eq_x'.
+  Qed.
+
   Add Parametric Morphism : (@length E.t) with
     signature (eq ==> Logic.eq) as length_morphism.
   Proof.
     intros x x' x_eq_x'.
-    rewrite eq_altdef in x_eq_x'; apply eqlistA_length with (1 := x_eq_x').
+    rewrite eq_altdef in x_eq_x'.
+    apply eqlistA_length with (1 := x_eq_x').
   Qed.
 
   Lemma eq_app_app_iff :
@@ -1116,36 +1148,45 @@ Module EqAFactsOn
     now rewrite eq_cons_cons_iff.
   Qed.
 
-  Lemma app_eq_nil :
-    forall
-    x y : list E.t,
-    eq (x ++ y) [] ->
-    eq x [] /\ eq y [].
-  Proof.
-    intros x y e.
-    apply eq_app_app_iff; [| assumption].
-    enough (length x = 0 /\ length y = 0) by tauto.
-    rewrite <- Nat.eq_add_0, <- app_length.
-    apply length_morphism with (1 := e).
-  Qed.
+  Section Properties.
+    Variables
+      (x x' y y' : list E.t).
 
-  Lemma app_inv_head:
-    forall
-    x y y' : list E.t,
-    eq (x ++ y) (x ++ y') ->
-    eq y y'.
-  Proof.
-    now intros x y y'; apply eq_app_app_iff; left.
-  Qed.
+    Lemma app_eq_nil :
+      eq (x ++ y) [] ->
+      eq x [] /\ eq y [].
+    Proof.
+      intros e.
+      apply eq_app_app_iff; [| assumption].
+      enough (length x = 0 /\ length y = 0) by tauto.
+      rewrite <- Nat.eq_add_0, <- app_length.
+      apply length_morphism with (1 := e).
+    Qed.
 
-  Lemma app_inv_tail :
-    forall
-    x x' y : list E.t,
-    eq (x ++ y) (x' ++ y) ->
-    eq x x'.
-  Proof.
-    now intros y x x'; apply eq_app_app_iff; right.
-  Qed.
+    Lemma app_inv_head:
+      eq (x ++ y) (x ++ y') ->
+      eq y y'.
+    Proof.
+      now apply eq_app_app_iff; left.
+    Qed.
+
+    Lemma app_inv_tail :
+      eq (x ++ y) (x' ++ y) ->
+      eq x x'.
+    Proof.
+      now apply eq_app_app_iff; right.
+    Qed.
+
+    Lemma eq_rev_rev_iff :
+      eq (rev x) (rev y) <->
+      eq x y.
+    Proof.
+      split.
+        intros rev_x_eq_rev_y.
+        setoid_rewrite <- rev_involutive; now rewrite rev_x_eq_rev_y.
+      now intros ->.
+    Qed.
+  End Properties.
 End EqAFactsOn.
 
 Module Type LeAOn
