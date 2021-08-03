@@ -1324,7 +1324,7 @@ Module FromNth
     Nth x n u /\
     E.eq v u.
 
-  Section Properties.
+  Section Specification.
     Variables
       (v u₀ : E.t)
       (x₀ : list E.t)
@@ -1352,14 +1352,21 @@ Module FromNth
     Proof.
       now split; intros (u & n_to_u & v_eq_u); exists u.
     Qed.
-  End Properties.
+  End Specification.
 End FromNth.
 
 Module NthAFactsOn
   (E : DecidableType)
+  (EqA : EqAOn E)
   (Import NthA : NthAOn E).
 
-  Section Properties.
+  Module EqA_Facts :=
+    EqAFactsOn E EqA.
+
+  Module FromNth :=
+    FromNth E.
+
+  Section Constructors.
     Variables
       (v u₀ : E.t)
       (x₀ : list E.t)
@@ -1398,7 +1405,7 @@ Module NthAFactsOn
     Proof.
       apply cons_S_iff.
     Qed.
-  End Properties.
+  End Constructors.
 
   Module Hints.
     #[export]
@@ -1410,47 +1417,6 @@ Module NthAFactsOn
   End Hints.
   Import Hints.
 
-  Lemma n_lt_x_iff:
-    forall
-    (x : list E.t)
-    (n : nat),
-    n < length x <->
-    (exists
-    v : E.t,
-    NthA.t v x n).
-  Proof with firstorder with arith nth relations.
-    induction x as [| u₀ x₀ IHx₀]; intros n.
-      setoid_rewrite nil_iff...
-    destruct n as [| n'].
-      enough ((exists v, t v (u₀ :: x₀) 0) /\ 0 < length (u₀ :: x₀)) as
-        (H₁ & H₂) by tauto.
-      split; [exists u₀| simpl]; auto with arith nth relations.
-    now simpl; setoid_rewrite cons_S_iff; rewrite <- Nat.succ_lt_mono.
-  Qed.
-
-  Lemma InA_iff:
-    forall
-    (v : E.t)
-    (x : list E.t),
-    InA E.eq v x <->
-    (exists
-    n : nat,
-    NthA.t v x n).
-  Proof with firstorder with nth.
-    induction x as [| u₀ x₀ IHx₀].
-      rewrite InA_nil; setoid_rewrite nil_iff...
-    rewrite InA_cons, IHx₀.
-    split.
-      intros [v_eq_u₀| (n & NthA_v_x₀_n)];
-      [exists 0| exists (S n)]...
-    intros ([| n'] & NthA_v_x_n); [left| right].
-      now apply cons_O_inv with x₀.
-    now exists n'; apply cons_S_inv with u₀.
-  Qed.
-
-  Module FromNth :=
-    FromNth E.
-
   Lemma FromNth_iff :
     forall
     (v : E.t)
@@ -1459,25 +1425,162 @@ Module NthAFactsOn
     FromNth.t v x n <->
     t v x n.
   Proof.
-    intros v.
-    induction x as [| u₀ x₀ IHx₀]; intros n.
+    intros v; induction x as [| u₀ x₀ IHx₀]; intros n.
       now rewrite FromNth.nil_iff, nil_iff.
     destruct n as [| n'].
       now rewrite FromNth.cons_O_iff, cons_O_iff.
     now rewrite FromNth.cons_S_iff, cons_S_iff.
   Qed.
 
-  Add Parametric Morphism : NthA.t
-    with signature E.eq ==> eqlistA E.eq ==> eq ==> iff as NthA_morphism.
+  Ltac rewrite_FromNth :=
+    setoid_rewrite <- FromNth_iff; unfold FromNth.t.
+
+  Lemma eq_iff :
+    forall
+    x y : list E.t,
+    EqA.eq x y <->
+    (forall
+    (n : nat)
+    (v : E.t),
+    t v x n <->
+    t v y n).
   Proof.
-    intros v v' v_eq_v' x x' x_eq_x'.
-    induction x_eq_x' as [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'];
-      intros n.
-      now rewrite 2!nil_iff.
-    destruct n as [| n'].
-      now rewrite 2!cons_O_iff, v_eq_v', u₀_eq_u₀'.
-    rewrite 2!cons_S_iff; apply IHx₀_eq_x₀'.
+    induction x as [| u₀ x₀ IHx₀]; intros [| v₀ y₀]; simpl.
+          now rewrite EqA.eq_nil_nil_iff.
+        rewrite EqA.eq_nil_cons_iff; setoid_rewrite NthA.nil_iff.
+        enough (t v₀ (v₀ :: y₀) 0); [firstorder| now apply cons_O].
+      rewrite EqA.eq_cons_nil_iff; setoid_rewrite NthA.nil_iff.
+      enough (t u₀ (u₀ :: x₀) 0); [firstorder| now apply cons_O].
+    rewrite EqA.eq_cons_cons_iff, IHx₀.
+    split.
+      intros (u₀_eq_v₀ & x₀_eq_y₀) [| n] v.
+          now rewrite 2!NthA.cons_O_iff, u₀_eq_v₀.
+      now rewrite 2!NthA.cons_S_iff.
+    intros x_eq_y; split.
+      specialize x_eq_y with 0 u₀; rewrite 2!NthA.cons_O_iff in x_eq_y.
+      now apply x_eq_y.
+    intros n v.
+    specialize x_eq_y with (S n) v; rewrite 2!NthA.cons_S_iff in x_eq_y.
+    apply x_eq_y.
   Qed.
+
+  Add Parametric Morphism : t
+    with signature E.eq ==> EqA.eq ==> eq ==> iff as NthA_morphism.
+  Proof.
+    intros v v' v_eq_v' x x' x_eq_x' n.
+    transitivity (t v x' n).
+      now apply eq_iff.
+    now rewrite_FromNth; setoid_rewrite v_eq_v'.
+  Qed.
+
+  Lemma middle_iff :
+    forall
+    (u v : E.t)
+    (x y : list E.t),
+    t u (x ++ v :: y) (length x) <->
+    E.eq u v.
+  Proof.
+    intros u v x y.
+    rewrite_FromNth; setoid_rewrite NthError.middle.
+    split.
+      now intros (u' & [=->] & u_eq_u').
+    now intros u_eq_v; exists v.
+  Qed.
+
+  Section Properties.
+    Variables
+      (v : E.t)
+      (x y : list E.t)
+      (n : nat).
+
+    Lemma lt_iff :
+      n < length x <->
+      (exists
+      v : E.t,
+      t v x n).
+    Proof.
+      rewrite NthError.lt_iff; rewrite_FromNth.
+      now enough (forall v : E.t, Nth x n v <-> Nth x n v /\ E.eq v v) by
+        firstorder.
+    Qed.
+
+    Lemma ge_iff :
+      n >= length x <->
+      (forall
+      v : E.t,
+      ~ t v x n).
+    Proof.
+      unfold ge; rewrite <- Nat.nlt_ge, lt_iff; firstorder.
+    Qed.
+
+    Lemma InA_iff:
+      InA E.eq v x <->
+      (exists
+      n : nat,
+      t v x n).
+    Proof.
+      rewrite InA_alt; rewrite_FromNth.
+      enough (forall u : E.t, In u x <-> (exists n : nat, Nth x n u))
+        by firstorder.
+      now intros u; rewrite -> NthError.In_iff.
+    Qed.
+
+    Lemma split_iff :
+      (exists
+      y z : list E.t,
+      EqA.eq x (y ++ v :: z) /\
+      length y = n) <->
+      t v x n.
+    Proof.
+      clear y; split.
+        intros (y & z & -> & <-); now apply middle_iff.
+      rewrite_FromNth; intros (u & n_to_u & v_eq_u).
+      apply NthError.split_iff in n_to_u as (y & z & e & y_eq_n).
+      now exists y, z; split; [rewrite e, v_eq_u|].
+    Qed.
+
+    Lemma app_lt :
+      n < length x ->
+      t v (x ++ y) n <-> t v x n.
+    Proof.
+      intros n_lt_x; rewrite_FromNth.
+      enough (forall u : E.t, Nth (x ++ y) n u <-> Nth x n u) by firstorder.
+      intros u; enough (nth_error (x ++ y) n = nth_error x n)
+        as -> by reflexivity.
+      now apply NthError.app_lt.
+    Qed.
+
+    Lemma app_ge :
+      n >= length x ->
+      t v (x ++ y) n <-> t v y (n - length x).
+    Proof.
+      intros n_ge_x; rewrite_FromNth.
+      enough (forall u : E.t, Nth (x ++ y) n u <-> Nth y (n - length x) u) by firstorder.
+      intros u; enough (nth_error (x ++ y) n = nth_error y (n - length x))
+        as -> by reflexivity.
+      now apply NthError.app_ge.
+    Qed.
+
+    Lemma app_iff :
+      t v (x ++ y) n <->
+      (n < length x /\ t v x n) \/
+      (n >= length x /\ t v y (n - length x)).
+    Proof.
+      specialize app_lt;
+      specialize app_ge;
+      specialize le_gt_dec with (length x) n;
+      tauto.
+    Qed.
+
+    Lemma rev_iff :
+      n < length x ->
+      t v (rev x) n <->
+      t v x (length x - S n).
+    Proof.
+      intros n_lt_x.
+      rewrite_FromNth; now setoid_rewrite NthError.rev.
+    Qed.
+  End Properties.
 End NthAFactsOn.
 
 Module Type RNthAOn
@@ -1639,8 +1742,10 @@ Module RNthAFactsOn
 
   Module RFromNth :=
     RFromNth E.
+  Module EqA :=
+    FromEqListA E.
   Module FromNth_Facts :=
-    NthAFactsOn E RFromNth.FromNth.
+    NthAFactsOn E EqA RFromNth.FromNth.
 
   Lemma RFromNth_iff :
     forall
@@ -1670,7 +1775,7 @@ Module RNthAFactsOn
   Proof.
     intros x n; setoid_rewrite <- RFromNth_iff.
     enough (n < length x -> exists v : E.t, RFromNth.FromNth.t v x (length x - S n)) by firstorder.
-    intros n_lt_x; apply FromNth_Facts.n_lt_x_iff; auto with arith.
+    intros n_lt_x; apply FromNth_Facts.lt_iff; auto with arith.
   Qed.
 
   Lemma InA_iff:
@@ -1687,7 +1792,7 @@ Module RNthAFactsOn
     split.
       intros (n & n_to_v).
       assert (n_lt_x : n < length x).
-        now apply FromNth_Facts.n_lt_x_iff; exists v.
+        now apply FromNth_Facts.lt_iff; exists v.
       exists (length x - S n); split.
         apply Nat.sub_lt; auto with arith.
       enough (length x - S (length x - S n) = n) as -> by assumption.
