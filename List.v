@@ -432,39 +432,40 @@ Module NthError.
   Section Properties.
     Variables
       (A : Type)
-      (x : list A)
+      (x y : list A)
       (n : nat)
       (v : A).
 
-    Lemma None_iff :
-      nth_error x n = None <->
-      n >= length x.
+    Lemma ge_iff :
+      n >= length x <->
+      nth_error x n = None.
     Proof.
-      apply nth_error_None.
+      symmetry; apply nth_error_None.
     Qed.
 
     Lemma None_ge :
       nth_error x n = None ->
       n >= length x.
     Proof.
-      apply None_iff.
+      apply ge_iff.
     Qed.
 
     Lemma ge_None :
       n >= length x ->
       nth_error x n = None.
     Proof.
-      apply None_iff.
+      apply ge_iff.
     Qed.
 
-    Lemma Some_iff :
-      (exists v : A, Nth x n v) <-> n < length x.
+    Lemma lt_iff :
+      n < length x <->
+      (exists v : A, nth_error x n = Some v).
     Proof.
       clear v; split.
-        intros [v n_to_v].
-        now apply nth_error_Some; rewrite n_to_v.
-      intros n_lt_x%nth_error_Some.
-      now destruct (nth_error x n) as [v|]; [exists v|].
+        intros n_lt_x%nth_error_Some.
+        now destruct (nth_error x n) as [v|]; [exists v|].
+      intros [v n_to_v].
+      now apply nth_error_Some; rewrite n_to_v.
     Qed.
 
     Lemma Some_lt :
@@ -472,39 +473,55 @@ Module NthError.
       n < length x.
     Proof.
       intros n_to_v.
-      now apply Some_iff; exists v.
+      now apply lt_iff; exists v.
     Qed.
 
     Lemma lt_Some :
       n < length x ->
       exists v : A, Nth x n v.
     Proof.
-      apply Some_iff.
+      apply lt_iff.
     Qed.
-  End Properties.
 
-  Section Misc.
-    Variables
-      (A : Type)
-      (x y : list A)
-      (n : nat).
-
-    Lemma spec :
-      OptionSpec
-        (fun _ => n < length x)
-        (n >= length x)
-        (nth_error x n).
+    Lemma In_iff :
+      (exists n : nat, nth_error x n = Some v) <->
+      In v x.
     Proof.
-      now destruct (nth_error x n) as [v|] eqn: nth; constructor;
-        [apply Some_lt with v| apply None_ge].
+      clear n; split.
+        intros (n & n_to_v); now apply nth_error_In with n.
+      apply In_nth_error.
     Qed.
 
-    Lemma pointwise_eq :
+    Lemma middle :
+      forall
+      x y : list A,
+      nth_error (x ++ v :: y) (length x) = Some v.
+    Proof.
+      clear x y; intros x y.
+      transitivity (Some (nth (length x) (x ++ v :: y) v)).
+        apply nth_error_nth'; rewrite app_length; simpl; lia.
+      f_equal; apply nth_middle.
+    Qed.
+
+    Lemma split_iff :
+      (exists
+      y z : list A,
+      x = y ++ v :: z /\
+      length y = n) <->
+      nth_error x n = Some v.
+    Proof.
+      clear y; split.
+        intros (y & z & -> & <-); apply middle.
+      apply nth_error_split.
+    Qed.
+
+    Lemma eq_iff :
+      x = y <->
       (forall
       n : nat,
-      nth_error x n = nth_error y n) ->
-      x = y.
+      nth_error x n = nth_error y n).
     Proof.
+      split; [now intros ->|].
       revert y.
       induction x as [| u₀ x₀]; intros [| v₀ y₀] x_eq_y.
             reflexivity.
@@ -528,22 +545,33 @@ Module NthError.
     Proof.
       apply nth_error_app2.
     Qed.
-  End Misc.
 
-  Lemma nth_error_rev :
+    Lemma rev :
+      n < length x ->
+      nth_error (rev x) n = nth_error x (length x - S n).
+    Proof.
+      intros n_lt_x; destruct x as [| u₀ x₀].
+        contradict n_lt_x; auto with arith.
+      setoid_rewrite nth_error_nth' with (d := u₀).
+          f_equal; now apply rev_nth.
+        now rewrite rev_length.
+      lia.
+    Qed.
+  End Properties.
+
+  Lemma spec :
     forall
     (A : Type)
-    (x : list A)
+    (x y : list A)
     (n : nat),
-    n < length x ->
-    nth_error (rev x) n = nth_error x (length x - S n).
+    OptionSpec
+      (fun _ => n < length x)
+      (n >= length x)
+      (nth_error x n).
   Proof.
-    intros A [| u₀ x₀] n n_lt_x.
-      contradict n_lt_x; auto with arith.
-    setoid_rewrite nth_error_nth' with (d := u₀).
-        f_equal; now apply rev_nth.
-      now rewrite rev_length.
-    lia.
+    intros.
+    now destruct (nth_error x n) as [v|] eqn: nth; constructor;
+      [apply Some_lt with v| apply None_ge].
   Qed.
 End NthError.
 
@@ -637,7 +665,7 @@ Module Replace.
           now intros [= <-]; (repeat split);
             [auto with arith|..| destruct m as [| m']].
         destruct y as [| v₀ y₀]; intros (n_lt_x & x_eq_y & [= ->] & H).
-        repeat f_equal; apply NthError.pointwise_eq.
+        repeat f_equal; apply NthError.eq_iff.
         intro m; refine (H (S m) _)...
       destruct y as [| v₀ y₀].
         split.
