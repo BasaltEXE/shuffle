@@ -115,7 +115,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Card := Card Key Owner.
 
   Module RNthA := List.RFromNth Card.
-  Module RNthA_Facts := List.RNthAFactsOn Card RNthA.
+  Module EqA := List.FromEqListA Card.
+  Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
   Module State.
     Record t :
@@ -350,6 +351,22 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
     Qed.
 
+    Lemma cons_iff :
+      forall
+      (v u₀ : Card.t)
+      (x₀ : list Card.t)
+      (n : nat),
+      RNthA.t v (u₀ :: x₀) n <->
+      n = Datatypes.length x₀ /\ Card.eq v u₀ \/
+      RNthA.t v x₀ n.
+    Proof.
+      intros v u₀ x₀ n.
+      enough (RNthA.t v x₀ n -> n <> Datatypes.length x₀)
+        by (rewrite RNthA_Facts.cons_iff; tauto).
+      intros n_to_v.
+      now apply PeanoNat.Nat.lt_neq, RNthA_Facts.lt_iff; exists v.
+    Qed.
+
     Lemma talon :
       forall
       (x₀ : list Card.t)
@@ -366,7 +383,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros owner indices owner_to_indices'.
         now apply Ok_s₁.(sorted) with owner.
       intros owner indices offset MapsTo_owner_indices.
-      rewrite RNthA_Facts.cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+      rewrite cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); simpl; tauto.
     Defined.
 
     Lemma assigned_mapsto :
@@ -391,11 +408,11 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           destruct indices₀ as [| index₀ indices₀]; constructor.
             now apply Ok_s₁.(sorted) with p₀.
           rewrite Ok_s₁.(length).
-          apply RNthA_Facts.n_lt_x_iff; exists (Card.Assigned p₀).
+          apply RNthA_Facts.lt_iff; exists (Card.Assigned p₀).
           now apply Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀); left.
         now apply Ok_s₁.(sorted) with owner.
       intros owner indices offset MapsTo_owner_indices;
-      rewrite RNthA_Facts.cons_iff.
+      rewrite cons_iff.
       apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
         (<- & <-)|
       (p₀_neq_owner & MapsTo_owner_indices)].
@@ -426,7 +443,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           constructor.
         now apply Ok_s₁.(sorted) with owner.
       intros owner indices offset MapsTo_owner_indices;
-      rewrite RNthA_Facts.cons_iff.
+      rewrite cons_iff.
       apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
         (p₀_eq_owner & <-)|
       (p₀_neq_owner & MapsTo_owner_indices)].
