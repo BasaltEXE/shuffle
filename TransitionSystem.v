@@ -109,7 +109,7 @@ Module Classes11.
       (A : Type)
       {Eq_A : Eq A}
       {PartialSetoid_A : PartialSetoid A} :
-      Proper eq (@eq A Eq_A).
+      Morphism (@eq A Eq_A).
     Proof.
       intros x x' x_eq_x' y y' y_eq_y'; split.
         intros x_eq_y; now transitivity x; [symmetry| transitivity y].
@@ -199,7 +199,7 @@ Module Classes11.
           Signature_S.(Ok) (u₀ :: x₀) t;
       }.
 
-    Class Morphism
+    Class WeaklyReflectiveHomomorphism
       {L : Type}
       {Eq_L : Eq L}
 
@@ -214,6 +214,8 @@ Module Classes11.
       (h : S -> S') :
       Prop :=
       {
+        Setoid_Morphism :>
+          Morphism h;
         Preserves_Initial :
           forall
           s : S,
@@ -232,25 +234,6 @@ Module Classes11.
           (s : S),
           Signature_S.(Ok) x s ->
           Signature_S'.(Ok) x (h s);
-      }.
-
-    Class Morphism_Weakly
-      {L : Type}
-      {Eq_L : Eq L}
-
-      {S : Type}
-      {Eq_S : Eq S}
-      (Signature_S : Signature L S)
-
-      {S' : Type}
-      {Eq_S' : Eq S'}
-      (Signature_S' : Signature L S')
-
-      (h : S -> S') :
-      Prop :=
-      {
-        Weakly_Morphism :>
-          Morphism Signature_S Signature_S' h;
         Weakly_Initial :
           forall
           s : S,
@@ -270,7 +253,7 @@ Module Classes11.
           Signature_S.(Ok) x s';
       }.
 
-    Program Instance Image_Signature
+    Program Definition Signature_Image
       {L : Type}
       {Eq_L : Eq L}
 
@@ -282,7 +265,7 @@ Module Classes11.
       (Signature_S' : Signature L S')
 
       (h : S -> S')
-      {Morphism_h : Setoid.Morphism h} :
+      {Morphism_h : Morphism h} :
       Signature L S :=
       {|
         Initial s :=
@@ -306,7 +289,7 @@ Module Classes11.
       now apply Morphism_Ok, Morphism_h.
     Qed.
 
-    Instance Weakly_Theory
+    Instance Theory_Image
       {L : Type}
       {Eq_L : Eq L}
       {Reflexive_L : Reflexive (@eq L Eq_L)}
@@ -323,11 +306,8 @@ Module Classes11.
       (Signature_S' : Signature L S')
 
       (h : S -> S')
-      {Morphism_h : Setoid.Morphism h}
-      (Weakly_f : Morphism_Weakly Signature_S Signature_S' h) :
-      Theory
-        Signature_L
-        (Image_Signature Signature_S' h).
+      {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
+      Theory Signature_L (Signature_Image Signature_S' h).
     Proof.
       split; simpl.
         intros x Initial_h_x.
@@ -346,7 +326,7 @@ Module Classes11.
         apply Morphism_Transition with (h s') u₀ (h t').
               assumption.
             reflexivity.
-          now apply Morphism_h.
+          now apply @Setoid_Morphism with (1 := Homomorphism_h).
         now apply Preserves_Transition.
       now apply Preserves_Ok.
     Qed.
@@ -423,7 +403,7 @@ Module Classes11.
           Signature_S.(Ok) (u₀ :: x₀) t;
       }.
 
-    Program Instance to_State
+    Program Definition to_State
       {L : Type}
       {Eq_L : Eq L}
 
@@ -477,7 +457,7 @@ Module Classes11.
       now apply executable.
     Qed.
 
-    Class Morphism
+    Class WeaklyReflectiveHomomorphism
       {L : Type}
       {Eq_L : Eq L}
 
@@ -492,8 +472,10 @@ Module Classes11.
       (h : S -> S') :
       Prop :=
       {
+        Setoid_Morphism :>
+          Morphism h;
         Preserves_init :
-          eq (h Signature_S.(init)) (Signature_S'.(init));
+          eq (h Signature_S.(init)) (Signature_S'.(init)); (* TODO flip *)
         Preserves_f :
           forall
           (s : S)
@@ -505,25 +487,6 @@ Module Classes11.
           (s : S),
           Signature_S.(Ok) x s ->
           Signature_S'.(Ok) x (h s);
-      }.
-
-    Class Morphism_Weakly
-      {L : Type}
-      {Eq_L : Eq L}
-
-      {S : Type}
-      {Eq_S : Eq S}
-      (Signature_S : Signature L S)
-
-      {S' : Type}
-      {Eq_S' : Eq S'}
-      (Signature_S' : Signature L S')
-
-      (h : S -> S') :
-      Prop :=
-      {
-        Weakly_Morphism :>
-          Morphism Signature_S Signature_S' h;
         Weakly_Ok :
           forall
           (x : list L)
@@ -535,7 +498,7 @@ Module Classes11.
           Signature_S.(Ok) x s';
       }.
 
-    Instance to_State_Morphism
+    Definition to_State_Morphism
       {L : Type}
       {Eq_L : Eq L}
 
@@ -551,44 +514,22 @@ Module Classes11.
 
       (h : S -> S')
       {Morphism_h : Setoid.Morphism h}
-      (Homomorphism_h : Morphism Signature_S Signature_S' h) :
-      State.Morphism (to_State Signature_S) (to_State Signature_S') h.
+      (Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h) :
+      State.WeaklyReflectiveHomomorphism (to_State Signature_S) (to_State Signature_S') h.
     Proof.
       split; simpl.
-          intros s s_eq_init.
-          transitivity (h Signature_S.(init)).
-            now apply Morphism_h.
-          apply Preserves_init.
-        intros s u t Transition_s_u_t.
-        change (eq (Signature_S.(f) s u) (Some t)) in Transition_s_u_t.
-        change (eq (Signature_S'.(f) (h s) u) (option_map h (Some t))).
-        transitivity (option_map h (Signature_S.(f) s u)).
-          apply Preserves_f.
-        now apply option_map_morphism with (2 := Transition_s_u_t).
-      intros x s; apply Preserves_Ok.
-    Qed.
-
-    Instance to_State_Weakly_Morphism
-      {L : Type}
-      {Eq_L : Eq L}
-
-      {S : Type}
-      {Eq_S : Eq S}
-      {Setoid_S : Setoid S}
-      (Signature_S : Signature L S)
-
-      {S' : Type}
-      {Eq_S' : Eq S'}
-      {Setoid_S' : Setoid S'}
-      (Signature_S' : Signature L S')
-
-      (h : S -> S')
-      {Morphism_h : Setoid.Morphism h}
-      (Weakly_Morphism_h : Morphism_Weakly Signature_S Signature_S' h) :
-      State.Morphism_Weakly (to_State Signature_S) (to_State Signature_S') h.
-    Proof.
-      split; simpl.
-          exact _.
+                exact _.
+              intros s s_eq_init.
+              transitivity (h Signature_S.(init)).
+                now apply @Setoid_Morphism with (1 := Homomorphism_h).
+              apply Preserves_init.
+            intros s u t Transition_s_u_t.
+            change (eq (Signature_S.(f) s u) (Some t)) in Transition_s_u_t.
+            change (eq (Signature_S'.(f) (h s) u) (option_map h (Some t))).
+            transitivity (option_map h (Signature_S.(f) s u)).
+              apply Preserves_f.
+            now apply option_map_morphism with (2 := Transition_s_u_t).
+          intros x s; apply Preserves_Ok.
         intros s h_s_eq_init.
         exists (Signature_S.(init)).
         split.
@@ -597,7 +538,7 @@ Module Classes11.
       intros x s; apply Weakly_Ok.
     Qed.
 
-    Program Instance Image_Signature
+    Program Definition Signature_Image
       {L : Type}
       {Eq_L : Eq L}
 
@@ -612,8 +553,7 @@ Module Classes11.
       (Signature_S' : Signature L S')
 
       (h : S -> S')
-      {Morphism_h : Setoid.Morphism h}
-      {Homomorphism_h : Morphism Signature_S Signature_S' h} :
+      {Morphism_h : Morphism h} :
       Signature L S :=
       {|
         init :=
@@ -624,11 +564,11 @@ Module Classes11.
           Signature_S'.(Ok) x (h s);
       |}.
     Next Obligation.
-      intros l l' l_eq_l' x x' x_eq_x';
+      intros l l' l_eq_l' x x' x_eq_x'.
       now apply Morphism_Ok, Morphism_h.
     Qed.
 
-    Instance Weakly_Theory
+    Instance Theory_Image
       {L : Type}
       {Eq_L : Eq L}
       {Setoid_L : Setoid L}
@@ -647,8 +587,8 @@ Module Classes11.
 
       (h : S -> S')
       {Morphism_h : Setoid.Morphism h}
-      (Weakly_h : Morphism_Weakly Signature_S Signature_S' h) :
-      Theory Signature_L (Image_Signature Signature_S Signature_S' h).
+      (Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h) :
+      Theory Signature_L (Signature_Image Signature_S Signature_S' h).
     Proof.
       split; simpl.
         apply Preserves_Ok, Ok_init.
