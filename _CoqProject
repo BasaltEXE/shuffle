@@ -4,6 +4,7 @@ Misc.v
 Orders.v
 Relations.v
 List.v
+TransitionSystem.v
 Instruction.v
 Coloring.v
 Interval.v
