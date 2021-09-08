@@ -13,7 +13,6 @@ Require Import
   Coq.Classes.RelationClasses
   Coq.Classes.Morphisms.
 
-Module Classes11.
   Module Setoid.
     Class Eq
       (A : Type) :
@@ -146,7 +145,7 @@ Module Classes11.
       }.
   End Label.
 
-  Module State.
+  Module Relational.
     Class Signature
       (L : Type)
       {Eq_L : Eq L}
@@ -281,8 +280,7 @@ Module Classes11.
     Qed.
     Next Obligation.
       intros x x' x_eq_x' u u' u_eq_u' y y' y_eq_y'.
-      apply Morphism_Transition with (2 := u_eq_u');
-      now apply Morphism_h.
+      now apply Morphism_Transition with (2 := u_eq_u'); apply Morphism_h.
     Qed.
     Next Obligation.
       intros l l' l_eq_l' x x' x_eq_x'.
@@ -330,9 +328,9 @@ Module Classes11.
         now apply Preserves_Transition.
       now apply Preserves_Ok.
     Qed.
-  End State.
+  End Relational.
 
-  Module State'.
+  Module Algebraic.
     Add Parametric Morphism
       (A : Type)
       {Eq_A : Eq A} :
@@ -403,7 +401,7 @@ Module Classes11.
           Signature_S.(Ok) (u₀ :: x₀) t;
       }.
 
-    Program Definition to_State
+    Program Definition to_Relational_Signature
       {L : Type}
       {Eq_L : Eq L}
 
@@ -411,13 +409,13 @@ Module Classes11.
       {Eq_S : Eq S}
       {Setoid_S : Setoid S}
       (Signature_S : Signature L S) :
-      State.Signature L S :=
+      Relational.Signature L S :=
       {|
-        State.Initial x :=
+        Relational.Initial x :=
           eq x Signature_S.(init);
-        State.Transition s u t :=
+        Relational.Transition s u t :=
           eq (Signature_S.(f) s u) (Some t);
-        State.Ok :=
+        Relational.Ok :=
           Signature_S.(Ok);
       |}.
     Next Obligation.
@@ -435,7 +433,7 @@ Module Classes11.
       now apply Morphism_f.
     Qed.
 
-    Instance to_State_Theory
+    Instance to_Relational_Theory
       {L : Type}
       {Eq_L : Eq L}
       (Signature_L : Label.Signature L)
@@ -445,7 +443,7 @@ Module Classes11.
       {Setoid_S : Setoid S}
       (Signature_S : Signature L S)
       {Theory_S : Theory Signature_L Signature_S} :
-      State.Theory Signature_L (to_State Signature_S).
+      Relational.Theory Signature_L (to_Relational_Signature Signature_S).
     Proof.
       split.
         intros s s_eq_init.
@@ -498,7 +496,7 @@ Module Classes11.
           Signature_S.(Ok) x s';
       }.
 
-    Definition to_State_Morphism
+    Definition to_Relational_WeaklyReflectiveHomomorphism
       {L : Type}
       {Eq_L : Eq L}
 
@@ -515,7 +513,7 @@ Module Classes11.
       (h : S -> S')
       {Morphism_h : Setoid.Morphism h}
       (Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h) :
-      State.WeaklyReflectiveHomomorphism (to_State Signature_S) (to_State Signature_S') h.
+      Relational.WeaklyReflectiveHomomorphism (to_Relational_Signature Signature_S) (to_Relational_Signature Signature_S') h.
     Proof.
       split; simpl.
                 exact _.
@@ -611,5 +609,4 @@ Module Classes11.
         assumption.
       now apply Preserves_Ok.
     Qed.
-  End State'.
-End Classes11.
+  End Algebraic.
