@@ -50,6 +50,13 @@ Module Setoid.
     Reflexive A | 10 :=
     { }.
 
+  Global Instance Setoid_PartialSetoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {Setoid_A : Setoid A} :
+    PartialSetoid A | 10 :=
+    { }.
+
   Inductive eqoptionA
     (A : Type)
     (R : A -> A -> Prop) :
@@ -79,18 +86,26 @@ Module Setoid.
     intros [x|]; now constructor.
   Qed.
 
+  Instance Option_PartialSetoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {PartialSetoid_A : PartialSetoid A} :
+    PartialSetoid (option A).
+  Proof.
+    split.
+      intros x y [x' y' x_eq_y|]; constructor.
+      now symmetry.
+    intros x y [z|] [x' y' x_eq_y|] y_eq_z; inversion_clear y_eq_z; constructor.
+    now transitivity y'.
+  Qed.
+
   Instance Option_Setoid
     (A : Type)
     {Eq_A : Eq A}
     {Setoid_A : Setoid A} :
     Setoid (option A).
   Proof.
-    split.
-        intros [x|]; now constructor.
-      intros x y [x' y' x_eq_y|]; constructor.
-      now symmetry.
-    intros x y [z|] [x' y' x_eq_y|] y_eq_z; inversion_clear y_eq_z; constructor.
-    now transitivity y'.
+    split; [apply Option_Reflexive| apply Option_PartialSetoid..]; exact _.
   Qed.
 
   Add Parametric Morphism
@@ -131,6 +146,32 @@ Module Setoid.
     intros x; induction x as [| u₀ x₀ IHx₀]; now constructor.
   Qed.
 
+  Instance List_PartialSetoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {PartialSetoid_A : PartialSetoid A} :
+    PartialSetoid (list A).
+  Proof.
+    split.
+      intros x y x_eq_y; induction x_eq_y as [| u₀ v₀ x₀ y₀ IHx₀y₀];
+      now constructor.
+    intros x y z x_eq_y; revert z;
+    induction x_eq_y as [| u₀ v₀ x₀ y₀ u₀_eq_v₀ x₀_eq_y₀ IHx₀_eq_y₀];
+    intros z y_eq_z; [assumption|].
+    destruct z as [| w₀ z₀];
+    inversion_clear y_eq_z as [| ? ? ? ? v₀_eq_w₀ y₀_eq_z₀].
+    now constructor; [transitivity v₀| apply IHx₀_eq_y₀].
+  Qed.
+
+  Instance List_Setoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {Setoid_A : Setoid A} :
+    Setoid (list A).
+  Proof.
+    split; [apply List_Reflexive| apply List_PartialSetoid..]; exact _.
+  Qed.
+
   Instance Proposition_Eq :
     Eq Prop :=
     iff.
@@ -139,6 +180,18 @@ Module Setoid.
     Reflexive Prop.
   Proof.
     unfold Reflexive; exact _.
+  Qed.
+
+  Instance Proposition_PartialSetoid :
+    PartialSetoid Prop.
+  Proof.
+    unfold PartialSetoid; exact _.
+  Qed.
+
+  Instance Proposition_Setoid :
+    Setoid Prop.
+  Proof.
+    unfold Setoid; exact _.
   Qed.
 
   Instance Arrow_Eq
