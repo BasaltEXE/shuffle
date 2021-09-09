@@ -296,6 +296,7 @@ Module Relational.
     (Signature_S' : Signature L S')
 
     (h : S -> S')
+
     {Morphism_h : Morphism h} :
     Signature L S :=
     {|
@@ -322,20 +323,21 @@ Module Relational.
   Instance Theory_Image
     {L : Type}
     {Eq_L : Eq L}
-    {Reflexive_L : Reflexive (@eq L Eq_L)}
     (Signature_L : Label.Signature L)
 
     {S : Type}
     {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
     (Signature_S : Signature L S)
-    {Theory_S : Theory Signature_L Signature_S}
 
     {S' : Type}
     {Eq_S' : Eq S'}
     (Signature_S' : Signature L S')
 
     (h : S -> S')
+
+    {Reflexive_L : Reflexive (@eq L Eq_L)}
+    {Setoid_S : Setoid S}
+    {Theory_S : Theory Signature_L Signature_S}
     {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
     Theory Signature_L (Signature_Image Signature_S' h).
   Proof.
@@ -414,57 +416,6 @@ Module Algebraic.
         Signature_S.(Ok) (u₀ :: x₀) t;
     }.
 
-  Program Definition to_Relational_Signature
-    {L : Type}
-    {Eq_L : Eq L}
-
-    {S : Type}
-    {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
-    (Signature_S : Signature L S) :
-    Relational.Signature L S :=
-    {|
-      Relational.Initial x :=
-        eq x Signature_S.(init);
-      Relational.Transition s u t :=
-        eq (Signature_S.(f) s u) (Some t);
-      Relational.Ok :=
-        Signature_S.(Ok);
-    |}.
-  Next Obligation.
-    now intros x x' ->.
-  Qed.
-  Next Obligation.
-    intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'; rewrite t_eq_t'.
-    split.
-      intros f_s_u_eq_t.
-      now transitivity (Signature_S.(f) s u); [symmetry; apply Morphism_f|].
-    intros f_s'_u'_eq_t'.
-    now transitivity (Signature_S.(f) s' u'); [apply Morphism_f|].
-  Qed.
-
-  Instance to_Relational_Theory
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
-
-    {S : Type}
-    {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
-    (Signature_S : Signature L S)
-    {Theory_S : Theory Signature_L Signature_S} :
-    Relational.Theory Signature_L (to_Relational_Signature Signature_S).
-  Proof.
-    split.
-      intros s s_eq_init.
-      apply Morphism_Ok with [] (Signature_S.(init)).
-          constructor.
-        assumption.
-      apply Ok_init.
-    intros u₀ x₀ s Ok_x Ok_x₀_s.
-    now apply executable.
-  Qed.
-
   Class WeaklyReflectiveHomomorphism
     {L : Type}
     {Eq_L : Eq L}
@@ -506,21 +457,139 @@ Module Algebraic.
         Signature_S.(Ok) x s';
     }.
 
+  Program Definition Signature_Image
+    {L : Type}
+    {Eq_L : Eq L}
+
+    {S : Type}
+    {Eq_S : Eq S}
+    (Signature_S : Signature L S)
+
+    {S' : Type}
+    {Eq_S' : Eq S'}
+    (Signature_S' : Signature L S')
+
+    (h : S -> S')
+
+    {Morphism_h : Morphism h} :
+    Signature L S :=
+    {|
+      init :=
+        Signature_S.(init);
+      f :=
+        Signature_S.(f);
+      Ok x s :=
+        Signature_S'.(Ok) x (h s);
+    |}.
+  Next Obligation.
+    intros l l' l_eq_l' x x' x_eq_x'.
+    now apply Morphism_Ok, Morphism_h.
+  Qed.
+
+  Instance Theory_Image
+    {L : Type}
+    {Eq_L : Eq L}
+    (Signature_L : Label.Signature L)
+
+    {S : Type}
+    {Eq_S : Eq S}
+    (Signature_S : Signature L S)
+
+    {S' : Type}
+    {Eq_S' : Eq S'}
+    (Signature_S' : Signature L S')
+
+    (h : S -> S')
+
+    {Setoid_L : Setoid L}
+    {Setoid_S : Setoid S}
+    {Theory_S : Theory Signature_L Signature_S}
+    {Setoid_S' : Setoid S'}
+    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
+    Theory Signature_L (Signature_Image Signature_S Signature_S' h).
+  Proof.
+    split; simpl.
+      apply Preserves_Ok, Ok_init.
+    intros u₀ x₀ s Ok_x Ok'_x₀_h_s.
+    apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
+    specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
+      (t' & f_s'_u₀_eq_t' & Ok_x_t').
+    assert (H : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
+      now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
+    destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
+    exists t; split; [reflexivity|].
+    now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
+  Qed.
+
+  Program Definition to_Relational_Signature
+    {L : Type}
+    {Eq_L : Eq L}
+
+    {S : Type}
+    {Eq_S : Eq S}
+    (Signature_S : Signature L S)
+
+    {Setoid_S : Setoid S} :
+    Relational.Signature L S :=
+    {|
+      Relational.Initial x :=
+        eq x Signature_S.(init);
+      Relational.Transition s u t :=
+        eq (Signature_S.(f) s u) (Some t);
+      Relational.Ok :=
+        Signature_S.(Ok);
+    |}.
+  Next Obligation.
+    now intros x x' ->.
+  Qed.
+  Next Obligation.
+    intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'; rewrite t_eq_t'.
+    split.
+      intros f_s_u_eq_t.
+      now transitivity (Signature_S.(f) s u); [symmetry; apply Morphism_f|].
+    intros f_s'_u'_eq_t'.
+    now transitivity (Signature_S.(f) s' u'); [apply Morphism_f|].
+  Qed.
+
+  Instance to_Relational_Theory
+    {L : Type}
+    {Eq_L : Eq L}
+    (Signature_L : Label.Signature L)
+
+    {S : Type}
+    {Eq_S : Eq S}
+    (Signature_S : Signature L S)
+
+    {Setoid_S : Setoid S}
+    {Theory_S : Theory Signature_L Signature_S} :
+    Relational.Theory Signature_L (to_Relational_Signature Signature_S).
+  Proof.
+    split.
+      intros s s_eq_init.
+      apply Morphism_Ok with [] (Signature_S.(init)).
+          constructor.
+        assumption.
+      apply Ok_init.
+    intros u₀ x₀ s Ok_x Ok_x₀_s.
+    now apply executable.
+  Qed.
+
   Definition to_Relational_WeaklyReflectiveHomomorphism
     {L : Type}
     {Eq_L : Eq L}
 
     {S : Type}
     {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
     (Signature_S : Signature L S)
 
     {S' : Type}
     {Eq_S' : Eq S'}
-    {Setoid_S' : Setoid S'}
     (Signature_S' : Signature L S')
 
     (h : S -> S')
+
+    {Setoid_S : Setoid S}
+    {Setoid_S' : Setoid S'}
     {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
     Relational.WeaklyReflectiveHomomorphism
       (to_Relational_Signature Signature_S)
@@ -541,67 +610,5 @@ Module Algebraic.
         rewrite h_s_eq_init; apply Preserves_init.
       reflexivity.
     intros x s; apply Weakly_Ok.
-  Qed.
-
-  Program Definition Signature_Image
-    {L : Type}
-    {Eq_L : Eq L}
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-    {Morphism_h : Morphism h} :
-    Signature L S :=
-    {|
-      init :=
-        Signature_S.(init);
-      f :=
-        Signature_S.(f);
-      Ok x s :=
-        Signature_S'.(Ok) x (h s);
-    |}.
-  Next Obligation.
-    intros l l' l_eq_l' x x' x_eq_x'.
-    now apply Morphism_Ok, Morphism_h.
-  Qed.
-
-  Instance Theory_Image
-    {L : Type}
-    {Eq_L : Eq L}
-    {Setoid_L : Setoid L}
-    (Signature_L : Label.Signature L)
-
-    {S : Type}
-    {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
-    (Signature_S : Signature L S)
-    {Theory_S : Theory Signature_L Signature_S}
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    {Setoid_S' : Setoid S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
-    Theory Signature_L (Signature_Image Signature_S Signature_S' h).
-  Proof.
-    split; simpl.
-      apply Preserves_Ok, Ok_init.
-    intros u₀ x₀ s Ok_x Ok'_x₀_h_s.
-    apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
-    specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
-      (t' & f_s'_u₀_eq_t' & Ok_x_t').
-    assert (H : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
-      now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
-    destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
-    exists t; split; [reflexivity|].
-    now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
   Qed.
 End Algebraic.
