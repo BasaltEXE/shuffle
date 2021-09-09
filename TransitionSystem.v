@@ -68,6 +68,29 @@ Module Setoid.
     now transitivity y'.
   Qed.
 
+  Add Parametric Morphism
+    (A : Type)
+    {Eq_A : Eq A} :
+    (@Some A) with signature
+    (eq ==> eq) as
+    Some_morphism.
+  Proof.
+    intros x y x_eq_y.
+    now constructor.
+  Qed.
+
+  Add Parametric Morphism
+    (A B : Type)
+    {Eq_A : Eq A}
+    {Eq_B : Eq B}  :
+    (@option_map A B) with signature
+    ((eq ==> eq) ==> eq ==> eq) as
+    option_map_morphism.
+  Proof.
+    intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x'; constructor.
+    now apply f_eq_g.
+  Qed.
+
   Instance List_Eq
     (A : Type)
     {Eq_A : Eq A} :
@@ -338,29 +361,6 @@ Module Relational.
 End Relational.
 
 Module Algebraic.
-  Add Parametric Morphism
-    (A : Type)
-    {Eq_A : Eq A} :
-    (@Some A) with signature
-    (eq ==> eq) as
-    Some_morphism.
-  Proof.
-    intros x y x_eq_y.
-    now constructor.
-  Qed.
-
-  Add Parametric Morphism
-    (A B : Type)
-    {Eq_A : Eq A}
-    {Eq_B : Eq B}  :
-    (@option_map A B) with signature
-    ((eq ==> eq) ==> eq ==> eq) as
-    option_map_morphism.
-  Proof.
-    intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x'; constructor.
-    now apply f_eq_g.
-  Qed.
-
   Class Signature
     (L : Type)
     {Eq_L : Eq L}
