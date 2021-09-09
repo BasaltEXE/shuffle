@@ -22,6 +22,13 @@ Module Setoid.
       A ->
       Prop.
 
+  Class Reflexive
+    (A : Type)
+    {Eq_A : Eq A} :
+    Prop :=
+    reflexive :>
+      RelationClasses.Reflexive (@eq A Eq_A).
+
   Class PartialSetoid
     (A : Type)
     {Eq_A : Eq A} :
@@ -35,6 +42,13 @@ Module Setoid.
     Prop :=
     setoid_equivalence :>
       Equivalence (@eq A Eq_A).
+
+  Global Instance Setoid_Reflexive
+    (A : Type)
+    {Eq_A : Eq A}
+    {Setoid_A : Setoid A} :
+    Reflexive A | 10 :=
+    { }.
 
   Inductive eqoptionA
     (A : Type)
@@ -55,6 +69,15 @@ Module Setoid.
     {Eq_A : Eq A} :
     Eq (option A) :=
     eqoptionA A (@eq A Eq_A).
+
+  Instance Option_Reflexive
+    (A : Type)
+    {Eq_A : Eq A}
+    {Reflexive_A : Reflexive A} :
+    Reflexive (option A).
+  Proof.
+    intros [x|]; now constructor.
+  Qed.
 
   Instance Option_Setoid
     (A : Type)
@@ -99,9 +122,24 @@ Module Setoid.
     Eq (list A) :=
     eqlistA eq.
 
+  Instance List_Reflexive
+    (A : Type)
+    {Eq_A : Eq A}
+    {Reflexive_A : Reflexive A} :
+    Reflexive (list A).
+  Proof.
+    intros x; induction x as [| u₀ x₀ IHx₀]; now constructor.
+  Qed.
+
   Instance Proposition_Eq :
     Eq Prop :=
     iff.
+
+  Instance Proposition_Reflexive :
+    Reflexive Prop.
+  Proof.
+    unfold Reflexive; exact _.
+  Qed.
 
   Instance Arrow_Eq
     (A B : Type)
@@ -335,7 +373,7 @@ Module Relational.
 
     (h : S -> S')
 
-    {Reflexive_L : Reflexive (@eq L Eq_L)}
+    {Reflexive_L : Reflexive L}
     {Setoid_S : Setoid S}
     {Theory_S : Theory Signature_L Signature_S}
     {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
@@ -501,7 +539,7 @@ Module Algebraic.
 
     (h : S -> S')
 
-    {Setoid_L : Setoid L}
+    {Reflexive_L : Reflexive L}
     {Setoid_S : Setoid S}
     {Theory_S : Theory Signature_L Signature_S}
     {Setoid_S' : Setoid S'}
