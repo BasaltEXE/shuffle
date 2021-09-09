@@ -18,7 +18,9 @@ Module Setoid.
     (A : Type) :
     Type :=
     eq :
-      A -> A -> Prop.
+      A ->
+      A ->
+      Prop.
 
   Class PartialSetoid
     (A : Type)
@@ -433,15 +435,12 @@ Module Algebraic.
     now intros x x' ->.
   Qed.
   Next Obligation.
-    intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'.
-    change (eq (Signature_S.(f) s u) (Some t) <-> eq (Signature_S.(f) s' u') (Some t')).
+    intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'; rewrite t_eq_t'.
     split.
-      intros f_s_u_eq_t; rewrite <- t_eq_t'.
-      transitivity (Signature_S.(f) s u); [symmetry| assumption].
-      now apply Morphism_f.
-    intros f_s'_u'_eq_t'; rewrite t_eq_t'.
-    transitivity (Signature_S.(f) s' u'); [| assumption].
-    now apply Morphism_f.
+      intros f_s_u_eq_t.
+      now transitivity (Signature_S.(f) s u); [symmetry; apply Morphism_f|].
+    intros f_s'_u'_eq_t'.
+    now transitivity (Signature_S.(f) s' u'); [apply Morphism_f|].
   Qed.
 
   Instance to_Relational_Theory
@@ -484,7 +483,7 @@ Module Algebraic.
       Setoid_Morphism :>
         Morphism h;
       Preserves_init :
-        eq (h Signature_S.(init)) (Signature_S'.(init)); (* TODO flip *)
+        eq (Signature_S'.(init)) (h Signature_S.(init));
       Preserves_f :
         forall
         (s : S)
@@ -522,27 +521,24 @@ Module Algebraic.
     (Signature_S' : Signature L S')
 
     (h : S -> S')
-    {Morphism_h : Setoid.Morphism h}
-    (Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h) :
-    Relational.WeaklyReflectiveHomomorphism (to_Relational_Signature Signature_S) (to_Relational_Signature Signature_S') h.
+    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
+    Relational.WeaklyReflectiveHomomorphism
+      (to_Relational_Signature Signature_S)
+      (to_Relational_Signature Signature_S')
+      h.
   Proof.
     split; simpl.
               exact _.
             intros s s_eq_init.
             transitivity (h Signature_S.(init)).
               now apply @Setoid_Morphism with (1 := Homomorphism_h).
-            apply Preserves_init.
+            symmetry; apply Preserves_init.
           intros s u t Transition_s_u_t.
-          change (eq (Signature_S.(f) s u) (Some t)) in Transition_s_u_t.
-          change (eq (Signature_S'.(f) (h s) u) (option_map h (Some t))).
-          transitivity (option_map h (Signature_S.(f) s u)).
-            apply Preserves_f.
-          now apply option_map_morphism with (2 := Transition_s_u_t).
+          now rewrite Preserves_f, Transition_s_u_t.
         intros x s; apply Preserves_Ok.
       intros s h_s_eq_init.
-      exists (Signature_S.(init)).
-      split.
-        rewrite h_s_eq_init; symmetry; now apply Preserves_init.
+      exists (Signature_S.(init)); split.
+        rewrite h_s_eq_init; apply Preserves_init.
       reflexivity.
     intros x s; apply Weakly_Ok.
   Qed.
@@ -553,12 +549,10 @@ Module Algebraic.
 
     {S : Type}
     {Eq_S : Eq S}
-    {Setoid_S : Setoid S}
     (Signature_S : Signature L S)
 
     {S' : Type}
     {Eq_S' : Eq S'}
-    {Setoid_S' : Setoid S'}
     (Signature_S' : Signature L S')
 
     (h : S -> S')
@@ -595,29 +589,19 @@ Module Algebraic.
     (Signature_S' : Signature L S')
 
     (h : S -> S')
-    {Morphism_h : Setoid.Morphism h}
-    (Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h) :
+    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
     Theory Signature_L (Signature_Image Signature_S Signature_S' h).
   Proof.
     split; simpl.
       apply Preserves_Ok, Ok_init.
     intros u₀ x₀ s Ok_x Ok'_x₀_h_s.
     apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
-    specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as (t' & f_s'_u₀_eq_t' & Ok_x_t').
-    assert (H : eq (option_map h (Signature_S.(f) s' u₀)) (option_map h (Some t'))).
-      apply option_map_morphism with (2 := f_s'_u₀_eq_t').
-      apply Morphism_h.
-    assert (H' : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
-      rewrite <- Preserves_f.
-      transitivity (Signature_S'.(f) (h s') u₀).
-        now apply Morphism_f.
-      now rewrite Preserves_f.
-    destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H'.
-    exists t; split.
-      reflexivity.
-    apply Morphism_Ok with (u₀ :: x₀) (h t').
-        reflexivity.
-      assumption.
-    now apply Preserves_Ok.
+    specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
+      (t' & f_s'_u₀_eq_t' & Ok_x_t').
+    assert (H : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
+      now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
+    destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
+    exists t; split; [reflexivity|].
+    now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
   Qed.
 End Algebraic.
