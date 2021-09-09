@@ -104,6 +104,76 @@ Module Setoid.
     split; [apply Prod_Reflexive| apply Prod_PartialSetoid..]; exact _.
   Qed.
 
+  Inductive eqsumAB
+    (A : Type)
+    (R : A -> A -> Prop)
+    (B : Type)
+    (S : B -> B -> Prop) :
+    A + B ->
+    A + B ->
+    Prop :=
+    | Left_Left :
+        forall
+        x y : A,
+        R x y ->
+        eqsumAB A R B S (inl x) (inl y)
+    | Right_Right :
+        forall
+        x y : B,
+        S x y ->
+        eqsumAB A R B S (inr x) (inr y).
+
+  Instance Sum_Eq
+    (A : Type)
+    {Eq_A : Eq A}
+    (B : Type)
+    {Eq_B : Eq B} :
+    Eq (A + B) :=
+    eqsumAB A (@eq A Eq_A) B (@eq B Eq_B).
+
+  Instance Sum_Reflexive
+    (A : Type)
+    {Eq_A : Eq A}
+    {Reflexive_A : Reflexive A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {Reflexive_B : Reflexive B} :
+    Reflexive (A + B).
+  Proof.
+    intros [x₁| x₂]; constructor; reflexivity.
+  Qed.
+
+  Instance Sum_PartialSetoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {PartialSetoid_A : PartialSetoid A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {PartialSetoid_B : PartialSetoid B} :
+    PartialSetoid (A + B).
+  Proof.
+    split.
+      intros [x₁| x₂] [y₁| y₂] x_eq_y;
+      inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
+      now constructor; symmetry.
+    intros [x₁| x₂] [y₁| y₂] [z₁| z₂] x_eq_y y_eq_z;
+    inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
+    inversion_clear y_eq_z as [? ? y₁_eq_z₁| ? ? y₂_eq_z₂];
+    constructor; [transitivity y₁| transitivity y₂]; assumption.
+  Defined.
+
+  Instance Sum_Setoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {Setoid_A : Setoid A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {Setoid_B : Setoid B} :
+    Setoid (A + B).
+  Proof.
+    split; [apply Sum_Reflexive| apply Sum_PartialSetoid..]; exact _.
+  Qed.
+
   Inductive eqoptionA
     (A : Type)
     (R : A -> A -> Prop) :
