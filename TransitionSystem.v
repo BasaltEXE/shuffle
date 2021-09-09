@@ -57,6 +57,53 @@ Module Setoid.
     PartialSetoid A | 10 :=
     { }.
 
+  Instance Prod_Eq
+    (A : Type)
+    {Eq_A : Eq A}
+    (B : Type)
+    {Eq_B : Eq B} :
+    Eq (A * B) :=
+    fun x y : A * B => eq (fst x) (fst y) /\ eq (snd x) (snd y).
+
+  Instance Prod_Reflexive
+    (A : Type)
+    {Eq_A : Eq A}
+    {Reflexive_A : Reflexive A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {Reflexive_B : Reflexive B} :
+    Reflexive (A * B).
+  Proof.
+    now split.
+  Qed.
+
+  Instance Prod_PartialSetoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {PartialSetoid_A : PartialSetoid A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {PartialSetoid_B : PartialSetoid B} :
+    PartialSetoid (A * B).
+  Proof.
+    split.
+      intros x y (x₁_eq_y₁ & x₂_eq_y₂); now split; symmetry.
+    intros x y z (x₁_eq_y₁ & x₂_eq_y₂) (y₁_eq_z₁ & y₂_eq_z₂);
+    now split; [transitivity (fst y)| transitivity (snd y)].
+  Qed.
+
+  Instance Prod_Setoid
+    (A : Type)
+    {Eq_A : Eq A}
+    {Setoid_A : Setoid A}
+    (B : Type)
+    {Eq_B : Eq B}
+    {Setoid_B : Setoid B} :
+    Setoid (A * B).
+  Proof.
+    split; [apply Prod_Reflexive| apply Prod_PartialSetoid..]; exact _.
+  Qed.
+
   Inductive eqoptionA
     (A : Type)
     (R : A -> A -> Prop) :
