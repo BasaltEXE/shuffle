@@ -14,320 +14,46 @@ Require Import
   Coq.Classes.Morphisms.
 
 Module Setoid.
-  Class Eq
-    (A : Type) :
-    Type :=
-    eq :
-      A ->
-      A ->
-      Prop.
+  Section Classes.
+    Class Eq
+      (A : Type) :
+      Type :=
+      eq :
+        A ->
+        A ->
+        Prop.
 
-  Class Reflexive
-    (A : Type)
-    {Eq_A : Eq A} :
-    Prop :=
-    reflexive :>
-      RelationClasses.Reflexive (@eq A Eq_A).
+    Context
+      (A : Type)
+      {Eq_A : Eq A}.
 
-  Class PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A} :
-    Prop :=
-    partial_setoid_per :>
-      PER (@eq A Eq_A).
+    Class Reflexive :
+      Prop :=
+      reflexive :>
+        RelationClasses.Reflexive (@eq A Eq_A).
 
-  Class Setoid
-    (A : Type)
-    {Eq_A : Eq A} :
-    Prop :=
-    setoid_equivalence :>
-      Equivalence (@eq A Eq_A).
+    Class PartialSetoid :
+      Prop :=
+      partial_setoid_per :>
+        PER (@eq A Eq_A).
 
-  Global Instance Setoid_Reflexive
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A} :
-    Reflexive A | 10 :=
-    { }.
+    Class Setoid :
+      Prop :=
+      setoid_equivalence :>
+        Equivalence (@eq A Eq_A).
 
-  Global Instance Setoid_PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A} :
-    PartialSetoid A | 10 :=
-    { }.
+    #[global]
+    Instance Setoid_Reflexive
+      {Setoid_A : Setoid} :
+      Reflexive | 10 :=
+      { }.
 
-  Instance Prod_Eq
-    (A : Type)
-    {Eq_A : Eq A}
-    (B : Type)
-    {Eq_B : Eq B} :
-    Eq (A * B) :=
-    fun x y : A * B => eq (fst x) (fst y) /\ eq (snd x) (snd y).
-
-  Instance Prod_Reflexive
-    (A : Type)
-    {Eq_A : Eq A}
-    {Reflexive_A : Reflexive A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {Reflexive_B : Reflexive B} :
-    Reflexive (A * B).
-  Proof.
-    now split.
-  Qed.
-
-  Instance Prod_PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {PartialSetoid_A : PartialSetoid A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {PartialSetoid_B : PartialSetoid B} :
-    PartialSetoid (A * B).
-  Proof.
-    split.
-      intros x y (x₁_eq_y₁ & x₂_eq_y₂); now split; symmetry.
-    intros x y z (x₁_eq_y₁ & x₂_eq_y₂) (y₁_eq_z₁ & y₂_eq_z₂);
-    now split; [transitivity (fst y)| transitivity (snd y)].
-  Qed.
-
-  Instance Prod_Setoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {Setoid_B : Setoid B} :
-    Setoid (A * B).
-  Proof.
-    split; [apply Prod_Reflexive| apply Prod_PartialSetoid..]; exact _.
-  Qed.
-
-  Inductive eqsumAB
-    (A : Type)
-    (R : A -> A -> Prop)
-    (B : Type)
-    (S : B -> B -> Prop) :
-    A + B ->
-    A + B ->
-    Prop :=
-    | Left_Left :
-        forall
-        x y : A,
-        R x y ->
-        eqsumAB A R B S (inl x) (inl y)
-    | Right_Right :
-        forall
-        x y : B,
-        S x y ->
-        eqsumAB A R B S (inr x) (inr y).
-
-  Instance Sum_Eq
-    (A : Type)
-    {Eq_A : Eq A}
-    (B : Type)
-    {Eq_B : Eq B} :
-    Eq (A + B) :=
-    eqsumAB A (@eq A Eq_A) B (@eq B Eq_B).
-
-  Instance Sum_Reflexive
-    (A : Type)
-    {Eq_A : Eq A}
-    {Reflexive_A : Reflexive A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {Reflexive_B : Reflexive B} :
-    Reflexive (A + B).
-  Proof.
-    intros [x₁| x₂]; constructor; reflexivity.
-  Qed.
-
-  Instance Sum_PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {PartialSetoid_A : PartialSetoid A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {PartialSetoid_B : PartialSetoid B} :
-    PartialSetoid (A + B).
-  Proof.
-    split.
-      intros [x₁| x₂] [y₁| y₂] x_eq_y;
-      inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
-      now constructor; symmetry.
-    intros [x₁| x₂] [y₁| y₂] [z₁| z₂] x_eq_y y_eq_z;
-    inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
-    inversion_clear y_eq_z as [? ? y₁_eq_z₁| ? ? y₂_eq_z₂];
-    constructor; [transitivity y₁| transitivity y₂]; assumption.
-  Defined.
-
-  Instance Sum_Setoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A}
-    (B : Type)
-    {Eq_B : Eq B}
-    {Setoid_B : Setoid B} :
-    Setoid (A + B).
-  Proof.
-    split; [apply Sum_Reflexive| apply Sum_PartialSetoid..]; exact _.
-  Qed.
-
-  Inductive eqoptionA
-    (A : Type)
-    (R : A -> A -> Prop) :
-    option A ->
-    option A ->
-    Prop :=
-    | Some_Some :
-        forall
-        x y : A,
-        R x y ->
-        eqoptionA A R (Some x) (Some y)
-    | None_None :
-        eqoptionA A R None None.
-
-  Instance Option_Eq
-    (A : Type)
-    {Eq_A : Eq A} :
-    Eq (option A) :=
-    eqoptionA A (@eq A Eq_A).
-
-  Instance Option_Reflexive
-    (A : Type)
-    {Eq_A : Eq A}
-    {Reflexive_A : Reflexive A} :
-    Reflexive (option A).
-  Proof.
-    intros [x|]; now constructor.
-  Qed.
-
-  Instance Option_PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {PartialSetoid_A : PartialSetoid A} :
-    PartialSetoid (option A).
-  Proof.
-    split.
-      intros x y [x' y' x_eq_y|]; constructor.
-      now symmetry.
-    intros x y [z|] [x' y' x_eq_y|] y_eq_z; inversion_clear y_eq_z; constructor.
-    now transitivity y'.
-  Qed.
-
-  Instance Option_Setoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A} :
-    Setoid (option A).
-  Proof.
-    split; [apply Option_Reflexive| apply Option_PartialSetoid..]; exact _.
-  Qed.
-
-  Add Parametric Morphism
-    (A : Type)
-    {Eq_A : Eq A} :
-    (@Some A) with signature
-    (eq ==> eq) as
-    Some_morphism.
-  Proof.
-    intros x y x_eq_y.
-    now constructor.
-  Qed.
-
-  Add Parametric Morphism
-    (A B : Type)
-    {Eq_A : Eq A}
-    {Eq_B : Eq B}  :
-    (@option_map A B) with signature
-    ((eq ==> eq) ==> eq ==> eq) as
-    option_map_morphism.
-  Proof.
-    intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x'; constructor.
-    now apply f_eq_g.
-  Qed.
-
-  Instance List_Eq
-    (A : Type)
-    {Eq_A : Eq A} :
-    Eq (list A) :=
-    eqlistA eq.
-
-  Instance List_Reflexive
-    (A : Type)
-    {Eq_A : Eq A}
-    {Reflexive_A : Reflexive A} :
-    Reflexive (list A).
-  Proof.
-    intros x; induction x as [| u₀ x₀ IHx₀]; now constructor.
-  Qed.
-
-  Instance List_PartialSetoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {PartialSetoid_A : PartialSetoid A} :
-    PartialSetoid (list A).
-  Proof.
-    split.
-      intros x y x_eq_y; induction x_eq_y as [| u₀ v₀ x₀ y₀ IHx₀y₀];
-      now constructor.
-    intros x y z x_eq_y; revert z;
-    induction x_eq_y as [| u₀ v₀ x₀ y₀ u₀_eq_v₀ x₀_eq_y₀ IHx₀_eq_y₀];
-    intros z y_eq_z; [assumption|].
-    destruct z as [| w₀ z₀];
-    inversion_clear y_eq_z as [| ? ? ? ? v₀_eq_w₀ y₀_eq_z₀].
-    now constructor; [transitivity v₀| apply IHx₀_eq_y₀].
-  Qed.
-
-  Instance List_Setoid
-    (A : Type)
-    {Eq_A : Eq A}
-    {Setoid_A : Setoid A} :
-    Setoid (list A).
-  Proof.
-    split; [apply List_Reflexive| apply List_PartialSetoid..]; exact _.
-  Qed.
-
-  Instance Proposition_Eq :
-    Eq Prop :=
-    iff.
-
-  Instance Proposition_Reflexive :
-    Reflexive Prop.
-  Proof.
-    unfold Reflexive; exact _.
-  Qed.
-
-  Instance Proposition_PartialSetoid :
-    PartialSetoid Prop.
-  Proof.
-    unfold PartialSetoid; exact _.
-  Qed.
-
-  Instance Proposition_Setoid :
-    Setoid Prop.
-  Proof.
-    unfold Setoid; exact _.
-  Qed.
-
-  Instance Arrow_Eq
-    (A B : Type)
-    {Eq_A : Eq A}
-    {Eq_B : Eq B} :
-    Eq (A -> B) :=
-    (eq ==> eq)%signature.
-
-  Instance Arrow_PartialSetoid
-    (A B : Type)
-    {Eq_A : Eq A}
-    {Eq_B : Eq B}
-    {PartialSetoid_A : PartialSetoid A}
-    {PartialSetoid_B : PartialSetoid B} :
-    PartialSetoid (A -> B).
-  Proof.
-    now apply respectful_per.
-  Qed.
+    #[global]
+    Instance Setoid_PartialSetoid
+      {Setoid_A : Setoid} :
+      PartialSetoid | 10 :=
+      { }.
+  End Classes.
 
   Class Morphism
     {A : Type}
@@ -337,16 +63,268 @@ Module Setoid.
     Preserves_eq :>
       Proper eq f.
 
-  Instance Morphism_eq
-    (A : Type)
-    {Eq_A : Eq A}
-    {PartialSetoid_A : PartialSetoid A} :
-    Morphism (@eq A Eq_A).
-  Proof.
-    intros x x' x_eq_x' y y' y_eq_y'; split.
-      intros x_eq_y; now transitivity x; [symmetry| transitivity y].
-    intros x'_eq_y'; now transitivity x'; [| transitivity y'; symmetry].
-  Qed.
+  Section Instances.
+    Context
+      (A : Type)
+      {Eq_A : Eq A}
+      (B : Type)
+      {Eq_B : Eq B}.
+
+    #[global]
+    Instance Prod_Eq :
+      Eq (A * B) :=
+      fun x y : A * B => eq (fst x) (fst y) /\ eq (snd x) (snd y).
+
+    #[global]
+    Instance Prod_Reflexive
+      {Reflexive_A : Reflexive A}
+      {Reflexive_B : Reflexive B} :
+      Reflexive (A * B).
+    Proof.
+      now split.
+    Qed.
+
+    #[global]
+    Instance Prod_PartialSetoid
+      {PartialSetoid_A : PartialSetoid A}
+      {PartialSetoid_B : PartialSetoid B} :
+      PartialSetoid (A * B).
+    Proof.
+      split.
+        intros x y (x₁_eq_y₁ & x₂_eq_y₂); now split; symmetry.
+      intros x y z (x₁_eq_y₁ & x₂_eq_y₂) (y₁_eq_z₁ & y₂_eq_z₂);
+      now split; [transitivity (fst y)| transitivity (snd y)].
+    Qed.
+
+    #[global]
+    Instance Prod_Setoid
+      {Setoid_A : Setoid A}
+      {Setoid_B : Setoid B} :
+      Setoid (A * B).
+    Proof.
+      split; [apply Prod_Reflexive| apply Prod_PartialSetoid..]; exact _.
+    Qed.
+
+    Inductive eqsumAB
+      (A : Type)
+      (R : A -> A -> Prop)
+      (B : Type)
+      (S : B -> B -> Prop) :
+      A + B ->
+      A + B ->
+      Prop :=
+      | Left_Left :
+          forall
+          x y : A,
+          R x y ->
+          eqsumAB A R B S (inl x) (inl y)
+      | Right_Right :
+          forall
+          x y : B,
+          S x y ->
+          eqsumAB A R B S (inr x) (inr y).
+
+    #[global]
+    Instance Sum_Eq :
+      Eq (A + B) :=
+      eqsumAB A (@eq A Eq_A) B (@eq B Eq_B).
+
+    #[global]
+    Instance Sum_Reflexive
+      {Reflexive_A : Reflexive A}
+      {Reflexive_B : Reflexive B} :
+      Reflexive (A + B).
+    Proof.
+      intros [x₁| x₂]; constructor; reflexivity.
+    Qed.
+
+    #[global]
+    Instance Sum_PartialSetoid
+      {PartialSetoid_A : PartialSetoid A}
+      {PartialSetoid_B : PartialSetoid B} :
+      PartialSetoid (A + B).
+    Proof.
+      split.
+        intros [x₁| x₂] [y₁| y₂] x_eq_y;
+        inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
+        now constructor; symmetry.
+      intros [x₁| x₂] [y₁| y₂] [z₁| z₂] x_eq_y y_eq_z;
+      inversion_clear x_eq_y as [? ? x₁_eq_y₁| ? ? x₂_eq_y₂];
+      inversion_clear y_eq_z as [? ? y₁_eq_z₁| ? ? y₂_eq_z₂];
+      constructor; [transitivity y₁| transitivity y₂]; assumption.
+    Defined.
+
+    #[global]
+    Instance Sum_Setoid
+      {Setoid_A : Setoid A}
+      {Setoid_B : Setoid B} :
+      Setoid (A + B).
+    Proof.
+      split; [apply Sum_Reflexive| apply Sum_PartialSetoid..]; exact _.
+    Qed.
+
+    Inductive eqoptionA
+      (A : Type)
+      (R : A -> A -> Prop) :
+      option A ->
+      option A ->
+      Prop :=
+      | Some_Some :
+          forall
+          x y : A,
+          R x y ->
+          eqoptionA A R (Some x) (Some y)
+      | None_None :
+          eqoptionA A R None None.
+
+    #[global]
+    Instance Option_Eq :
+      Eq (option A) :=
+      eqoptionA A (@eq A Eq_A).
+
+    #[global]
+    Instance Option_Reflexive
+      {Reflexive_A : Reflexive A} :
+      Reflexive (option A).
+    Proof.
+      intros [x|]; now constructor.
+    Qed.
+
+    #[global]
+    Instance Option_PartialSetoid
+      {PartialSetoid_A : PartialSetoid A} :
+      PartialSetoid (option A).
+    Proof.
+      split.
+        intros x y [x' y' x_eq_y|]; constructor.
+        now symmetry.
+      intros x y [z|] [x' y' x_eq_y|] y_eq_z; inversion_clear y_eq_z; constructor.
+      now transitivity y'.
+    Qed.
+
+    #[global]
+    Instance Option_Setoid
+      {Setoid_A : Setoid A} :
+      Setoid (option A).
+    Proof.
+      split; [apply Option_Reflexive| apply Option_PartialSetoid..]; exact _.
+    Qed.
+
+    #[global]
+    Instance List_Eq :
+      Eq (list A) :=
+      eqlistA eq.
+
+    #[global]
+    Instance List_Reflexive
+      {Reflexive_A : Reflexive A} :
+      Reflexive (list A).
+    Proof.
+      intros x; induction x as [| u₀ x₀ IHx₀]; now constructor.
+    Qed.
+
+    #[global]
+    Instance List_PartialSetoid
+      {PartialSetoid_A : PartialSetoid A} :
+      PartialSetoid (list A).
+    Proof.
+      split.
+        intros x y x_eq_y; induction x_eq_y as [| u₀ v₀ x₀ y₀ IHx₀y₀];
+        now constructor.
+      intros x y z x_eq_y; revert z;
+      induction x_eq_y as [| u₀ v₀ x₀ y₀ u₀_eq_v₀ x₀_eq_y₀ IHx₀_eq_y₀];
+      intros z y_eq_z; [assumption|].
+      destruct z as [| w₀ z₀];
+      inversion_clear y_eq_z as [| ? ? ? ? v₀_eq_w₀ y₀_eq_z₀].
+      now constructor; [transitivity v₀| apply IHx₀_eq_y₀].
+    Qed.
+
+    #[global]
+    Instance List_Setoid
+      {Setoid_A : Setoid A} :
+      Setoid (list A).
+    Proof.
+      split; [apply List_Reflexive| apply List_PartialSetoid..]; exact _.
+    Qed.
+
+    #[global]
+    Instance Proposition_Eq :
+      Eq Prop :=
+      iff.
+
+    #[global]
+    Instance Proposition_Reflexive :
+      Reflexive Prop.
+    Proof.
+      unfold Reflexive; exact _.
+    Qed.
+
+    #[global]
+    Instance Proposition_PartialSetoid :
+      PartialSetoid Prop.
+    Proof.
+      unfold PartialSetoid; exact _.
+    Qed.
+
+    #[global]
+    Instance Proposition_Setoid :
+      Setoid Prop.
+    Proof.
+      unfold Setoid; exact _.
+    Qed.
+
+    #[global]
+    Instance Arrow_Eq :
+      Eq (A -> B) :=
+      (eq ==> eq)%signature.
+
+    #[global]
+    Instance Arrow_PartialSetoid
+      {PartialSetoid_A : PartialSetoid A}
+      {PartialSetoid_B : PartialSetoid B} :
+      PartialSetoid (A -> B).
+    Proof.
+      now apply respectful_per.
+    Qed.
+  End Instances.
+
+  Section Misc.
+    Context
+      (A : Type)
+      {Eq_A : Eq A}
+      (B : Type)
+      {Eq_B : Eq B}.
+
+    #[global]
+    Add Parametric Morphism :
+      (@Some A) with signature
+      (eq ==> eq) as
+      Some_morphism.
+    Proof.
+      intros x y x_eq_y.
+      now constructor.
+    Qed.
+
+    #[global]
+    Add Parametric Morphism :
+      (@option_map A B) with signature
+      ((eq ==> eq) ==> eq ==> eq) as
+      option_map_morphism.
+    Proof.
+      intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x';
+      constructor; now apply f_eq_g.
+    Qed.
+
+    #[global]
+    Instance Morphism_eq
+      {PartialSetoid_A : PartialSetoid A} :
+      Morphism (@eq A Eq_A).
+    Proof.
+      intros x x' x_eq_x' y y' y_eq_y'; split.
+        intros x_eq_y; now transitivity x; [symmetry| transitivity y].
+      intros x'_eq_y'; now transitivity x'; [| transitivity y'; symmetry].
+    Qed.
+  End Misc.
 End Setoid.
 Import Setoid.
 
@@ -380,443 +358,376 @@ Module Label.
 End Label.
 
 Module Relational.
-  Class Signature
-    (L : Type)
-    {Eq_L : Eq L}
+  Section Relational.
+    Class Signature
+      (L : Type)
+      {Eq_L : Eq L}
 
-    (S : Type)
-    {Eq_S : Eq S} :
-    Type :=
-    {
-      Initial :
-        S ->
-        Prop;
-      Morphism_Initial :>
-        Morphism Initial;
-      Transition :
-        S ->
-        L ->
-        S ->
-        Prop;
-      Morphism_Transition :>
-        Morphism Transition;
-      Ok :
-        list L ->
-        S ->
-        Prop;
-      Morphism_Ok :>
-        Morphism Ok;
-    }.
-  Arguments Initial {L} {Eq_L} {S} {Eq_S} _.
-  Arguments Transition {L} {Eq_L} {S} {Eq_S} _.
-  Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
+      (S : Type)
+      {Eq_S : Eq S} :
+      Type :=
+      {
+        Initial :
+          S ->
+          Prop;
+        Morphism_Initial :>
+          Morphism Initial;
+        Transition :
+          S ->
+          L ->
+          S ->
+          Prop;
+        Morphism_Transition :>
+          Morphism Transition;
+        Ok :
+          list L ->
+          S ->
+          Prop;
+        Morphism_Ok :>
+          Morphism Ok;
+      }.
+    #[global]
+    Arguments Initial {L} {Eq_L} {S} {Eq_S} _.
+    #[global]
+    Arguments Transition {L} {Eq_L} {S} {Eq_S} _.
+    #[global]
+    Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
 
-  Class Theory
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
+    Context
+      {L : Type}
+      {Eq_L : Eq L}
+      (Signature_L : Label.Signature L).
 
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S) :
-    Prop :=
-    {
-      Ok_Initial :
-        forall
-        s : S,
-        Signature_S.(Initial) s ->
-        Signature_S.(Ok) [] s;
-      executable :
-        forall
-        (u₀ : L)
-        (x₀ : list L)
-        (s : S),
-        Signature_L.(Label.Ok) (u₀ :: x₀) ->
-        Signature_S.(Ok) x₀ s ->
-        exists t : S,
-        Signature_S.(Transition) s u₀ t /\
-        Signature_S.(Ok) (u₀ :: x₀) t;
-    }.
+    Class Theory
+      {S : Type}
+      {Eq_S : Eq S}
+      (Signature_S : Signature L S) :
+      Prop :=
+      {
+        Ok_Initial :
+          forall
+          s : S,
+          Signature_S.(Initial) s ->
+          Signature_S.(Ok) [] s;
+        executable :
+          forall
+          (u₀ : L)
+          (x₀ : list L)
+          (s : S),
+          Signature_L.(Label.Ok) (u₀ :: x₀) ->
+          Signature_S.(Ok) x₀ s ->
+          exists t : S,
+          Signature_S.(Transition) s u₀ t /\
+          Signature_S.(Ok) (u₀ :: x₀) t;
+      }.
 
-  Class WeaklyReflectiveHomomorphism
-    {L : Type}
-    {Eq_L : Eq L}
+    Context
+      {S : Type}
+      {Eq_S : Eq S}
+      (Signature_S : Signature L S)
 
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
+      {S' : Type}
+      {Eq_S' : Eq S'}
+      (Signature_S' : Signature L S')
 
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
+      (h : S -> S').
 
-    (h : S -> S') :
-    Prop :=
-    {
-      Setoid_Morphism :>
-        Morphism h;
-      Preserves_Initial :
-        forall
-        s : S,
-        Signature_S.(Initial) s ->
-        Signature_S'.(Initial) (h s);
-      Preserves_Transition :
-        forall
-        (s : S)
-        (u : L)
-        (t : S),
-        Signature_S.(Transition) s u t ->
-        Signature_S'.(Transition) (h s) u (h t);
-      Preserves_Ok :
-        forall
-        (x : list L)
-        (s : S),
-        Signature_S.(Ok) x s ->
-        Signature_S'.(Ok) x (h s);
-      Weakly_Initial :
-        forall
-        s : S,
-        Signature_S'.(Initial) (h s) ->
-        exists
-        s' : S,
-        eq (h s) (h s') /\
-        Signature_S.(Initial) s';
-      Weakly_Ok :
-        forall
-        (x : list L)
-        (s : S),
-        Signature_S'.(Ok) x (h s) ->
-        exists
-        s' : S,
-        eq (h s) (h s') /\
-        Signature_S.(Ok) x s';
-    }.
+    Class WeaklyReflectiveHomomorphism :
+      Prop :=
+      {
+        Setoid_Morphism :>
+          Morphism h;
+        Preserves_Initial :
+          forall
+          s : S,
+          Signature_S.(Initial) s ->
+          Signature_S'.(Initial) (h s);
+        Preserves_Transition :
+          forall
+          (s : S)
+          (u : L)
+          (t : S),
+          Signature_S.(Transition) s u t ->
+          Signature_S'.(Transition) (h s) u (h t);
+        Preserves_Ok :
+          forall
+          (x : list L)
+          (s : S),
+          Signature_S.(Ok) x s ->
+          Signature_S'.(Ok) x (h s);
+        Weakly_Initial :
+          forall
+          s : S,
+          Signature_S'.(Initial) (h s) ->
+          exists
+          s' : S,
+          eq (h s) (h s') /\
+          Signature_S.(Initial) s';
+        Weakly_Ok :
+          forall
+          (x : list L)
+          (s : S),
+          Signature_S'.(Ok) x (h s) ->
+          exists
+          s' : S,
+          eq (h s) (h s') /\
+          Signature_S.(Ok) x s';
+      }.
 
-  Program Definition Signature_Image
-    {L : Type}
-    {Eq_L : Eq L}
+    Program Definition Signature_Image
+      {Morphism_h : Morphism h} :
+      Signature L S :=
+      {|
+        Initial s :=
+          Signature_S'.(Initial) (h s);
+        Transition s u t:=
+          Signature_S'.(Transition) (h s) u (h t);
+        Ok x s :=
+          Signature_S'.(Ok) x (h s);
+      |}.
+    Next Obligation.
+      intros x x' x_eq_x'.
+      now apply Morphism_Initial, Morphism_h.
+    Qed.
+    Next Obligation.
+      intros x x' x_eq_x' u u' u_eq_u' y y' y_eq_y'.
+      now apply Morphism_Transition with (2 := u_eq_u'); apply Morphism_h.
+    Qed.
+    Next Obligation.
+      intros l l' l_eq_l' x x' x_eq_x'.
+      now apply Morphism_Ok, Morphism_h.
+    Qed.
 
-    {S : Type}
-    {Eq_S : Eq S}
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-
-    {Morphism_h : Morphism h} :
-    Signature L S :=
-    {|
-      Initial s :=
-        Signature_S'.(Initial) (h s);
-      Transition s u t:=
-        Signature_S'.(Transition) (h s) u (h t);
-      Ok x s :=
-        Signature_S'.(Ok) x (h s);
-    |}.
-  Next Obligation.
-    intros x x' x_eq_x'.
-    now apply Morphism_Initial, Morphism_h.
-  Qed.
-  Next Obligation.
-    intros x x' x_eq_x' u u' u_eq_u' y y' y_eq_y'.
-    now apply Morphism_Transition with (2 := u_eq_u'); apply Morphism_h.
-  Qed.
-  Next Obligation.
-    intros l l' l_eq_l' x x' x_eq_x'.
-    now apply Morphism_Ok, Morphism_h.
-  Qed.
-
-  Instance Theory_Image
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-
-    {Reflexive_L : Reflexive L}
-    {Setoid_S : Setoid S}
-    {Theory_S : Theory Signature_L Signature_S}
-    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
-    Theory Signature_L (Signature_Image Signature_S' h).
-  Proof.
-    split; simpl.
-      intros x Initial_h_x.
-      apply Weakly_Initial in Initial_h_x as
-        (x' & h_x_eq_h_x' & Initial_x').
-      apply Morphism_Ok with [] (h x').
-          constructor.
-        assumption.
-      now apply Preserves_Ok, Ok_Initial.
-    intros u₀ x₀ s Ok_x Ok_x₀_h_s.
-    apply Weakly_Ok in Ok_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
-    specialize @executable with (2 := Ok_x) (3 := Ok_x₀_s') as
-      (t' & Transition_s'_u₀_t' & Ok_x_t').
-      exact _.
-    exists t'; split.
-      apply Morphism_Transition with (h s') u₀ (h t').
-            assumption.
-          reflexivity.
-        now apply @Setoid_Morphism with (1 := Homomorphism_h).
-      now apply Preserves_Transition.
-    now apply Preserves_Ok.
-  Qed.
+    Instance Theory_Image
+      {Reflexive_L : Reflexive L}
+      {Setoid_S : Setoid S}
+      {Theory_S : Theory Signature_S}
+      {Homomorphism_h : WeaklyReflectiveHomomorphism} :
+      Theory Signature_Image.
+    Proof.
+      split; simpl.
+        intros x Initial_h_x.
+         apply Weakly_Initial in Initial_h_x as
+          (x' & h_x_eq_h_x' & Initial_x').
+        apply Morphism_Ok with [] (h x').
+            constructor.
+          assumption.
+        now apply Preserves_Ok, Ok_Initial.
+      intros u₀ x₀ s Ok_x Ok_x₀_h_s.
+      apply Weakly_Ok in Ok_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
+      specialize @executable with (2 := Ok_x) (3 := Ok_x₀_s') as
+        (t' & Transition_s'_u₀_t' & Ok_x_t').
+        exact _.
+      exists t'; split.
+        apply Morphism_Transition with (h s') u₀ (h t').
+              assumption.
+            reflexivity.
+          now apply @Setoid_Morphism with (1 := Homomorphism_h).
+        now apply Preserves_Transition.
+      now apply Preserves_Ok.
+    Qed.
+  End Relational.
 End Relational.
 
 Module Algebraic.
-  Class Signature
-    (L : Type)
-    {Eq_L : Eq L}
+  Section Algebraic.
+    Class Signature
+      (L : Type)
+      {Eq_L : Eq L}
 
-    (S : Type)
-    {Eq_S : Eq S} :
-    Type :=
-    {
-      init :
-        S;
-      f :
-        S ->
-        L ->
-        option S;
-      Morphism_f :>
-        Morphism f;
-      Ok :
-        list L ->
-        S ->
-        Prop;
-      Morphism_Ok :>
-        Morphism Ok;
-    }.
-  Arguments init {L} {Eq_L} {S} {Eq_S} _.
-  Arguments f {L} {Eq_L} {S} {Eq_S} _.
-  Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
+      (S : Type)
+      {Eq_S : Eq S} :
+      Type :=
+      {
+        init :
+          S;
+        f :
+          S ->
+          L ->
+          option S;
+        Morphism_f :>
+          Morphism f;
+        Ok :
+          list L ->
+          S ->
+          Prop;
+        Morphism_Ok :>
+          Morphism Ok;
+      }.
+    #[global]
+    Arguments init {L} {Eq_L} {S} {Eq_S} _.
+    #[global]
+    Arguments f {L} {Eq_L} {S} {Eq_S} _.
+    #[global]
+    Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
 
-  Class Theory
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
+    Context
+      {L : Type}
+      {Eq_L : Eq L}
+      (Signature_L : Label.Signature L).
 
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S) :
-    Prop :=
-    {
-      Ok_init :
-        Signature_S.(Ok) [] Signature_S.(init);
-      executable :
-        forall
-        (u₀ : L)
-        (x₀ : list L)
-        (s : S),
-        Signature_L.(Label.Ok) (u₀ :: x₀) ->
-        Signature_S.(Ok) x₀ s ->
-        exists t : S,
-        eq (Signature_S.(f) s u₀) (Some t) /\
-        Signature_S.(Ok) (u₀ :: x₀) t;
-    }.
+    Program Definition to_Relational_Signature
+      {S : Type}
+      {Eq_S : Eq S}
+      (Signature_S : Signature L S)
 
-  Class WeaklyReflectiveHomomorphism
-    {L : Type}
-    {Eq_L : Eq L}
+      {Setoid_S : Setoid S} :
+      Relational.Signature L S :=
+      {|
+        Relational.Initial x :=
+          eq x Signature_S.(init);
+        Relational.Transition s u t :=
+          eq (Signature_S.(f) s u) (Some t);
+        Relational.Ok :=
+          Signature_S.(Ok);
+      |}.
+    Next Obligation.
+      now intros x x' ->.
+    Qed.
+    Next Obligation.
+      intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'; rewrite t_eq_t'.
+      split.
+        intros f_s_u_eq_t.
+        now transitivity (Signature_S.(f) s u); [symmetry; apply Morphism_f|].
+      intros f_s'_u'_eq_t'.
+      now transitivity (Signature_S.(f) s' u'); [apply Morphism_f|].
+    Qed.
 
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
+    Class Theory
+      {S : Type}
+      {Eq_S : Eq S}
+      (Signature_S : Signature L S) :
+      Prop :=
+      {
+        Ok_init :
+          Signature_S.(Ok) [] Signature_S.(init);
+        executable :
+          forall
+          (u₀ : L)
+          (x₀ : list L)
+          (s : S),
+          Signature_L.(Label.Ok) (u₀ :: x₀) ->
+          Signature_S.(Ok) x₀ s ->
+          exists t : S,
+          eq (Signature_S.(f) s u₀) (Some t) /\
+          Signature_S.(Ok) (u₀ :: x₀) t;
+      }.
 
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
+    Context
+      {S : Type}
+      {Eq_S : Eq S}
+      (Signature_S : Signature L S)
 
-    (h : S -> S') :
-    Prop :=
-    {
-      Setoid_Morphism :>
-        Morphism h;
-      Preserves_init :
-        eq (Signature_S'.(init)) (h Signature_S.(init));
-      Preserves_f :
-        forall
-        (s : S)
-        (u : L),
-        eq (Signature_S'.(f) (h s) u) (option_map h (Signature_S.(f) s u));
-      Preserves_Ok :
-        forall
-        (x : list L)
-        (s : S),
-        Signature_S.(Ok) x s ->
-        Signature_S'.(Ok) x (h s);
-      Weakly_Ok :
-        forall
-        (x : list L)
-        (s : S),
-        Signature_S'.(Ok) x (h s) ->
-        exists
-        s' : S,
-        eq (h s) (h s') /\
-        Signature_S.(Ok) x s';
-    }.
+      {S' : Type}
+      {Eq_S' : Eq S'}
+      (Signature_S' : Signature L S')
 
-  Program Definition Signature_Image
-    {L : Type}
-    {Eq_L : Eq L}
+      (h : S -> S').
 
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
+    Class WeaklyReflectiveHomomorphism :
+      Prop :=
+      {
+        Setoid_Morphism :>
+          Morphism h;
+        Preserves_init :
+          eq (Signature_S'.(init)) (h Signature_S.(init));
+        Preserves_f :
+          forall
+          (s : S)
+          (u : L),
+          eq (Signature_S'.(f) (h s) u) (option_map h (Signature_S.(f) s u));
+        Preserves_Ok :
+          forall
+          (x : list L)
+          (s : S),
+          Signature_S.(Ok) x s ->
+          Signature_S'.(Ok) x (h s);
+        Weakly_Ok :
+          forall
+          (x : list L)
+          (s : S),
+          Signature_S'.(Ok) x (h s) ->
+          exists
+          s' : S,
+          eq (h s) (h s') /\
+          Signature_S.(Ok) x s';
+      }.
 
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
+    Program Definition Signature_Image
+      {Morphism_h : Morphism h} :
+      Signature L S :=
+      {|
+        init :=
+          Signature_S.(init);
+        f :=
+          Signature_S.(f);
+        Ok x s :=
+          Signature_S'.(Ok) x (h s);
+      |}.
+    Next Obligation.
+      intros l l' l_eq_l' x x' x_eq_x'.
+      now apply Morphism_Ok, Morphism_h.
+    Qed.
 
-    (h : S -> S')
+    Instance Theory_Image
+      {Reflexive_L : Reflexive L}
+      {Setoid_S : Setoid S}
+      {Theory_S : Theory Signature_S}
+      {Setoid_S' : Setoid S'}
+      {Homomorphism_h : WeaklyReflectiveHomomorphism} :
+      Theory Signature_Image.
+    Proof.
+      split; simpl.
+        apply Preserves_Ok, Ok_init.
+      intros u₀ x₀ s Ok_x Ok'_x₀_h_s.
+      apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
+      specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
+        (t' & f_s'_u₀_eq_t' & Ok_x_t').
+      assert (H : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
+        now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
+      destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
+      exists t; split; [reflexivity|].
+      now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
+    Qed.
 
-    {Morphism_h : Morphism h} :
-    Signature L S :=
-    {|
-      init :=
-        Signature_S.(init);
-      f :=
-        Signature_S.(f);
-      Ok x s :=
-        Signature_S'.(Ok) x (h s);
-    |}.
-  Next Obligation.
-    intros l l' l_eq_l' x x' x_eq_x'.
-    now apply Morphism_Ok, Morphism_h.
-  Qed.
+    Instance to_Relational_Theory
+      {Setoid_S : Setoid S}
+      {Theory_S : Theory Signature_S} :
+      Relational.Theory Signature_L (to_Relational_Signature Signature_S).
+    Proof.
+      split.
+        intros s s_eq_init.
+        apply Morphism_Ok with [] (Signature_S.(init)).
+            constructor.
+          assumption.
+        exact Ok_init.
+      intros u₀ x₀ s Ok_x Ok_x₀_s.
+      now apply executable.
+    Qed.
 
-  Instance Theory_Image
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-
-    {Reflexive_L : Reflexive L}
-    {Setoid_S : Setoid S}
-    {Theory_S : Theory Signature_L Signature_S}
-    {Setoid_S' : Setoid S'}
-    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
-    Theory Signature_L (Signature_Image Signature_S Signature_S' h).
-  Proof.
-    split; simpl.
-      apply Preserves_Ok, Ok_init.
-    intros u₀ x₀ s Ok_x Ok'_x₀_h_s.
-    apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
-    specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
-      (t' & f_s'_u₀_eq_t' & Ok_x_t').
-    assert (H : eq (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
-      now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
-    destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
-    exists t; split; [reflexivity|].
-    now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
-  Qed.
-
-  Program Definition to_Relational_Signature
-    {L : Type}
-    {Eq_L : Eq L}
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {Setoid_S : Setoid S} :
-    Relational.Signature L S :=
-    {|
-      Relational.Initial x :=
-        eq x Signature_S.(init);
-      Relational.Transition s u t :=
-        eq (Signature_S.(f) s u) (Some t);
-      Relational.Ok :=
-        Signature_S.(Ok);
-    |}.
-  Next Obligation.
-    now intros x x' ->.
-  Qed.
-  Next Obligation.
-    intros s s' s_eq_s' u u' u_eq_u' t t' t_eq_t'; rewrite t_eq_t'.
-    split.
-      intros f_s_u_eq_t.
-      now transitivity (Signature_S.(f) s u); [symmetry; apply Morphism_f|].
-    intros f_s'_u'_eq_t'.
-    now transitivity (Signature_S.(f) s' u'); [apply Morphism_f|].
-  Qed.
-
-  Instance to_Relational_Theory
-    {L : Type}
-    {Eq_L : Eq L}
-    (Signature_L : Label.Signature L)
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {Setoid_S : Setoid S}
-    {Theory_S : Theory Signature_L Signature_S} :
-    Relational.Theory Signature_L (to_Relational_Signature Signature_S).
-  Proof.
-    split.
-      intros s s_eq_init.
-      apply Morphism_Ok with [] (Signature_S.(init)).
-          constructor.
-        assumption.
-      apply Ok_init.
-    intros u₀ x₀ s Ok_x Ok_x₀_s.
-    now apply executable.
-  Qed.
-
-  Definition to_Relational_WeaklyReflectiveHomomorphism
-    {L : Type}
-    {Eq_L : Eq L}
-
-    {S : Type}
-    {Eq_S : Eq S}
-    (Signature_S : Signature L S)
-
-    {S' : Type}
-    {Eq_S' : Eq S'}
-    (Signature_S' : Signature L S')
-
-    (h : S -> S')
-
-    {Setoid_S : Setoid S}
-    {Setoid_S' : Setoid S'}
-    {Homomorphism_h : WeaklyReflectiveHomomorphism Signature_S Signature_S' h} :
-    Relational.WeaklyReflectiveHomomorphism
-      (to_Relational_Signature Signature_S)
-      (to_Relational_Signature Signature_S')
-      h.
-  Proof.
-    split; simpl.
-              exact _.
-            intros s s_eq_init.
-            transitivity (h Signature_S.(init)).
-              now apply @Setoid_Morphism with (1 := Homomorphism_h).
-            symmetry; apply Preserves_init.
-          intros s u t Transition_s_u_t.
-          now rewrite Preserves_f, Transition_s_u_t.
-        intros x s; apply Preserves_Ok.
-      intros s h_s_eq_init.
-      exists (Signature_S.(init)); split.
-        rewrite h_s_eq_init; apply Preserves_init.
-      reflexivity.
-    intros x s; apply Weakly_Ok.
-  Qed.
+    Definition to_Relational_WeaklyReflectiveHomomorphism
+      {Setoid_S : Setoid S}
+      {Setoid_S' : Setoid S'}
+      {Homomorphism_h : WeaklyReflectiveHomomorphism} :
+      Relational.WeaklyReflectiveHomomorphism
+        (to_Relational_Signature Signature_S)
+        (to_Relational_Signature Signature_S')
+        h.
+    Proof.
+      split; simpl.
+                exact _.
+              intros s s_eq_init.
+              transitivity (h Signature_S.(init)).
+                now apply @Setoid_Morphism with (1 := Homomorphism_h).
+              symmetry; apply Preserves_init.
+            intros s u t Transition_s_u_t.
+            now rewrite Preserves_f, Transition_s_u_t.
+          intros x s; apply Preserves_Ok.
+        intros s h_s_eq_init.
+        exists (Signature_S.(init)); split.
+          rewrite h_s_eq_init; apply Preserves_init.
+        reflexivity.
+      intros x s; apply Weakly_Ok.
+    Qed.
+  End Algebraic.
 End Algebraic.
