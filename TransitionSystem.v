@@ -958,5 +958,26 @@ Module Algebraic.
         Relational.Path.Path s x t :=
           eq (try_fold L S s Signature_S.(f) x) (Some t);
       |}.
+
+    Program Instance to_Relational_Path_Theory
+      {Reflexive_L : Reflexive L}
+      {Setoid_S : Setoid S} :
+      Relational.Path.Theory
+        (to_Relational_Signature Signature_S)
+        to_Relational_Path_Signature.
+    Next Obligation.
+      now split; intros s_eq_t; [inversion_clear s_eq_t| rewrite s_eq_t].
+    Qed.
+    Next Obligation.
+      destruct (try_fold L S s (Signature_S.(f)) x₀) as [t₁|].
+        split.
+          intros f_t₁_u₀_eq_t₀; exists t₁; now split.
+        intros (t₁' & Some_t₁_eq_Some_t₁' & f_t₁'_u₀_eq_t₀);
+        inversion_clear Some_t₁_eq_Some_t₁' as [? ? t₁_eq_t₁'|].
+        now rewrite t₁_eq_t₁'.
+      split.
+        intros None_eq_Some_t₀; inversion None_eq_Some_t₀.
+      intros (t₁ & None_eq_Some_t₁ & _); inversion_clear None_eq_Some_t₁.
+    Qed.
   End Algebraic.
 End Algebraic.
