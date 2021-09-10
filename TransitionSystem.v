@@ -528,8 +528,8 @@ Module Relational.
     Qed.
   End Relational.
 
-  Module Graph.
-    Section Graph.
+  Module Path.
+    Section Path.
       Context
         {L : Type}
         {Eq_L : Eq L}
@@ -646,7 +646,7 @@ Module Relational.
         intros x y s Ok_x_app_y Ok_y_s; move x at bottom.
         induction x as [| u₀ x₀ IHx₀].
           now exists s; split; [constructor|].
-        specialize IHx₀ as (t₁ & Graph_s_t₁ & Ok_x₀_app_y_t₁).
+        specialize IHx₀ as (t₁ & Path_s_t₁ & Ok_x₀_app_y_t₁).
           now apply Label.Ok_tl_morphism with u₀.
         specialize (executable _ u₀ (x₀ ++ y) t₁) as
           (t₀ & Transition_t₁_t₀ & Ok_x_app_y_t₀); [assumption..|].
@@ -665,13 +665,13 @@ Module Relational.
         Signature_S.(Ok) x t.
       Proof.
         intros x s Ok_x InitialState_s.
-        specialize (executable x [] s) as (t & Graph_s_t & Ok_x_t).
+        specialize (executable x [] s) as (t & Path_s_t & Ok_x_t).
             now rewrite app_nil_r.
           now apply Ok_Initial with Signature_L.
         now rewrite app_nil_r in Ok_x_t; exists t.
       Qed.
-    End Graph.
-  End Graph.
+    End Path.
+  End Path.
 End Relational.
 
 Module Algebraic.
