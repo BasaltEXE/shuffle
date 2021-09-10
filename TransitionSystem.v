@@ -951,5 +951,12 @@ Module Algebraic.
         reflexivity.
       intros x s; apply Weakly_Ok.
     Qed.
+
+    Definition to_Relational_Path_Signature :
+      Relational.Path.Signature L S :=
+      {|
+        Relational.Path.Path s x t :=
+          eq (try_fold L S s Signature_S.(f) x) (Some t);
+      |}.
   End Algebraic.
 End Algebraic.
