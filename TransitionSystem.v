@@ -296,20 +296,16 @@ Module Setoid.
       {Eq_B : Eq B}.
 
     #[global]
-    Add Parametric Morphism :
-      (@Some A) with signature
-      (eq ==> eq) as
-      Some_morphism.
+    Instance Morphism_Some :
+      Morphism (@Some A).
     Proof.
       intros x y x_eq_y.
       now constructor.
     Qed.
 
     #[global]
-    Add Parametric Morphism :
-      (@option_map A B) with signature
-      ((eq ==> eq) ==> eq ==> eq) as
-      option_map_morphism.
+    Instance Morphism_option_map :
+      Morphism (@option_map A B).
     Proof.
       intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x';
       constructor; now apply f_eq_g.
