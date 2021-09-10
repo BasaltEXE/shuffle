@@ -527,6 +527,151 @@ Module Relational.
       now apply Preserves_Ok.
     Qed.
   End Relational.
+
+  Module Graph.
+    Section Graph.
+      Context
+        {L : Type}
+        {Eq_L : Eq L}
+        (Signature_L : Label.Signature L)
+
+        {S : Type}
+        {Eq_S : Eq S}
+        (Signature_S : Signature L S).
+
+      Inductive R
+        (s : S) :
+        list L ->
+        S ->
+        Prop :=
+        | Nil :
+          forall
+          t : S,
+          eq s t ->
+          R s [] t
+        | Cons :
+          forall
+          (u₀ : L)
+          (x₀ : list L)
+          (t₀ t₁ : S),
+          R s x₀ t₁ ->
+          Signature_S.(Transition) t₁ u₀ t₀ ->
+          R s (u₀ :: x₀) t₀.
+
+      Lemma nil_iff :
+        forall
+        s t : S,
+        R s [] t <->
+        eq s t.
+      Proof.
+        now intros s t; split; [inversion 1| constructor].
+      Qed.
+
+      Lemma cons_iff :
+        forall
+        (u₀ : L)
+        (x₀ : list L)
+        (s t₀ : S),
+        R s (u₀ :: x₀) t₀ <->
+        exists
+        t₁ : S,
+        R s x₀ t₁ /\
+        Signature_S.(Transition) t₁ u₀ t₀.
+      Proof.
+        intros u₀ x₀ s t₀; split.
+          inversion_clear 1 as [| ? ? ? t₁ Transition_s_t₁ Transition_t₁_t₀].
+          now exists t₁.
+        intros (t₁ & Transition_s_t₁ & Transition_t₁_t₀).
+        now constructor 2 with t₁.
+      Qed.
+
+      Context
+        {Reflexive_L : Reflexive L}
+        {Setoid_S : Setoid S}.
+
+      Instance Morphism_R :
+        Morphism R.
+      Proof.
+        intros s s' s_eq_s' x x' x_eq_x'.
+        induction x_eq_x' as [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'];
+          intros t t' t_eq_t'.
+          now rewrite 2!nil_iff, s_eq_s', t_eq_t'.
+        rewrite 2!cons_iff.
+        enough (forall
+          t₁ : S,
+          R s x₀ t₁ /\ Signature_S.(Transition) t₁ u₀ t <->
+          R s' x₀' t₁ /\ Signature_S.(Transition) t₁ u₀' t') by firstorder.
+        intros t₁; specialize (IHx₀_eq_x₀' t₁ t₁ (reflexivity t₁)).
+        enough (
+          Transition Signature_S t₁ u₀ t <->
+          Transition Signature_S t₁ u₀' t') by
+          firstorder.
+        now apply Morphism_Transition.
+      Qed.
+
+      Lemma app_iff :
+        forall
+        (x y : list L)
+        (s u : S),
+        R s (x ++ y) u <->
+        exists
+        t : S,
+        R s y t /\
+        R t x u.
+      Proof.
+        intros x y s; move x after s.
+        induction x as [| u₀ x₀ IHx₀]; intros u.
+          setoid_rewrite nil_iff.
+          split.
+            intros Transition_s_y_u; now exists u.
+          intros (t & Transition_s_y_t & t_eq_u).
+          now rewrite <- t_eq_u.
+        setoid_rewrite cons_iff; setoid_rewrite IHx₀; firstorder.
+      Qed.
+
+      Context
+        {Theory_L : Label.Theory Signature_L}
+        {Theory_S : Theory Signature_L Signature_S}.
+
+      Lemma executable :
+        forall
+        (x y : list L)
+        (s : S),
+        Signature_L.(Label.Ok) (x ++ y) ->
+        Signature_S.(Ok) y s ->
+        exists t : S,
+        R s x t /\
+        Signature_S.(Ok) (x ++ y) t.
+      Proof.
+        intros x y s Ok_x_app_y Ok_y_s; move x at bottom.
+        induction x as [| u₀ x₀ IHx₀].
+          now exists s; split; [constructor|].
+        specialize IHx₀ as (t₁ & Graph_s_t₁ & Ok_x₀_app_y_t₁).
+          now apply Label.Ok_tl_morphism with u₀.
+        specialize (executable _ u₀ (x₀ ++ y) t₁) as
+          (t₀ & Transition_t₁_t₀ & Ok_x_app_y_t₀); [assumption..|].
+        now exists t₀; split; [constructor 2 with t₁|].
+      Qed.
+
+      Lemma executable_Initial  :
+        forall
+        (x : list L)
+        (s : S),
+        Signature_L.(Label.Ok) x ->
+        Signature_S.(Initial) s ->
+        exists
+        t : S,
+        R s x t /\
+        Signature_S.(Ok) x t.
+      Proof.
+        intros x s Ok_x InitialState_s.
+        specialize (executable x [] s) as (t & Graph_s_t & Ok_x_t).
+            now rewrite app_nil_r.
+          now apply Ok_Initial with Signature_L.
+        now rewrite app_nil_r in Ok_x_t; exists t.
+      Qed.
+    End Graph.
+  End Graph.
 End Relational.
 
 Module Algebraic.
