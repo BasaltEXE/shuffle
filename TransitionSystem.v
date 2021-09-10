@@ -311,6 +311,35 @@ Module Setoid.
       constructor; now apply f_eq_g.
     Qed.
 
+    Fixpoint try_fold
+      (init : B)
+      (f : B -> A -> option B)
+      (x : list A) :
+      option B :=
+      match x with
+      | [] =>
+          Some init
+      | u₀ :: x₀ =>
+          match try_fold init f x₀ with
+          | Some t₁ => f t₁ u₀
+          | None => None
+          end
+      end.
+
+    #[global]
+    Instance Morphism_try_fold :
+      Morphism try_fold.
+    Proof.
+      intros init init' init_eq_init' f f' f_eq_f' x x' x_eq_x'.
+      induction x_eq_x' as [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'].
+        now constructor.
+      simpl.
+      destruct (try_fold init f x₀) as [t₁|], (try_fold init' f' x₀') as [t₁'|];
+      inversion_clear IHx₀_eq_x₀' as [? ? t₁_eq_t₁'|].
+        now apply f_eq_f'.
+      constructor.
+    Qed.
+
     #[global]
     Instance Morphism_eq
       {PartialSetoid_A : PartialSetoid A} :
