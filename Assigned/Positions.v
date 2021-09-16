@@ -429,18 +429,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Qed.
   Next Obligation.
     intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
-    rewrite 2!Ok.Raw.
-    repeat try apply and_iff_morphism.
-          now rewrite x_eq_x', index_eq_index'.
-        apply all_iff_morphism; intros owner.
-        now rewrite x_eq_x', positions_eq_positions'.
-      apply all_iff_morphism; intros owner;
-      apply all_iff_morphism; intros indices.
-      now rewrite positions_eq_positions'.
-    apply all_iff_morphism; intros owner;
-    apply all_iff_morphism; intros indices;
-    apply all_iff_morphism; intros offset.
-    now rewrite x_eq_x', positions_eq_positions'.
+    now rewrite 2!Ok.Raw;
+    setoid_rewrite x_eq_x';
+    setoid_rewrite index_eq_index';
+    setoid_rewrite positions_eq_positions'.
   Qed.
 
   Instance Theory_L_S
