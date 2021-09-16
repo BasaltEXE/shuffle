@@ -412,6 +412,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     apply s_eq_s'.
   Qed.
 
+  Instance Morphism_new :
+    Proper (Logic.eq ==> Map.Equal ==> Setoid.eq) State.new.
+  Proof.
+    intros index index' index_eq_index'
+      positions positions' positions_eq_positions'; split.
+      now rewrite index_eq_index'.
+    simpl.
+    now rewrite positions_eq_positions'.
+  Qed.
+
   Unset Program Cases.
   #[program]
   Instance Signature_L_S
