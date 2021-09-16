@@ -467,19 +467,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     split.
       apply Ok.initial_state.
     intros [k₀| p₀] x₀ s _ Ok_x₀_s.
-      exists (State.talon s); split.
-        simpl.
-        constructor.
-        now constructor.
+      exists (State.talon s); split; [reflexivity|].
       now apply Ok.talon.
-    destruct (Map.find p₀ s.(State.owner_to_indices)) as [indices|] eqn: e.
-      exists (State.assigned_mapsto s p₀ indices); split.
-        simpl; rewrite e.
-        now constructor.
+    simpl; destruct (Map.find p₀ s.(State.owner_to_indices))
+      as [indices|] eqn: find_p₀_s.
+      exists (State.assigned_mapsto s p₀ indices); split; [reflexivity|].
       now apply Ok.assigned_mapsto; [apply Map_Facts.find_mapsto_iff|].
-    exists (State.assigned_not_in s p₀); split.
-      simpl; rewrite e.
-      now constructor.
+    exists (State.assigned_not_in s p₀); split; [reflexivity|].
     now apply Ok.assigned_not_in; [apply Map_Facts.not_find_in_iff|].
   Qed.
 
