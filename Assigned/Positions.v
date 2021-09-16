@@ -4,9 +4,7 @@ Require Import
   Coq.Structures.Equalities
   Coq.Lists.List
   Coq.Lists.SetoidList
-  Coq.Sorting.Sorted
-  Coq.Classes.RelationClasses
-  Coq.Classes.Morphisms_Prop.
+  Coq.Sorting.Sorted.
 
 Import
   ListNotations.
