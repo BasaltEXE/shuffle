@@ -540,19 +540,29 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     RNthA.t (Card.Assigned owner) cards offset)).
   Proof.
     intros cards.
-    specialize (Relational.Path.executable_Initial Signature_L (Algebraic.to_Relational_Signature Signature_L_S) (Algebraic.to_Relational_Path_Signature Signature_L_S) cards State.initial_state I) as (t & Path_init_t & Ok_cards_t).
+    pose (Relational_Signature_L_S :=
+      Algebraic.to_Relational_Signature Signature_L_S).
+    pose (Relational_Path_Signature_L_S :=
+      Algebraic.to_Relational_Path_Signature Signature_L_S).
+    specialize (Relational.Path.executable_Initial
+      Signature_L
+      Relational_Signature_L_S
+      Relational_Path_Signature_L_S
+      cards
+      State.initial_state) as (t & Path_init_t & Ok_cards_t).
+        constructor.
       simpl; reflexivity.
-    change (Setoid.eq (Setoid.try_fold _ _ Signature_L_S.(Algebraic.init) Signature_L_S.(Algebraic.f) cards) (Some t)) in Path_init_t.
-    rewrite generate_body_eq_try_fold in Path_init_t.
-     change (generate cards) with ((generate_body cards State.initial_state).(State.owner_to_indices)).
-    inversion_clear Path_init_t.
-    destruct H as (index_eq_index' & positions_eq_positions').
-    setoid_rewrite positions_eq_positions'.
-    split.
-    apply Ok_cards_t.(Ok.contains).
-  intros owner indices owner_to_indices; split.
-    now apply Ok_cards_t.(Ok.sorted) with owner.
-  intros offset.
-  now apply Ok_cards_t.(Ok.positions).
+    setoid_replace (generate cards) with t.(State.owner_to_indices).
+      split.
+        apply Ok_cards_t.
+      intros owner indices owner_to_indices; split.
+        now apply Ok_cards_t.(Ok.sorted) with owner.
+      intros offset.
+      now apply Ok_cards_t.(Ok.positions).
+    enough (H : Setoid.eq
+      (Some (generate_body cards State.initial_state))
+      (Some t)).
+      inversion_clear H as [? ? H'|]; apply H'.
+    now rewrite <- generate_body_eq_try_fold.
   Qed.
 End Make.
