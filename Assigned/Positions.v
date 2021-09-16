@@ -385,7 +385,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       s.(State.index) = s'.(State.index) /\
       Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
 
-  Program Instance Signature_L_S
+  Unset Program Cases.
+  #[program]
+  Instance Signature_L_S
     {Setoid_L : TransitionSystem.Setoid.Setoid L} :
     Algebraic.Signature L State.t :=
     {|
@@ -497,13 +499,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     induction x as [| u₀ x₀ IHx₀].
       reflexivity.
     intros s.
-    simpl.
-    rewrite IHx₀.
-    simpl.
-    destruct u₀; try reflexivity.
-    destruct ( Map.find t (State.owner_to_indices (generate_body x₀ s))).
-    reflexivity.
-    reflexivity.
+    simpl; rewrite IHx₀.
+    now destruct u₀.
   Qed.
 
   Definition generate
