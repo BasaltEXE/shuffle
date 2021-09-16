@@ -445,23 +445,12 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Ok.t;
     |}.
   Next Obligation.
-    intros s s' s_eq_s' [k| p] [k'| p'] u_eq_u'; constructor.
-          change (Key.eq k k') in u_eq_u'; split.
-            simpl; f_equal.
-            apply s_eq_s'.
-          apply s_eq_s'.
-        inversion u_eq_u'.
-      inversion u_eq_u'.
-    destruct s_eq_s' as (index_eq_index' & positions_eq_positions').
-    change (Owner.eq p p') in u_eq_u'; simpl in *.
-    rewrite positions_eq_positions'.
-    destruct (Map.find p (State.owner_to_indices s')) as [indices'|] eqn: e; simpl in *;  rewrite u_eq_u' in e; rewrite e; simpl.
-      split; simpl.
-        now f_equal.
-      now rewrite u_eq_u', index_eq_index', positions_eq_positions'.
-    split; simpl.
-      now f_equal.
-    now rewrite u_eq_u', index_eq_index', positions_eq_positions'.
+    intros s s' s_eq_s' [k| p] [k'| p'] u_eq_u';
+    compute in u_eq_u'; try contradiction; constructor.
+      now rewrite s_eq_s'.
+    rewrite u_eq_u', s_eq_s'.
+    destruct (Map.find p' (State.owner_to_indices s')) as [indices'|];
+    now rewrite u_eq_u', s_eq_s'.
   Qed.
   Next Obligation.
     intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
