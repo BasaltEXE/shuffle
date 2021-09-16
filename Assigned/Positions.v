@@ -392,17 +392,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Algebraic.init :=
         State.initial_state;
       Algebraic.f s u :=
-        match u with
-        | Card.Talon _ =>
-          Some (
-          State.talon s)
-        | Card.Assigned owner =>
-          Some (
-          match Map.find owner s.(State.owner_to_indices) with
-          | Some indices => State.assigned_mapsto s owner indices
-          | None => State.assigned_not_in s owner
-          end)
-        end;
+        Some
+          (match u with
+          | Card.Talon _ =>
+              State.talon s
+          | Card.Assigned owner =>
+              match Map.find owner s.(State.owner_to_indices) with
+              | Some indices => State.assigned_mapsto s owner indices
+              | None => State.assigned_not_in s owner
+              end
+          end);
       Algebraic.Ok :=
         Ok.t;
     |}.
@@ -489,8 +488,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     induction x as [| u₀ x₀ IHx₀].
       reflexivity.
     intros s.
-    simpl; rewrite IHx₀.
-    now destruct u₀.
+    simpl; now rewrite IHx₀.
   Qed.
 
   Definition generate
