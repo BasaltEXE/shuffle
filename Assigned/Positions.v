@@ -525,32 +525,30 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     {Setoid_S : Setoid.Setoid State.t} :
     forall
     cards : list Card.t,
-    let positions := generate cards in
     (forall
-      owner : Owner.t,
-      InA Card.eq (Card.Assigned owner) cards <->
-      Map.In owner positions) /\
+    owner : Owner.t,
+    Map.In owner (generate cards) <->
+    InA Card.eq (Card.Assigned owner) cards) /\
     (forall
     (owner : Owner.t)
     (indices : list nat),
-    Map.MapsTo owner indices positions ->
+    Map.MapsTo owner indices (generate cards) ->
     LocallySorted Peano.gt indices /\
     (forall
     offset : nat,
     In offset indices <->
     RNthA.t (Card.Assigned owner) cards offset)).
   Proof.
-    intros cards positions.
+    intros cards.
     specialize (Relational.Path.executable_Initial Signature_L (Algebraic.to_Relational_Signature Signature_L_S) (Algebraic.to_Relational_Path_Signature Signature_L_S) cards State.initial_state I) as (t & Path_init_t & Ok_cards_t).
       simpl; reflexivity.
     change (Setoid.eq (Setoid.try_fold _ _ Signature_L_S.(Algebraic.init) Signature_L_S.(Algebraic.f) cards) (Some t)) in Path_init_t.
     rewrite generate_body_eq_try_fold in Path_init_t.
-     change positions with ((generate_body cards State.initial_state).(State.owner_to_indices)).
+     change (generate cards) with ((generate_body cards State.initial_state).(State.owner_to_indices)).
     inversion_clear Path_init_t.
     destruct H as (index_eq_index' & positions_eq_positions').
     setoid_rewrite positions_eq_positions'.
     split.
-    symmetry.
     apply Ok_cards_t.(Ok.contains).
   intros owner indices owner_to_indices; split.
     now apply Ok_cards_t.(Ok.sorted) with owner.
