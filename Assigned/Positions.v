@@ -477,9 +477,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     now apply Ok.assigned_not_in; [apply Map_Facts.not_find_in_iff|].
   Qed.
 
-  Notation Graph :=
-    (TransitionSystem.Relational.Path.R (Algebraic.to_Relational_Signature Signature_L_S)).
-
   Fixpoint generate_body
     (cards : list Card.t)
     (state : State.t) :
