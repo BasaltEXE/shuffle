@@ -4,7 +4,9 @@ Require Import
   Coq.Structures.Equalities
   Coq.Lists.List
   Coq.Lists.SetoidList
-  Coq.Sorting.Sorted.
+  Coq.Sorting.Sorted
+  Coq.Classes.RelationClasses
+  Coq.Classes.Morphisms_Prop.
 
 Import
   ListNotations.
@@ -15,6 +17,9 @@ Require
 Require
   Shuffle.Misc
   Shuffle.List.
+
+Require Import
+  Shuffle.TransitionSystem.
 
 Import
   Misc(bind, ret).
@@ -118,6 +123,27 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module EqA := List.FromEqListA Card.
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
+  Definition L :
+    Type :=
+    Card.t.
+
+  Instance Eq_L :
+    Setoid.Eq L :=
+    Card.eq.
+
+  Program Definition Signature_L :
+    Label.Signature L :=
+    {|
+      Label.Ok x :=
+        True;
+    |}.
+  Next Obligation.
+    intros x x' x_eq_x'; reflexivity.
+  Qed.
+
+  Program Instance Label_Theory_L :
+    Label.Theory Signature_L.
+
   Module State.
     Record t :
       Type :=
@@ -177,139 +203,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       |}.
   End State.
 
-  Module Transition.
-    Inductive t :
-      State.t ->
-      Card.t ->
-      State.t ->
-      Prop :=
-      | Talon :
-        forall
-        (s₁ : State.t)
-        (key : Key.t),
-        t s₁ (Card.Talon key) (State.talon s₁)
-      | Assigned_MapsTo :
-        forall
-        (s₁ : State.t)
-        (owner : Owner.t)
-        (indices : list nat),
-        State.MapsTo s₁ owner indices ->
-        t s₁ (Card.Assigned owner) (State.assigned_mapsto s₁ owner indices)
-      | Assigned_not_In :
-        forall
-        (s₁ : State.t)
-        (owner : Owner.t),
-        ~ State.Contains s₁ owner ->
-        t s₁ (Card.Assigned owner) (State.assigned_not_in s₁ owner).
-
-    Lemma serial :
-      forall
-      (s₁ : State.t)
-      (u₀ : Card.t),
-      exists
-      s₀ : State.t,
-      t s₁ u₀ s₀.
-    Proof.
-      intros s₁ [key| owner].
-        exists (State.talon s₁); constructor.
-      destruct (Map.find owner s₁.(State.owner_to_indices)) as
-        [indices|] eqn: find.
-        now exists (State.assigned_mapsto s₁ owner indices); constructor; apply Map.find_2.
-      now exists (State.assigned_not_in s₁ owner); constructor;
-      apply Map_Facts.not_find_in_iff.
-    Qed.
-  End Transition.
-
-  Module Graph.
-    Inductive t
-      (s : State.t) :
-      list Card.t ->
-      State.t ->
-      Prop :=
-      | Nil :
-        t s [] s
-      | Cons :
-        forall
-        (u₀ : Card.t)
-        (x₀ : list Card.t)
-        (t₀ t₁ : State.t),
-        t s x₀ t₁ ->
-        Transition.t t₁ u₀ t₀ ->
-        t s (u₀ :: x₀) t₀.
-
-    Lemma nil_iff :
-      forall
-      s t : State.t,
-      Graph.t s [] t <->
-      s = t.
-    Proof.
-      intros s t; split.
-        now inversion 1.
-      intros <-; constructor.
-    Qed.
-
-    Lemma cons_iff :
-      forall
-      (u₀ : Card.t)
-      (x₀ : list Card.t)
-      (s t₀ : State.t),
-      Graph.t s (u₀ :: x₀) t₀ <->
-      exists
-      t₁ : State.t,
-      Graph.t s x₀ t₁ /\
-      Transition.t t₁ u₀ t₀.
-    Proof.
-      intros u₀ x₀ s t₀; split.
-        inversion_clear 1 as [| ? ? ? t₁ Graph_s_t₁ Transition_t₁_t₀ ].
-        now exists t₁.
-      intros (t₁ & Graph_s_t₁ & Transition_t₁_t₀).
-      now constructor 2 with t₁.
-    Qed.
-
-    Lemma app_iff :
-      forall
-      (x y : list Card.t)
-      (s u : State.t),
-      Graph.t s (x ++ y) u <->
-      exists
-      t : State.t,
-      Graph.t s y t /\
-      Graph.t t x u.
-    Proof.
-      intros x y s; move x after s.
-      induction x as [| u₀ x₀ IHx₀]; intros u.
-        split.
-          intros Graph_s_u.
-          exists u; split; [assumption| constructor].
-        intros (t & Graph_s_t & Graph_t_u).
-        now apply nil_iff in Graph_t_u as ->.
-      split.
-        intros Graph_s_u; change (Graph.t s (u₀ :: x₀ ++ y) u) in Graph_s_u.
-        apply cons_iff in Graph_s_u as (u' & Graph_s_u' & Transition_u'_u).
-        apply IHx₀ in Graph_s_u' as (t & Graph_s_t & Graph_t_u').
-        now exists t; split; [| constructor 2 with u'].
-      intros (t & Graph_s_t & Graph_t_u).
-      apply cons_iff in Graph_t_u as (u' & Graph_t_u' & Transition_u'_u).
-      enough (Graph.t s (x₀ ++ y) u') by (now constructor 2 with u').
-      now apply IHx₀; exists t.
-    Qed.
-
-    Lemma serial :
-      forall
-      (x : list Card.t)
-      (s : State.t),
-      exists
-      t : State.t,
-      Graph.t s x t.
-    Proof.
-      intros x s.
-      induction x as [| u₀ x₀ (t₁ & Graph_s_t₁)].
-        exists s; constructor.
-      specialize Transition.serial with t₁ u₀ as (t₀ & Transition_t₁_t₀).
-      now exists t₀; constructor 2 with t₁.
-    Qed.
-  End Graph.
-
   Module Ok.
     Record t
       (x : list Card.t)
@@ -338,6 +231,35 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           In offset indices <->
           RNthA.t (Card.Assigned owner) x offset;
       }.
+
+    Lemma Raw :
+      forall
+      (x : list Card.t)
+      (s : State.t),
+      t x s <->
+      s.(State.index) = List.length x /\
+      (forall
+      owner : Owner.t,
+      State.Contains s owner <->
+      InA Card.eq (Card.Assigned owner) x) /\
+      (forall
+      (owner : Owner.t)
+      (indices : list nat),
+      State.MapsTo s owner indices ->
+      LocallySorted Peano.gt indices) /\
+      (forall
+      (owner : Owner.t)
+      (indices : list nat)
+      (offset : nat),
+      State.MapsTo s owner indices ->
+      In offset indices <->
+      RNthA.t (Card.Assigned owner) x offset).
+    Proof.
+      intros x s; split.
+        now intros [length_x contains_s sorted_s positions_s].
+      intros (length_x & contains_s & sorted_s & positions_s).
+      now constructor.
+    Qed.
 
     Lemma initial_state :
       t [] State.initial_state.
@@ -455,75 +377,95 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
       rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
     Qed.
-
-    Lemma transition :
-      forall
-      (u₀ : Card.t)
-      (x₀ : list Card.t)
-      (s₀ s₁ : State.t),
-      Transition.t s₁ u₀ s₀ ->
-      t x₀ s₁ ->
-      t (u₀ :: x₀) s₀.
-    Proof.
-      intros u₀ x₀ s₀ s₁ Transition_s₁_s₀.
-      destruct Transition_s₁_s₀ as [
-          s₁ key |
-        s₁ p₀ indices₀ MapsTo_p₀_indices₀|
-      s₁ p₀ not_In_p₀];
-      intros Ok_s₁.
-          now apply talon.
-        now apply assigned_mapsto.
-      now apply assigned_not_in.
-    Qed.
-
-    Lemma graph :
-      forall
-      (x : list Card.t)
-      (s t : State.t),
-      Graph.t s x t ->
-      Ok.t [] s ->
-      Ok.t x t.
-    Proof.
-      intros x s t Graph_s_t Ok_s.
-      now induction Graph_s_t as
-        [| u₀ x₀ t₀ t₁ Graph_s_t₁ IHs_t₁ Transition_t₁_t₀];
-        [| apply transition with t₁].
-    Qed.
   End Ok.
 
-  Lemma spec :
-    forall
-    x : list Card.t,
-    exists
-    t : State.t,
-    Graph.t State.initial_state x t /\
-    (forall
-    owner : Owner.t,
-    InA Card.eq (Card.Assigned owner) x <->
-    State.Contains t owner) /\
-    (forall
-    (owner : Owner.t)
-    (indices : list nat),
-    State.MapsTo t owner indices ->
-    LocallySorted Peano.gt indices /\
-    (forall
-    offset : nat,
-    In offset indices <->
-    RNthA.t (Card.Assigned owner) x offset)).
-  Proof with auto.
-    intros x; pose (s := State.initial_state).
-    specialize Graph.serial with x s as (t & Graph_s_t).
-    assert (Ok_s : Ok.t [] s) by apply Ok.initial_state.
-    pose (Ok_t := Ok.graph Graph_s_t Ok_s).
-    exists t; split; [assumption|].
-    split.
-      intros owner; symmetry; apply Ok_t.(Ok.contains).
-    intros owner indices owner_to_indices.
-    split.
-      now apply Ok_t.(Ok.sorted) with owner.
-    intros offset.
-    now apply Ok_t.(Ok.positions).
+  Instance Eq_State :
+    Setoid.Eq State.t :=
+    fun s s' : State.t =>
+      s.(State.index) = s'.(State.index) /\
+      Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
+
+  Program Instance Signature_L_S
+    {Setoid_L : TransitionSystem.Setoid.Setoid L} :
+    Algebraic.Signature L State.t :=
+    {|
+      Algebraic.init :=
+        State.initial_state;
+      Algebraic.f s u :=
+        match u with
+        | Card.Talon _ =>
+          Some (
+          State.talon s)
+        | Card.Assigned owner =>
+          Some (
+          match Map.find owner s.(State.owner_to_indices) with
+          | Some indices => State.assigned_mapsto s owner indices
+          | None => State.assigned_not_in s owner
+          end)
+        end;
+      Algebraic.Ok :=
+        Ok.t;
+    |}.
+  Next Obligation.
+    intros s s' s_eq_s' [k| p] [k'| p'] u_eq_u'; constructor.
+          change (Key.eq k k') in u_eq_u'; split.
+            simpl; f_equal.
+            apply s_eq_s'.
+          apply s_eq_s'.
+        inversion u_eq_u'.
+      inversion u_eq_u'.
+    destruct s_eq_s' as (index_eq_index' & positions_eq_positions').
+    change (Owner.eq p p') in u_eq_u'; simpl in *.
+    rewrite positions_eq_positions'.
+    destruct (Map.find p (State.owner_to_indices s')) as [indices'|] eqn: e; simpl in *;  rewrite u_eq_u' in e; rewrite e; simpl.
+      split; simpl.
+        now f_equal.
+      now rewrite u_eq_u', index_eq_index', positions_eq_positions'.
+    split; simpl.
+      now f_equal.
+    now rewrite u_eq_u', index_eq_index', positions_eq_positions'.
   Qed.
+  Next Obligation.
+    intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
+    rewrite 2!Ok.Raw.
+    repeat try apply and_iff_morphism.
+          now rewrite x_eq_x', index_eq_index'.
+        apply all_iff_morphism; intros owner.
+        now rewrite x_eq_x', positions_eq_positions'.
+      apply all_iff_morphism; intros owner;
+      apply all_iff_morphism; intros indices.
+      now rewrite positions_eq_positions'.
+    apply all_iff_morphism; intros owner;
+    apply all_iff_morphism; intros indices;
+    apply all_iff_morphism; intros offset.
+    now rewrite x_eq_x', positions_eq_positions'.
+  Qed.
+
+  Instance Theory_L_S
+    {Setoid_L : TransitionSystem.Setoid.Setoid L} :
+    Algebraic.Theory Signature_L Signature_L_S.
+  Proof.
+    split.
+      apply Ok.initial_state.
+    intros [k₀| p₀] x₀ s _ Ok_x₀_s.
+      exists (State.talon s); split.
+        simpl.
+        constructor.
+        now constructor.
+      now apply Ok.talon.
+    destruct (Map.find p₀ s.(State.owner_to_indices)) as [indices|] eqn: e.
+      exists (State.assigned_mapsto s p₀ indices); split.
+        simpl; rewrite e.
+        now constructor.
+      now apply Ok.assigned_mapsto; [apply Map_Facts.find_mapsto_iff|].
+    exists (State.assigned_not_in s p₀); split.
+      simpl; rewrite e.
+      now constructor.
+    now apply Ok.assigned_not_in; [apply Map_Facts.not_find_in_iff|].
+  Qed.
+
+  Notation Graph :=
+    (TransitionSystem.Relational.Path.R (Algebraic.to_Relational_Signature Signature_L_S)).
 
   Fixpoint generate_body
     (cards : list Card.t)
@@ -542,38 +484,48 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       end
     end.
 
+  Lemma generate_body_eq_try_fold
+    {Setoid_L : Setoid.Setoid L} :
+    forall
+    (x : list Card.t)
+    (s : State.t),
+    Setoid.try_fold _ _
+      s
+      Signature_L_S.(Algebraic.f) x = Some
+        (generate_body x s).
+  Proof.
+    induction x as [| u₀ x₀ IHx₀].
+      reflexivity.
+    intros s.
+    simpl.
+    rewrite IHx₀.
+    simpl.
+    destruct u₀; try reflexivity.
+    destruct ( Map.find t (State.owner_to_indices (generate_body x₀ s))).
+    reflexivity.
+    reflexivity.
+  Qed.
+
   Definition generate
     (cards : list Card.t) :
     Map.t (list nat) :=
     (generate_body cards State.initial_state).(State.owner_to_indices).
 
-  Lemma generate_body_spec :
-    forall
-    (cards : list Card.t)
-    (s t : State.t),
-    Graph.t s cards t ->
-    generate_body cards s = t.
-  Proof.
-    intros x s t Graph_s_t.
-    induction Graph_s_t as [| u₀ x₀ t₀ t₁ Graph_s_t₁ IHs_t₁ Transition_t₁_t₀].
-      reflexivity.
-    destruct Transition_t₁_t₀ as [
-        t₁ key|
-      t₁ p₀ indices₀ MapsTo_p₀_indices₀|
-    t₁ p₀ not_In_p₀]; simpl in *; rewrite IHs_t₁.
-        reflexivity.
-      now apply Map.find_1 in MapsTo_p₀_indices₀ as ->.
-    now apply Map_Facts.not_find_in_iff in not_In_p₀ as ->.
-  Qed.
+  #[local]
+  Hint Resolve Algebraic.to_Relational_Theory : typeclass_instances.
+  #[local]
+  Hint Resolve Algebraic.to_Relational_Path_Theory : typeclass_instances.
 
-  Lemma generate_spec :
+  Lemma generate_spec
+    {Setoid_L : Setoid.Setoid L}
+    {Setoid_S : Setoid.Setoid State.t} :
     forall
     cards : list Card.t,
     let positions := generate cards in
     (forall
-    owner : Owner.t,
-    InA Card.eq (Card.Assigned owner) cards <->
-    Map.In owner positions) /\
+      owner : Owner.t,
+      InA Card.eq (Card.Assigned owner) cards <->
+      Map.In owner positions) /\
     (forall
     (owner : Owner.t)
     (indices : list nat),
@@ -585,10 +537,20 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     RNthA.t (Card.Assigned owner) cards offset)).
   Proof.
     intros cards positions.
-    specialize spec with cards as
-      (t & Graph_s_t & contains_sorted_positions).
-    enough (positions = t.(State.owner_to_indices)) as -> by assumption.
-    now unfold positions, generate;
-    rewrite generate_body_spec with (1 := Graph_s_t).
+    specialize (Relational.Path.executable_Initial Signature_L (Algebraic.to_Relational_Signature Signature_L_S) (Algebraic.to_Relational_Path_Signature Signature_L_S) cards State.initial_state I) as (t & Path_init_t & Ok_cards_t).
+      simpl; reflexivity.
+    change (Setoid.eq (Setoid.try_fold _ _ Signature_L_S.(Algebraic.init) Signature_L_S.(Algebraic.f) cards) (Some t)) in Path_init_t.
+    rewrite generate_body_eq_try_fold in Path_init_t.
+     change positions with ((generate_body cards State.initial_state).(State.owner_to_indices)).
+    inversion_clear Path_init_t.
+    destruct H as (index_eq_index' & positions_eq_positions').
+    setoid_rewrite positions_eq_positions'.
+    split.
+    symmetry.
+    apply Ok_cards_t.(Ok.contains).
+  intros owner indices owner_to_indices; split.
+    now apply Ok_cards_t.(Ok.sorted) with owner.
+  intros offset.
+  now apply Ok_cards_t.(Ok.positions).
   Qed.
 End Make.
