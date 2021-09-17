@@ -517,9 +517,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     (generate_body cards State.initial_state).(State.owner_to_indices).
 
   #[local]
-  Hint Resolve Algebraic.to_Relational_Theory : typeclass_instances.
+  Existing Instance Algebraic.to_Relational_Theory.
   #[local]
-  Hint Resolve Algebraic.to_Relational_Path_Theory : typeclass_instances.
+  Existing Instance Algebraic.to_Relational_Path_Theory.
 
   Lemma generate_spec :
     forall
