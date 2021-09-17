@@ -496,19 +496,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       end
     end.
 
-  Lemma generate_body_eq_try_fold :
+  Lemma try_fold_eq_generate_body :
     forall
     (x : list Card.t)
     (s : State.t),
-    Setoid.try_fold _ _
-      s
-      State.Signature.(Algebraic.f) x = Some
-        (generate_body x s).
+    Setoid.try_fold Label.t State.t s (Algebraic.f State.Signature) x =
+    Some (generate_body x s).
   Proof.
     induction x as [| u₀ x₀ IHx₀].
       reflexivity.
-    intros s.
-    simpl; now rewrite IHx₀.
+    intros s; simpl; now rewrite IHx₀.
   Qed.
 
   Definition generate
@@ -562,6 +559,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       (Some (generate_body cards State.initial_state))
       (Some t)).
       inversion_clear H as [? ? H'|]; apply H'.
-    now rewrite <- generate_body_eq_try_fold.
+    now rewrite <- try_fold_eq_generate_body.
   Qed.
 End Make.
