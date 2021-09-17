@@ -129,6 +129,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Instance Eq :
       Setoid.Eq t :=
       Card.eq.
+
+    Program Instance Setoid :
+      Setoid.Setoid t.
   End Label.
 
   Program Definition Signature_L :
@@ -425,8 +428,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Unset Program Cases.
   #[program]
-  Instance Signature_L_S
-    {Setoid_L : TransitionSystem.Setoid.Setoid Label.t} :
+  Instance Signature_L_S :
     Algebraic.Signature Label.t State.t :=
     {|
       Algebraic.init :=
@@ -461,8 +463,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     setoid_rewrite positions_eq_positions'.
   Qed.
 
-  Instance Theory_L_S
-    {Setoid_L : TransitionSystem.Setoid.Setoid Label.t} :
+  Instance Theory_L_S :
     Algebraic.Theory Signature_L Signature_L_S.
   Proof.
     split.
@@ -495,8 +496,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       end
     end.
 
-  Lemma generate_body_eq_try_fold
-    {Setoid_L : Setoid.Setoid Label.t} :
+  Lemma generate_body_eq_try_fold :
     forall
     (x : list Card.t)
     (s : State.t),
@@ -521,9 +521,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   #[local]
   Hint Resolve Algebraic.to_Relational_Path_Theory : typeclass_instances.
 
-  Lemma generate_spec
-    {Setoid_L : Setoid.Setoid Label.t}
-    {Setoid_S : Setoid.Setoid State.t} :
+  Lemma generate_spec :
     forall
     cards : list Card.t,
     (forall
