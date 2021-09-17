@@ -150,6 +150,50 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         owner_to_indices : Map.t (list nat);
       }.
 
+    Instance Eq :
+      Setoid.Eq State.t :=
+      fun s s' : State.t =>
+        s.(State.index) = s'.(State.index) /\
+        Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
+
+    Instance Setoid :
+      Setoid.Setoid State.t.
+    Proof.
+      split.
+          intros x; split; reflexivity.
+        intros x y x_eq_y; split; symmetry; apply x_eq_y.
+      intros x y z x_eq_y y_eq_z; split.
+        transitivity (y.(State.index)).
+          apply x_eq_y.
+        apply y_eq_z.
+      transitivity (y.(State.owner_to_indices)).
+        apply x_eq_y.
+      apply y_eq_z.
+    Qed.
+
+    Instance Morphism_new :
+      Proper (Logic.eq ==> Map.Equal ==> Setoid.eq) State.new.
+    Proof.
+      intros index index' index_eq_index'
+        positions positions' positions_eq_positions'; split.
+        now rewrite index_eq_index'.
+      simpl; now rewrite positions_eq_positions'.
+    Qed.
+
+    Instance Morphism_index :
+      Proper (Setoid.eq ==> Logic.eq) State.index.
+    Proof.
+      intros s s' s_eq_s'.
+      apply s_eq_s'.
+    Qed.
+
+    Instance Morphism_owner_to_indices :
+      Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
+    Proof.
+      intros s s' s_eq_s'.
+      apply s_eq_s'.
+    Qed.
+
     Notation MapsTo
       s
       owner
@@ -376,51 +420,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
     Qed.
   End Ok.
-
-  Instance Eq_State :
-    Setoid.Eq State.t :=
-    fun s s' : State.t =>
-      s.(State.index) = s'.(State.index) /\
-      Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
-
-  Instance Setoid_State :
-    Setoid.Setoid State.t.
-  Proof.
-    split.
-        intros x; split; reflexivity.
-      intros x y x_eq_y; split; symmetry; apply x_eq_y.
-    intros x y z x_eq_y y_eq_z; split.
-      transitivity (y.(State.index)).
-        apply x_eq_y.
-      apply y_eq_z.
-    transitivity (y.(State.owner_to_indices)).
-      apply x_eq_y.
-    apply y_eq_z.
-  Qed.
-
-  Instance Morphism_new :
-    Proper (Logic.eq ==> Map.Equal ==> Setoid.eq) State.new.
-  Proof.
-    intros index index' index_eq_index'
-      positions positions' positions_eq_positions'; split.
-      now rewrite index_eq_index'.
-    simpl.
-    now rewrite positions_eq_positions'.
-  Qed.
-
-  Instance Morphism_index :
-    Proper (Setoid.eq ==> Logic.eq) State.index.
-  Proof.
-    intros s s' s_eq_s'.
-    apply s_eq_s'.
-  Qed.
-
-  Instance Morphism_owner_to_indices :
-    Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
-  Proof.
-    intros s s' s_eq_s'.
-    apply s_eq_s'.
-  Qed.
 
   Unset Program Cases.
   #[program]
