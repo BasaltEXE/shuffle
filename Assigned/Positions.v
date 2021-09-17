@@ -428,7 +428,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Unset Program Cases.
   #[program]
-  Instance Signature_L_S :
+  Definition Signature_L_S :
     Algebraic.Signature Label.t State.t :=
     {|
       Algebraic.init :=
