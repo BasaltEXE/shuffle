@@ -424,60 +424,60 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
       Qed.
     End Ok.
+
+    Unset Program Cases.
+    #[program]
+    Definition Signature :
+      Algebraic.Signature Label.t State.t :=
+      {|
+        Algebraic.init :=
+          State.initial_state;
+        Algebraic.f s u :=
+          Some
+            (match u with
+            | Card.Talon _ =>
+                State.talon s
+            | Card.Assigned owner =>
+                match Map.find owner s.(State.owner_to_indices) with
+                | Some indices => State.assigned_mapsto s owner indices
+                | None => State.assigned_not_in s owner
+                end
+            end);
+        Algebraic.Ok :=
+          State.Ok.t;
+      |}.
+    Next Obligation.
+      intros s s' s_eq_s' [k| p] [k'| p'] u_eq_u';
+      compute in u_eq_u'; try contradiction; constructor.
+        now rewrite s_eq_s'.
+      rewrite u_eq_u', s_eq_s'.
+      destruct (Map.find p' (State.owner_to_indices s')) as [indices'|];
+      now rewrite u_eq_u', s_eq_s'.
+    Qed.
+    Next Obligation.
+      intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
+      now rewrite 2!State.Ok.Raw;
+      setoid_rewrite x_eq_x';
+      setoid_rewrite index_eq_index';
+      setoid_rewrite positions_eq_positions'.
+    Qed.
+
+    Instance Theory :
+      Algebraic.Theory Label.Signature Signature.
+    Proof.
+      split.
+        apply State.Ok.initial_state.
+      intros [k₀| p₀] x₀ s _ Ok_x₀_s.
+        exists (State.talon s); split; [reflexivity|].
+        now apply State.Ok.talon.
+      simpl; destruct (Map.find p₀ s.(State.owner_to_indices))
+        as [indices|] eqn: find_p₀_s.
+        exists (State.assigned_mapsto s p₀ indices); split; [reflexivity|].
+        now apply State.Ok.assigned_mapsto; [apply Map_Facts.find_mapsto_iff|].
+      exists (State.assigned_not_in s p₀); split; [reflexivity|].
+      now apply State.Ok.assigned_not_in; [apply Map_Facts.not_find_in_iff|].
+    Qed.
   End State.
-
-  Unset Program Cases.
-  #[program]
-  Definition Signature_L_S :
-    Algebraic.Signature Label.t State.t :=
-    {|
-      Algebraic.init :=
-        State.initial_state;
-      Algebraic.f s u :=
-        Some
-          (match u with
-          | Card.Talon _ =>
-              State.talon s
-          | Card.Assigned owner =>
-              match Map.find owner s.(State.owner_to_indices) with
-              | Some indices => State.assigned_mapsto s owner indices
-              | None => State.assigned_not_in s owner
-              end
-          end);
-      Algebraic.Ok :=
-        State.Ok.t;
-    |}.
-  Next Obligation.
-    intros s s' s_eq_s' [k| p] [k'| p'] u_eq_u';
-    compute in u_eq_u'; try contradiction; constructor.
-      now rewrite s_eq_s'.
-    rewrite u_eq_u', s_eq_s'.
-    destruct (Map.find p' (State.owner_to_indices s')) as [indices'|];
-    now rewrite u_eq_u', s_eq_s'.
-  Qed.
-  Next Obligation.
-    intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
-    now rewrite 2!State.Ok.Raw;
-    setoid_rewrite x_eq_x';
-    setoid_rewrite index_eq_index';
-    setoid_rewrite positions_eq_positions'.
-  Qed.
-
-  Instance Theory_L_S :
-    Algebraic.Theory Label.Signature Signature_L_S.
-  Proof.
-    split.
-      apply State.Ok.initial_state.
-    intros [k₀| p₀] x₀ s _ Ok_x₀_s.
-      exists (State.talon s); split; [reflexivity|].
-      now apply State.Ok.talon.
-    simpl; destruct (Map.find p₀ s.(State.owner_to_indices))
-      as [indices|] eqn: find_p₀_s.
-      exists (State.assigned_mapsto s p₀ indices); split; [reflexivity|].
-      now apply State.Ok.assigned_mapsto; [apply Map_Facts.find_mapsto_iff|].
-    exists (State.assigned_not_in s p₀); split; [reflexivity|].
-    now apply State.Ok.assigned_not_in; [apply Map_Facts.not_find_in_iff|].
-  Qed.
 
   Fixpoint generate_body
     (cards : list Card.t)
@@ -502,7 +502,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     (s : State.t),
     Setoid.try_fold _ _
       s
-      Signature_L_S.(Algebraic.f) x = Some
+      State.Signature.(Algebraic.f) x = Some
         (generate_body x s).
   Proof.
     induction x as [| u₀ x₀ IHx₀].
@@ -540,9 +540,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Proof.
     intros cards.
     pose (Relational_Signature_L_S :=
-      Algebraic.to_Relational_Signature Signature_L_S).
+      Algebraic.to_Relational_Signature State.Signature).
     pose (Relational_Path_Signature_L_S :=
-      Algebraic.to_Relational_Path_Signature Signature_L_S).
+      Algebraic.to_Relational_Path_Signature State.Signature).
     specialize (Relational.Path.executable_Initial
       Label.Signature
       Relational_Signature_L_S
