@@ -132,20 +132,20 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
     Program Instance Setoid :
       Setoid.Setoid t.
+
+    Program Definition Signature :
+      Label.Signature Label.t :=
+      {|
+        Label.Ok x :=
+          True;
+      |}.
+    Next Obligation.
+      intros x x' x_eq_x'; reflexivity.
+    Qed.
+
+    Program Instance Theory :
+      Label.Theory Signature.
   End Label.
-
-  Program Definition Signature_L :
-    Label.Signature Label.t :=
-    {|
-      Label.Ok x :=
-        True;
-    |}.
-  Next Obligation.
-    intros x x' x_eq_x'; reflexivity.
-  Qed.
-
-  Program Instance Label_Theory_L :
-    Label.Theory Signature_L.
 
   Module State.
     Record t :
@@ -464,7 +464,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Qed.
 
   Instance Theory_L_S :
-    Algebraic.Theory Signature_L Signature_L_S.
+    Algebraic.Theory Label.Signature Signature_L_S.
   Proof.
     split.
       apply Ok.initial_state.
@@ -544,7 +544,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     pose (Relational_Path_Signature_L_S :=
       Algebraic.to_Relational_Path_Signature Signature_L_S).
     specialize (Relational.Path.executable_Initial
-      Signature_L
+      Label.Signature
       Relational_Signature_L_S
       Relational_Path_Signature_L_S
       cards
