@@ -609,6 +609,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           simpl; now rewrite positions_eq_positions'.
         simpl; now rewrite instructions_eq_instructions'.
       Qed.
+
+      Instance Morphism_index :
+        Proper (Setoid.eq ==> Logic.eq) State.index.
+      Proof.
+        intros s s' s_eq_s'.
+        apply s_eq_s'.
+      Qed.
     End State.
   End Compress.
 End Make.
