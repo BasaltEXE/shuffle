@@ -636,6 +636,11 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         owner
         indices :=
         (Map.MapsTo owner indices s.(owner_to_indices)).
+
+      Notation Contains
+        s
+        owner :=
+        (Map.In owner s.(owner_to_indices)).
     End State.
   End Compress.
 End Make.
