@@ -14,7 +14,8 @@ Require
 
 Require
   Shuffle.Misc
-  Shuffle.List.
+  Shuffle.List
+  Shuffle.Assigned.Instructions.
 
 Require Import
   Shuffle.TransitionSystem.
@@ -116,6 +117,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Map_Facts := FMapFacts.WFacts_fun Owner Map.
 
   Module Card := Card Key Owner.
+  Module Instructions := Instructions.Make Owner.
 
   Module RNthA := List.RFromNth Card.
   Module EqA := List.FromEqListA Card.
@@ -563,4 +565,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now rewrite <- try_fold_eq_generate_body.
     Qed.
   End Indices.
+
+  Module Compress.
+    Module State.
+      Record t :
+        Type :=
+        new {
+          index : nat;
+          owner_to_indices : Map.t (list nat);
+          instructions : Instructions.t;
+        }.
+    End State.
+  End Compress.
 End Make.
