@@ -568,6 +568,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   End Indices.
 
   Module Compress.
+    Import Instructions.Notations.
+
     Module State.
       Record t :
         Type :=
@@ -656,6 +658,15 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           index := S s.(index);
           owner_to_indices := s.(owner_to_indices);
           instructions := s.(instructions);
+        |}.
+
+      Notation assigned_first
+        s
+        owner :=
+        {|
+          index := S s.(index);
+          owner_to_indices := s.(owner_to_indices);
+          instructions := Down owner :: s.(instructions);
         |}.
     End State.
   End Compress.
