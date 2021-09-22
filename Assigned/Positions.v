@@ -676,6 +676,15 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           owner_to_indices := s.(owner_to_indices);
           instructions := s.(instructions);
         |}.
+
+      Notation assigned_last
+        s
+        owner :=
+        {|
+          index := S s.(index);
+          owner_to_indices := s.(owner_to_indices);
+          instructions := Up owner :: s.(instructions);
+        |}.
     End State.
   End Compress.
 End Make.
