@@ -583,6 +583,18 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           s.(State.index) = s'.(State.index) /\
           Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices) /\
           eqlistA Instruction.eq s.(State.instructions) s'.(State.instructions).
+
+      Instance Setoid :
+        Setoid.Setoid State.t.
+      Proof.
+        split.
+            intros x; split; [| split]; reflexivity.
+          intros x y x_eq_y; split; [| split]; symmetry; apply x_eq_y.
+        intros x y z x_eq_y y_eq_z; split; [| split].
+            transitivity y.(State.index); [apply x_eq_y| apply y_eq_z].
+          transitivity y.(State.owner_to_indices); [apply x_eq_y| apply y_eq_z].
+        transitivity y.(State.instructions); [apply x_eq_y| apply y_eq_z].
+      Qed.
     End State.
   End Compress.
 End Make.
