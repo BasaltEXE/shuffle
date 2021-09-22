@@ -595,6 +595,20 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           transitivity y.(State.owner_to_indices); [apply x_eq_y| apply y_eq_z].
         transitivity y.(State.instructions); [apply x_eq_y| apply y_eq_z].
       Qed.
+
+      Instance Morphism_new :
+        Proper (Logic.eq ==> Map.Equal ==> eqlistA Instruction.eq ==> Setoid.eq) State.new.
+      Proof.
+        intros
+          index index' index_eq_index'
+          positions positions' positions_eq_positions'
+          instructions instructions' instructions_eq_instructions';
+          split; [| split].
+
+            now rewrite index_eq_index'.
+          simpl; now rewrite positions_eq_positions'.
+        simpl; now rewrite instructions_eq_instructions'.
+      Qed.
     End State.
   End Compress.
 End Make.
