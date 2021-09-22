@@ -118,6 +118,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Module Card := Card Key Owner.
   Module Instructions := Instructions.Make Owner.
+  Module Instruction := Instructions.Instruction.
 
   Module RNthA := List.RFromNth Card.
   Module EqA := List.FromEqListA Card.
@@ -575,6 +576,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           owner_to_indices : Map.t (list nat);
           instructions : Instructions.t;
         }.
+
+      Instance Eq :
+        Setoid.Eq State.t :=
+        fun s s' : State.t =>
+          s.(State.index) = s'.(State.index) /\
+          Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices) /\
+          eqlistA Instruction.eq s.(State.instructions) s'.(State.instructions).
     End State.
   End Compress.
 End Make.
