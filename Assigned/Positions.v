@@ -578,6 +578,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Instance Eq :
         Setoid.Eq t :=
         Card.eq.
+
+      #[program]
+      Instance Setoid :
+        Setoid.Setoid t.
     End Label.
 
     Module State.
