@@ -570,6 +570,12 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Compress.
     Import Instructions.Notations.
 
+    Module Label.
+      Definition t :
+        Type :=
+        Card.t.
+    End Label.
+
     Module State.
       Record t :
         Type :=
