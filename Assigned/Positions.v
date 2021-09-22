@@ -597,6 +597,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros x x' x_eq_x'.
         now setoid_rewrite x_eq_x'.
       Qed.
+
+      Instance Theory
+        (cards : list Card.t) :
+        Label.Theory (Signature cards).
+      Proof.
+        constructor; intros u₀ x₀ (y & cards_eq_app_y_x).
+        now exists (y ++ [u₀]); rewrite <- app_assoc.
+      Qed.
     End Label.
 
     Module State.
