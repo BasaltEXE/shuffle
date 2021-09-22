@@ -582,6 +582,21 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       #[program]
       Instance Setoid :
         Setoid.Setoid t.
+
+      #[program]
+      Definition Signature
+        (cards : list Card.t) :
+        Label.Signature Label.t :=
+        {|
+          Label.Ok x :=
+            exists
+            y : list Card.t,
+            Setoid.eq cards (y ++ x);
+        |}.
+      Next Obligation.
+        intros x x' x_eq_x'.
+        now setoid_rewrite x_eq_x'.
+      Qed.
     End Label.
 
     Module State.
