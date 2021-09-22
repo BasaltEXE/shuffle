@@ -616,6 +616,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros s s' s_eq_s'.
         apply s_eq_s'.
       Qed.
+
+      Instance Morphism_owner_to_indices :
+        Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
+      Proof.
+        intros s s' s_eq_s'.
+        apply s_eq_s'.
+      Qed.
     End State.
   End Compress.
 End Make.
