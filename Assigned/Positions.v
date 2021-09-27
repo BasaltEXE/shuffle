@@ -623,7 +623,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Type :=
         new {
           index : nat;
-          owner_to_indices : Map.t (list nat);
           instructions : Instructions.t;
         }.
 
@@ -631,44 +630,32 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Setoid.Eq State.t :=
         fun s s' : State.t =>
           s.(State.index) = s'.(State.index) /\
-          Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices) /\
           eqlistA Instruction.eq s.(State.instructions) s'.(State.instructions).
 
       Instance Setoid :
         Setoid.Setoid State.t.
       Proof.
         split.
-            intros x; split; [| split]; reflexivity.
-          intros x y x_eq_y; split; [| split]; symmetry; apply x_eq_y.
-        intros x y z x_eq_y y_eq_z; split; [| split].
+            intros x; split; reflexivity.
+          intros x y x_eq_y; split; symmetry; apply x_eq_y.
+        intros x y z x_eq_y y_eq_z; split.
             transitivity y.(State.index); [apply x_eq_y| apply y_eq_z].
-          transitivity y.(State.owner_to_indices); [apply x_eq_y| apply y_eq_z].
         transitivity y.(State.instructions); [apply x_eq_y| apply y_eq_z].
       Qed.
 
       Instance Morphism_new :
-        Proper (Logic.eq ==> Map.Equal ==> eqlistA Instruction.eq ==> Setoid.eq) State.new.
+        Proper (Logic.eq ==> eqlistA Instruction.eq ==> Setoid.eq) State.new.
       Proof.
         intros
           index index' index_eq_index'
-          positions positions' positions_eq_positions'
           instructions instructions' instructions_eq_instructions';
-          split; [| split].
-
+          split.
             now rewrite index_eq_index'.
-          simpl; now rewrite positions_eq_positions'.
         simpl; now rewrite instructions_eq_instructions'.
       Qed.
 
       Instance Morphism_index :
         Proper (Setoid.eq ==> Logic.eq) State.index.
-      Proof.
-        intros s s' s_eq_s'.
-        apply s_eq_s'.
-      Qed.
-
-      Instance Morphism_owner_to_indices :
-        Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
       Proof.
         intros s s' s_eq_s'.
         apply s_eq_s'.
@@ -681,22 +668,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         apply s_eq_s'.
       Qed.
 
-      Notation MapsTo
-        s
-        owner
-        indices :=
-        (Map.MapsTo owner indices s.(owner_to_indices)).
-
-      Notation Contains
-        s
-        owner :=
-        (Map.In owner s.(owner_to_indices)).
-
-      Notation initial_state
-        owner_to_indices :=
+      Notation initial_state :=
         {|
           index := 0;
-          owner_to_indices := owner_to_indices;
           instructions := [];
         |}.
 
@@ -704,7 +678,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         s :=
         {|
           index := S s.(index);
-          owner_to_indices := s.(owner_to_indices);
           instructions := s.(instructions);
         |}.
 
@@ -713,7 +686,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         owner :=
         {|
           index := S s.(index);
-          owner_to_indices := s.(owner_to_indices);
           instructions := Down owner :: s.(instructions);
         |}.
 
@@ -721,7 +693,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         s :=
         {|
           index := S s.(index);
-          owner_to_indices := s.(owner_to_indices);
           instructions := s.(instructions);
         |}.
 
@@ -730,7 +701,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         owner :=
         {|
           index := S s.(index);
-          owner_to_indices := s.(owner_to_indices);
           instructions := Up owner :: s.(instructions);
         |}.
 
