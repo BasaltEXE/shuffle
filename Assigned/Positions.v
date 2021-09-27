@@ -733,6 +733,62 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           owner_to_indices := s.(owner_to_indices);
           instructions := Up owner :: s.(instructions);
         |}.
+
+      Module Ok.
+        Section Ok.
+          Variables
+            (cards : list Card.t)
+            (owner_to_indices : Map.t (list nat))
+            (contains :
+              forall
+              owner : Owner.t,
+              Map.In owner owner_to_indices <->
+              InA Card.eq (Card.Assigned owner) cards)
+            (sorted :
+              forall
+              (owner : Owner.t)
+              (indices : list nat),
+              Map.MapsTo owner indices owner_to_indices ->
+              LocallySorted Peano.gt indices)
+            (positions :
+              forall
+              (owner : Owner.t)
+              (indices : list nat)
+              (offset : nat),
+              Map.MapsTo owner indices owner_to_indices ->
+              List.In offset indices <->
+              RNthA.t (Card.Assigned owner) cards offset).
+
+          Record t
+            (x : list Card.t)
+            (s : State.t) :
+            Prop :=
+            new {
+              length :
+                s.(State.index) = length x;
+              instructions :
+                Instructions.Ok s.(State.instructions);
+              contains_down :
+                forall
+                (owner : Owner.t)
+                (indices : list nat)
+                (index : nat),
+                Map.MapsTo owner indices owner_to_indices ->
+                last_error indices = Some index ->
+                In (Down owner) s.(State.instructions) <->
+                s.(State.index) > index;
+              contains_up :
+                forall
+                (owner : Owner.t)
+                (indices : list nat)
+                (index : nat),
+                Map.MapsTo owner indices owner_to_indices ->
+                hd_error indices = Some index ->
+                In (Up owner) s.(State.instructions) <->
+                s.(State.index) > index;
+            }.
+        End Ok.
+      End Ok.
     End State.
   End Compress.
 End Make.
