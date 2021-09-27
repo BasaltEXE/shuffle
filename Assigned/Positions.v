@@ -757,6 +757,17 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 In (Up owner) s.(State.instructions) <->
                 s.(State.index) > index;
             }.
+
+          Lemma initial_state :
+            t [] State.initial_state.
+          Proof.
+            constructor.
+                  reflexivity.
+                constructor.
+            1, 2 :
+              intros owner indices index _ _  ;
+              rewrite InA_nil; enough (~ 0 > index); [tauto| auto with arith].
+          Qed.
         End Ok.
       End Ok.
     End State.
