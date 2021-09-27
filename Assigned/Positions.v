@@ -570,6 +570,17 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Compress.
     Import Instructions.Notations.
 
+    Definition last_error
+      (A : Type)
+      (x : list A) :
+      option A :=
+      match x with
+      | [] =>
+          None
+      | u₀ :: x₀ =>
+          Some (last x₀ u₀)
+      end.
+
     Module Label.
       Definition t :
         Type :=
