@@ -586,6 +586,11 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       x :=
       (last_error x = Some v).
 
+    Notation Head
+      v
+      x :=
+      (hd_error x = Some v).
+
     Module Label.
       Definition t :
         Type :=
@@ -758,7 +763,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 (indices : list nat)
                 (index : nat),
                 Map.MapsTo owner indices owner_to_indices ->
-                hd_error indices = Some index ->
+                Head index indices ->
                 In (Up owner) s.(State.instructions) <->
                 s.(State.index) > index;
             }.
