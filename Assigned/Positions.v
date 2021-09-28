@@ -591,6 +591,17 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       x :=
       (hd_error x = Some v).
 
+    Lemma In_Head :
+      forall
+      (A : Type)
+      (v : A)
+      (x : list A),
+      Head v x ->
+      List.In v x.
+    Proof.
+      intros A v [| u₀ x₀] [=->]; now left.
+    Qed.
+
     Module Label.
       Definition t :
         Type :=
