@@ -581,6 +581,11 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Some (last x₀ u₀)
       end.
 
+    Notation Last
+      v
+      x :=
+      (last_error x = Some v).
+
     Module Label.
       Definition t :
         Type :=
@@ -744,7 +749,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 (indices : list nat)
                 (index : nat),
                 Map.MapsTo owner indices owner_to_indices ->
-                last_error indices = Some index ->
+                Last index indices ->
                 In (Down owner) s.(State.instructions) <->
                 s.(State.index) > index;
               contains_up :
