@@ -600,6 +600,22 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       x :=
       (last_error x = Some v).
 
+    Lemma In_Last :
+      forall
+      (A : Type)
+      (v : A)
+      (x : list A),
+      Last v x ->
+      List.In v x.
+    Proof.
+      intros A v x.
+      induction x as [| u₀ [| u₁ x₁] IHx₀]; intros [=Last_v_x].
+        now left.
+      right; change (last (u₁ :: x₁) u₀ = v) in Last_v_x.
+      apply IHx₀; change (Some (last x₁ u₁) = Some v); f_equal.
+      now rewrite <- last_cons with (v := u₀).
+    Qed.
+
     Notation Head
       v
       x :=
