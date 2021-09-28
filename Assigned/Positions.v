@@ -570,6 +570,20 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module Compress.
     Import Instructions.Notations.
 
+    Lemma last_cons :
+      forall
+      (A : Type)
+      (v u₀ : A)
+      (x₀ : list A),
+      last (u₀ :: x₀) v = last x₀ u₀.
+    Proof.
+      intros A v u₀ x₀; move x₀ after v; revert v u₀.
+      induction x₀ as [| u₁ x₁ IHx₁]; intros v u₀.
+        reflexivity.
+      change (last (u₁ :: x₁) v = last (u₁ :: x₁) u₀).
+      now rewrite 2!IHx₁.
+    Qed.
+
     Definition last_error
       (A : Type)
       (x : list A) :
