@@ -47,105 +47,108 @@ Section Classes.
   Qed.
 End Classes.
 
-Section Restriction.
-  Context
-    {A : Type}
-    (P : A -> Prop)
-    (R : relation A).
+Module Restriction.
+  Section Restriction.
+    Context
+      {A : Type}
+      (P : A -> Prop)
+      (R : relation A).
 
-  Definition Restriction :
-    relation (sig P) :=
-    fun x y => R (proj1_sig x) (proj1_sig y).
+    Definition Restriction :
+      relation (sig P) :=
+      fun x y => R (proj1_sig x) (proj1_sig y).
 
-  Let R' :
-    relation (sig P) :=
-    Restriction.
+    Let R' :
+      relation (sig P) :=
+      Restriction.
 
-  #[global]
-  Instance reflexive {Reflexive_R : Reflexive R} :
-    Reflexive R'.
-  Proof.
-    intros (x & P_x).
-    apply Reflexive_R.
-  Qed.
+    #[global]
+    Instance reflexive {Reflexive_R : Reflexive R} :
+      Reflexive R'.
+    Proof.
+      intros (x & P_x).
+      apply Reflexive_R.
+    Qed.
 
-  #[global]
-  Instance irreflexive {Irreflexive_R : Irreflexive R} :
-    Irreflexive R'.
-  Proof.
-    intros (x & P_x).
-    apply Irreflexive_R.
-  Qed.
+    #[global]
+    Instance irreflexive {Irreflexive_R : Irreflexive R} :
+      Irreflexive R'.
+    Proof.
+      intros (x & P_x).
+      apply Irreflexive_R.
+    Qed.
 
-  #[global]
-  Instance symmetric {Symmetric_R : Symmetric R} :
-    Symmetric R'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Symmetric_R.
-  Qed.
+    #[global]
+    Instance symmetric {Symmetric_R : Symmetric R} :
+      Symmetric R'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Symmetric_R.
+    Qed.
 
-  #[global]
-  Instance asymmetric {Asymmetric_R : Asymmetric R} :
-    Asymmetric R'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Asymmetric_R.
-  Qed.
+    #[global]
+    Instance asymmetric {Asymmetric_R : Asymmetric R} :
+      Asymmetric R'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Asymmetric_R.
+    Qed.
 
-  #[global]
-  Instance transitive {Transitive_R : Transitive R} :
-    Transitive R'.
-  Proof.
-    intros (x & P_x) (y & P_y) (z & P_z).
-    apply Transitive_R.
-  Qed.
+    #[global]
+    Instance transitive {Transitive_R : Transitive R} :
+      Transitive R'.
+    Proof.
+      intros (x & P_x) (y & P_y) (z & P_z).
+      apply Transitive_R.
+    Qed.
 
-  #[global]
-  Instance preorder {PreOrder_R : PreOrder R} :
-    PreOrder R'.
-  Proof.
-    constructor; eauto with typeclass_instances.
-  Qed.
+    #[global]
+    Instance preorder {PreOrder_R : PreOrder R} :
+      PreOrder R'.
+    Proof.
+      constructor; eauto with typeclass_instances.
+    Qed.
 
-  #[global]
-  Instance equivalence {Equivalence_R : Equivalence R} :
-    Equivalence R'.
-  Proof.
-    constructor; eauto with typeclass_instances.
-  Qed.
+    #[global]
+    Instance equivalence {Equivalence_R : Equivalence R} :
+      Equivalence R'.
+    Proof.
+      constructor; eauto with typeclass_instances.
+    Qed.
+  End Restriction.
+
+  Section PartialOrder.
+    Context
+      {A : Type}
+      (P : A -> Prop)
+      (R Eq : relation A).
+
+    Let R' :
+      relation (sig P) :=
+      Restriction P R.
+
+    Let Eq' :
+      relation (sig P) :=
+      Restriction P Eq.
+
+    #[global]
+    Instance antisymmetric `{Antisymmetric_R : Antisymmetric A R Eq} :
+      Antisymmetric (sig P) R' Eq'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Antisymmetric_R.
+    Qed.
+
+    #[global]
+    Instance partial_order `{PartialOrder_R : PartialOrder A R Eq} :
+      PartialOrder R' Eq'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply PartialOrder_R.
+    Qed.
+  End PartialOrder.
 End Restriction.
-
-Section PartialOrder.
-  Context
-    {A : Type}
-    (P : A -> Prop)
-    (R Eq : relation A).
-
-  Let R' :
-    relation (sig P) :=
-    Restriction P R.
-
-  Let Eq' :
-    relation (sig P) :=
-    Restriction P Eq.
-
-  #[global]
-  Instance antisymmetric `{Antisymmetric_R : Antisymmetric A R Eq} :
-    Antisymmetric (sig P) R' Eq'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Antisymmetric_R.
-  Qed.
-
-  #[global]
-  Instance partial_order `{PartialOrder_R : PartialOrder A R Eq} :
-    PartialOrder R' Eq'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply PartialOrder_R.
-  Qed.
-End PartialOrder.
+Import Restriction(Restriction).
 
 Module ReflexiveTransitive.
   Section ReflexiveTransitive.
