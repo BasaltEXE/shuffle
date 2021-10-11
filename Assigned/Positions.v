@@ -130,10 +130,12 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       relation t :=
       Card.eq.
 
-    Program Instance Setoid :
+    #[program]
+    Instance Setoid :
       Equivalence eq.
 
-    Program Definition Signature :
+    #[program]
+    Definition Signature :
       @Label.Signature Label.t Label.eq :=
       {|
         Label.Ok x :=
@@ -143,7 +145,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       intros x x' x_eq_x'; reflexivity.
     Qed.
 
-    Program Instance Theory :
+    #[program]
+    Instance Theory :
       Label.Theory Signature.
   End Label.
 

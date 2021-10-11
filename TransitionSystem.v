@@ -402,7 +402,8 @@ Module Relational.
           Signature_S.(Ok) x s';
       }.
 
-    Program Definition Signature_Image
+    #[program]
+    Definition Signature_Image
       {Morphism_h : Proper (Eq_S ==> Eq_S') h} :
       Signature L S :=
       {|
@@ -520,8 +521,8 @@ Module Relational.
             Relational_Signature_L_S.(Transition) t₁ u₀ t₀ ->
             R s (u₀ :: x₀) t₀.
 
-      #[global]
-      Program Instance Theory_R :
+      #[global, program]
+      Instance Theory_R :
         Theory
           {|
             Path :=
@@ -692,7 +693,8 @@ Module Algebraic.
       (Signature_L : @Label.Signature L Eq_L).
 
 
-    Program Definition to_Relational_Signature
+    #[program]
+    Definition to_Relational_Signature
       {S : Type}
       {Eq_S : relation S}
       (Signature_S : @Signature L Eq_L S Eq_S)
@@ -779,7 +781,8 @@ Module Algebraic.
           Signature_S.(Ok) x s';
       }.
 
-    Program Definition Signature_Image
+    #[program]
+    Definition Signature_Image
       {Morphism_h : Proper (Eq_S ==> Eq_S') h} :
       @Signature L Eq_L S Eq_S :=
       {|
@@ -863,7 +866,8 @@ Module Algebraic.
           eqoptionA S Eq_S (try_fold L S s Signature_S.(f) x) (Some t);
       |}.
 
-    Program Instance to_Relational_Path_Theory
+    #[program]
+    Instance to_Relational_Path_Theory
       {Reflexive_L : Reflexive Eq_L}
       {Setoid_S : Equivalence Eq_S} :
       Relational.Path.Theory
