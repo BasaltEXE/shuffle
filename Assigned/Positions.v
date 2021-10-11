@@ -126,15 +126,15 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Type :=
       Card.t.
 
-    Instance Eq :
-      Setoid.Eq t :=
+    Definition eq :
+      relation t :=
       Card.eq.
 
     Program Instance Setoid :
-      Setoid.Setoid t.
+      Equivalence eq.
 
     Program Definition Signature :
-      Label.Signature Label.t :=
+      @Label.Signature Label.t Label.eq :=
       {|
         Label.Ok x :=
           True;
@@ -155,14 +155,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         owner_to_indices : Map.t (list nat);
       }.
 
-    Instance Eq :
-      Setoid.Eq State.t :=
+    Definition eq :
+      relation t :=
       fun s s' : State.t =>
         s.(State.index) = s'.(State.index) /\
         Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
 
     Instance Setoid :
-      Setoid.Setoid State.t.
+      Equivalence eq.
     Proof.
       split.
           intros x; split; reflexivity.
@@ -177,7 +177,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Qed.
 
     Instance Morphism_new :
-      Proper (Logic.eq ==> Map.Equal ==> Setoid.eq) State.new.
+      Proper (Logic.eq ==> Map.Equal ==> State.eq) State.new.
     Proof.
       intros index index' index_eq_index'
         positions positions' positions_eq_positions'; split.
@@ -186,14 +186,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Qed.
 
     Instance Morphism_index :
-      Proper (Setoid.eq ==> Logic.eq) State.index.
+      Proper (State.eq ==> Logic.eq) State.index.
     Proof.
       intros s s' s_eq_s'.
       apply s_eq_s'.
     Qed.
 
     Instance Morphism_owner_to_indices :
-      Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
+      Proper (State.eq ==> Map.Equal) State.owner_to_indices.
     Proof.
       intros s s' s_eq_s'.
       apply s_eq_s'.
@@ -428,7 +428,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Unset Program Cases.
     #[program]
     Definition Signature :
-      Algebraic.Signature Label.t State.t :=
+      @Algebraic.Signature Label.t Label.eq State.t State.eq :=
       {|
         Algebraic.init :=
           State.initial_state;
@@ -555,7 +555,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now apply Ok_cards_t.(State.Ok.sorted) with owner.
       intros offset.
       now apply Ok_cards_t.(State.Ok.positions).
-    enough (H : Setoid.eq
+    enough (H : Setoid.eqoptionA State.t State.eq
       (Some (generate_body cards State.initial_state))
       (Some t)).
       inversion_clear H as [? ? H'|]; apply H'.
