@@ -26,7 +26,7 @@ Module Setoid.
     Definition eqprodAB :=
       RelProd Eq_A Eq_B.
 
-    #[global]
+    #[local]
     Instance Prod_Reflexive
       {Reflexive_A : Reflexive Eq_A}
       {Reflexive_B : Reflexive Eq_B} :
@@ -35,7 +35,7 @@ Module Setoid.
       unfold eqprodAB; auto with typeclass_instances.
     Qed.
 
-    #[global]
+    #[local]
     Instance Prod_PartialSetoid
       {PartialSetoid_A : PER Eq_A}
       {PartialSetoid_B : PER Eq_B} :
@@ -47,7 +47,7 @@ Module Setoid.
       split; now transitivity y.
     Qed.
 
-    #[global]
+    #[local]
     Instance Prod_Setoid
       {Setoid_A : Equivalence Eq_A}
       {Setoid_B : Equivalence Eq_B} :
@@ -75,7 +75,7 @@ Module Setoid.
           S x y ->
           eqsumAB A R B S (inr x) (inr y).
 
-    #[global]
+    #[local]
     Instance Sum_Reflexive
       {Reflexive_A : Reflexive Eq_A}
       {Reflexive_B : Reflexive Eq_B} :
@@ -84,7 +84,7 @@ Module Setoid.
       intros [x₁| x₂]; constructor; reflexivity.
     Qed.
 
-    #[global]
+    #[local]
     Instance Sum_PartialSetoid
       {PartialSetoid_A : PER Eq_A}
       {PartialSetoid_B : PER Eq_B} :
@@ -100,7 +100,7 @@ Module Setoid.
       constructor; [transitivity y₁| transitivity y₂]; assumption.
     Defined.
 
-    #[global]
+    #[local]
     Instance Sum_Setoid
       {Setoid_A : Equivalence Eq_A}
       {Setoid_B : Equivalence Eq_B} :
@@ -123,7 +123,7 @@ Module Setoid.
       | None_None :
           eqoptionA A R None None.
 
-    #[global]
+    #[local]
     Instance Option_Reflexive
       {Reflexive_A : Reflexive Eq_A} :
       Reflexive (eqoptionA A Eq_A).
@@ -131,7 +131,7 @@ Module Setoid.
       intros [x|]; now constructor.
     Qed.
 
-    #[global]
+    #[local]
     Instance Option_PartialSetoid
       {PartialSetoid_A : PER Eq_A} :
       PER (eqoptionA A Eq_A).
@@ -143,7 +143,7 @@ Module Setoid.
       now transitivity y'.
     Qed.
 
-    #[global]
+    #[local]
     Instance Option_Setoid
       {Setoid_A : Equivalence Eq_A} :
       Equivalence (eqoptionA A Eq_A).
@@ -151,7 +151,7 @@ Module Setoid.
       split; [apply Option_Reflexive| apply Option_PartialSetoid..]; exact _.
     Qed.
 
-    #[global]
+    #[local]
     Instance List_Reflexive
       {Reflexive_A : Reflexive Eq_A} :
       Reflexive (eqlistA Eq_A).
@@ -159,7 +159,7 @@ Module Setoid.
       intros x; induction x as [| u₀ x₀ IHx₀]; now constructor.
     Qed.
 
-    #[global]
+    #[local]
     Instance List_PartialSetoid
       {PartialSetoid_A : PER Eq_A} :
       PER (eqlistA Eq_A).
@@ -175,7 +175,7 @@ Module Setoid.
       now constructor; [transitivity v₀| apply IHx₀_eq_y₀].
     Qed.
 
-    #[global]
+    #[local]
     Instance List_Setoid
       {Setoid_A : Equivalence Eq_A} :
       Equivalence (eqlistA Eq_A).
@@ -183,7 +183,7 @@ Module Setoid.
       split; [apply List_Reflexive| apply List_PartialSetoid..]; exact _.
     Qed.
 
-    #[global]
+    #[local]
     Instance Arrow_PartialSetoid
       {PartialSetoid_A : PER Eq_A}
       {PartialSetoid_B : PER Eq_B} :
@@ -200,7 +200,7 @@ Module Setoid.
       (B : Type)
       {Eq_B : relation B}.
 
-    #[global]
+    #[local]
     Instance Morphism_Some :
       Proper (Eq_A ==> eqoptionA A Eq_A) (@Some A).
     Proof.
@@ -208,7 +208,7 @@ Module Setoid.
       now constructor.
     Qed.
 
-    #[global]
+    #[local]
     Instance Morphism_option_map :
       Proper ((Eq_A ==> Eq_B) ==> eqoptionA A Eq_A ==> eqoptionA B Eq_B) (@option_map A B).
     Proof.
@@ -231,7 +231,7 @@ Module Setoid.
           end
       end.
 
-    #[global]
+    #[local]
     Instance Morphism_try_fold :
       Proper (Eq_B ==> (Eq_B ==> Eq_A ==> eqoptionA B Eq_B) ==> eqlistA Eq_A ==> eqoptionA B Eq_B) try_fold.
     Proof.
@@ -245,7 +245,7 @@ Module Setoid.
       constructor.
     Qed.
 
-    #[global]
+    #[local]
     Instance Morphism_eq
       {PartialSetoid_A : PER Eq_A} :
       Proper (Eq_A ==> Eq_A ==> iff) Eq_A.
@@ -427,6 +427,7 @@ Module Relational.
       now apply Morphism_Ok, Morphism_h.
     Qed.
 
+    #[local]
     Instance Theory_Image
       {Reflexive_L : Reflexive Eq_L}
       {Setoid_S : Equivalence Eq_S}
@@ -521,7 +522,7 @@ Module Relational.
             Relational_Signature_L_S.(Transition) t₁ u₀ t₀ ->
             R s (u₀ :: x₀) t₀.
 
-      #[global, program]
+      #[local, program]
       Instance Theory_R :
         Theory
           {|
@@ -570,6 +571,7 @@ Module Relational.
         {Reflexive_L : Reflexive Eq_L}
         {Setoid_S : Equivalence Eq_S}.
 
+      #[local]
       Instance Morphism_Path :
         Proper (Eq_S ==> eqlistA Eq_L ==> Eq_S ==> iff) Signature_L_S.(Path).
       Proof.
@@ -590,6 +592,8 @@ Module Relational.
         now apply Morphism_Transition.
       Qed.
 
+      #[local]
+      Existing Instance List_Reflexive.
       Lemma app_iff :
         forall
         (x y : list L)
@@ -693,6 +697,10 @@ Module Algebraic.
       (Signature_L : @Label.Signature L Eq_L).
 
 
+    #[local]
+    Existing Instance Option_Setoid.
+    #[local]
+    Existing Instance Morphism_Some.
     #[program]
     Definition to_Relational_Signature
       {S : Type}
@@ -798,6 +806,11 @@ Module Algebraic.
       now apply Morphism_Ok, Morphism_h.
     Qed.
 
+    #[local]
+    Existing Instance Morphism_option_map.
+    #[local]
+    Existing Instance List_Reflexive.
+    #[local]
     Instance Theory_Image
       {Reflexive_L : Reflexive Eq_L}
       {Setoid_S : Equivalence Eq_S}
@@ -819,6 +832,7 @@ Module Algebraic.
       now apply Morphism_Ok with (u₀ :: x₀) (h t'); [..| apply Preserves_Ok].
     Qed.
 
+    #[local]
     Instance to_Relational_Theory
       {Setoid_S : Equivalence Eq_S}
       {Theory_S : Theory Signature_S} :
@@ -866,7 +880,7 @@ Module Algebraic.
           eqoptionA S Eq_S (try_fold L S s Signature_S.(f) x) (Some t);
       |}.
 
-    #[program]
+    #[local, program]
     Instance to_Relational_Path_Theory
       {Reflexive_L : Reflexive Eq_L}
       {Setoid_S : Equivalence Eq_S} :

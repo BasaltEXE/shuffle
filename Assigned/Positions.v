@@ -465,6 +465,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       setoid_rewrite positions_eq_positions'.
     Qed.
 
+    #[local]
+    Existing Instance Setoid.Option_Setoid.
     Instance Theory :
       Algebraic.Theory Label.Signature Signature.
     Proof.
@@ -520,7 +522,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Existing Instance Algebraic.to_Relational_Theory.
   #[local]
   Existing Instance Algebraic.to_Relational_Path_Theory.
-
   Lemma generate_spec :
     forall
     cards : list Card.t,
