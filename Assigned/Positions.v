@@ -821,6 +821,36 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 s.(State.index) > index;
             }.
 
+          Lemma Raw :
+            forall
+            (x : list Card.t)
+            (s : State.t),
+            t x s <->
+            s.(State.index) = List.length x /\
+            Instructions.Ok s.(State.instructions) /\
+            (forall
+            (owner : Owner.t)
+            (indices : list nat)
+            (index : nat),
+            Map.MapsTo owner indices owner_to_indices ->
+            Last index indices ->
+            In (Down owner) s.(State.instructions) <->
+            s.(State.index) > index) /\
+            (forall
+            (owner : Owner.t)
+            (indices : list nat)
+            (index : nat),
+            Map.MapsTo owner indices owner_to_indices ->
+            Head index indices ->
+            In (Up owner) s.(State.instructions) <->
+            s.(State.index) > index).
+          Proof.
+            intros x s; split.
+              now intros [length_x instructions_s contains_down_s contains_up_s].
+            intros (length_x & instructions_s & contains_down_s & contains_up_s).
+            now constructor.
+          Qed.
+
           Lemma initial_state :
             t [] State.initial_state.
           Proof.
