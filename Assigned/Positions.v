@@ -917,6 +917,27 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               rewrite InA_nil; enough (~ 0 > index); [tauto| auto with arith].
           Qed.
 
+          Section Positions.
+            Variables
+              (p p' : Owner.t)
+              (indices indices' : list nat)
+              (MapsTo_p_indices : Map.MapsTo p indices owner_to_indices)
+              (MapsTo_p'_indices' : Map.MapsTo p' indices' owner_to_indices).
+
+            Lemma Intersecting_Positions :
+              (exists
+              index : nat,
+              List.In index indices /\
+              List.In index indices') ->
+              Owner.eq p p'.
+            Proof.
+              intros (index & In_index_indices & In_index_indices').
+              change (Card.eq (Card.Assigned p) (Card.Assigned p')).
+              now apply Functional_RNthA with cards index;
+              [apply positions with indices| apply positions with indices'].
+            Qed.
+          End Positions.
+
           Lemma S_n_gt_m :
             forall
             m n : nat,
