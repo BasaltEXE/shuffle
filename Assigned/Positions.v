@@ -938,6 +938,18 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             enough (~ Instruction.eq (Down v) (Up p₀)) by tauto.
             now apply Instruction.neq_opcode.
           Qed.
+
+          Lemma cons_Down_iff :
+            forall
+            (v p₀ : Owner.t)
+            (x₀ : Instructions.t),
+            In (Down v) (Down p₀ :: x₀) <->
+            Owner.eq p₀ v \/ In (Down v) x₀.
+          Proof.
+            intros v p₀ x₀; rewrite InA_cons.
+            rewrite Instruction.eq_opcode by reflexivity.
+            firstorder.
+          Qed.
         End Ok.
       End Ok.
     End State.
