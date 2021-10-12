@@ -684,6 +684,20 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       intros A v [| u₀ x₀] [=->]; now left.
     Qed.
 
+    Lemma Functional_Head :
+      forall
+      (A : Type)
+      (v w : A)
+      (x : list A),
+      Head v x ->
+      Head w x ->
+      v = w.
+    Proof.
+      intros A v w x Head_v_x Head_w_x.
+      enough (Some v = Some w) as [=] by assumption.
+      now transitivity (hd_error x).
+    Qed.
+
     Module Label.
       Definition t :
         Type :=
