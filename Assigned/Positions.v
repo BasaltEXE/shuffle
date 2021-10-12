@@ -595,6 +595,18 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Some (last x₀ u₀)
       end.
 
+    Lemma last_error_cons :
+      forall
+      (A : Type)
+      (u₀ u₁ : A)
+      (x₁ : list A),
+      last_error (u₀ :: u₁ :: x₁) = last_error (u₁ :: x₁).
+    Proof.
+      intros A u₀ u₁ x₁.
+      change (Some (last (u₁ :: x₁) u₀) = last_error (u₁ :: x₁)).
+      now rewrite last_cons.
+    Qed.
+
     Notation Last
       v
       x :=
