@@ -649,6 +649,25 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now rewrite <- last_cons with (v := u₀).
     Qed.
 
+    Lemma Functional_Last :
+      forall
+      (A : Type)
+      (v w : A)
+      (x : list A),
+      Last v x ->
+      Last w x ->
+      v = w.
+    Proof.
+      intros A v w x.
+      induction x as [| u₀ [| u₁ x₁] IHx₀]; intros Last_v_x Last_w_x.
+          inversion Last_v_x.
+        inversion Last_v_x.
+        inversion Last_w_x.
+        now transitivity u₀.
+      rewrite last_error_cons in Last_v_x, Last_w_x.
+      now apply IHx₀.
+    Qed.
+
     Notation Head
       v
       x :=
