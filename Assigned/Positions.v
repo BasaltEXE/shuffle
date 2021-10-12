@@ -955,6 +955,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 [| rewrite p_eq_p'].
               now apply Intersecting_Positions.
             Qed.
+
+            Lemma Injective_Positions :
+              indices = indices' ->
+              Owner.eq p p'.
+            Proof.
+              rewrite Equal_Positions by assumption.
+              now apply Intersecting_Positions.
+            Qed.
           End Positions.
 
           Lemma S_n_gt_m :
