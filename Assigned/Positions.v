@@ -4,7 +4,8 @@ Require Import
   Coq.Structures.Equalities
   Coq.Lists.List
   Coq.Lists.SetoidList
-  Coq.Sorting.Sorted.
+  Coq.Sorting.Sorted
+  Lia.
 
 Import
   ListNotations.
@@ -914,6 +915,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             1, 2 :
               intros owner indices index _ _  ;
               rewrite InA_nil; enough (~ 0 > index); [tauto| auto with arith].
+          Qed.
+
+          Lemma S_n_gt_m :
+            forall
+            m n : nat,
+            S n > m <->
+            m = n \/
+            n > m.
+          Proof.
+            intros m n; lia.
           Qed.
         End Ok.
       End Ok.
