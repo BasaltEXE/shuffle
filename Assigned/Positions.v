@@ -926,6 +926,18 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Proof.
             intros m n; lia.
           Qed.
+
+          Lemma cons_Up_iff :
+            forall
+            (v p₀ : Owner.t)
+            (x₀ : Instructions.t),
+            In (Down v) (Up p₀ :: x₀) <->
+            In (Down v) x₀.
+          Proof.
+            intros v p₀ x₀; rewrite InA_cons.
+            enough (~ Instruction.eq (Down v) (Up p₀)) by tauto.
+            now apply Instruction.neq_opcode.
+          Qed.
         End Ok.
       End Ok.
     End State.
