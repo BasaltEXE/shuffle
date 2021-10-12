@@ -122,6 +122,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Module RNthA := List.RFromNth Card.
   Module EqA := List.FromEqListA Card.
+
+  Module EqA_Facts := List.EqAFactsOn Card EqA.
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
   Module Indices.
@@ -569,6 +571,25 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
   Module Compress.
     Import Instructions.Notations.
+
+    Lemma Functional_RNthA :
+      forall
+      (v v' : Card.t)
+      (x : list Card.t)
+      (n : nat),
+      RNthA.t v x n ->
+      RNthA.t v' x n ->
+      Card.eq v v'.
+    Proof.
+      intros v v' x n.
+      rewrite <- 2!RNthA_Facts.split_iff.
+      intros (y & z & e & f) (y' & z' & e' & f').
+      enough (EqA.eq (v :: z) (v' :: z')).
+        now apply EqA.eq_cons_cons_iff with z z'.
+      apply EqA_Facts.eq_app_app_iff with y y'.
+        right; simpl; now rewrite f, f'.
+      now rewrite <- e, <- e'.
+    Qed.
 
     Lemma last_cons :
       forall
