@@ -699,6 +699,29 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now transitivity (hd_error x).
     Qed.
 
+    Lemma Sorted_Head_Last :
+      forall
+      x : list nat,
+      LocallySorted Peano.gt x ->
+      forall
+      head last : nat,
+      Head head x ->
+      Last last x ->
+      head = last \/
+      head > last.
+    Proof.
+      induction 1 as [| u₀| u₀ u₁ x₁ Sorted_x₀ IHx₀ u₀_gt_u₁];
+      intros head last [=<-] Last_last_x.
+        left; enough (Some u₀ = Some last) as [=] by assumption.
+        now transitivity (Some u₀).
+      right; unfold gt.
+      specialize IHx₀ with u₁ last as [<-|].
+            reflexivity.
+          now rewrite last_error_cons in Last_last_x.
+        assumption.
+      now transitivity u₁.
+    Qed.
+
     Module Label.
       Definition t :
         Type :=
