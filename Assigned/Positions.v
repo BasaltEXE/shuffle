@@ -936,6 +936,25 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               now apply Functional_RNthA with cards index;
               [apply positions with indices| apply positions with indices'].
             Qed.
+
+            Lemma Equal_Positions :
+              indices = indices' <->
+              (exists
+              index : nat,
+              List.In index indices /\
+              List.In index indices').
+            Proof.
+              split.
+                intros <-.
+                assert (InA Card.eq (Card.Assigned p) cards) as
+                  (index & RNthA_p_cards_index)%RNthA_Facts.InA_iff.
+                  now apply contains; exists indices.
+                exists index; split; now apply positions with p.
+              intros intersecting; enough (p_eq_p' : Owner.eq p p').
+                now apply Map_Facts.MapsTo_fun with owner_to_indices p;
+                [| rewrite p_eq_p'].
+              now apply Intersecting_Positions.
+            Qed.
           End Positions.
 
           Lemma S_n_gt_m :
