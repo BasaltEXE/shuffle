@@ -136,7 +136,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
     #[program]
     Definition Signature :
-      @Label.Signature Label.t Label.eq :=
+      Label.Signature Label.eq :=
       {|
         Label.Ok x :=
           True;
@@ -431,7 +431,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Unset Program Cases.
     #[program]
     Definition Signature :
-      @Algebraic.Signature Label.t Label.eq State.t State.eq :=
+      Algebraic.Signature Label.eq State.eq :=
       {|
         Algebraic.init :=
           State.initial_state;
@@ -505,7 +505,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     forall
     (x : list Card.t)
     (s : State.t),
-    Setoid.try_fold Label.t State.t s (Algebraic.f State.Signature) x =
+    Setoid.try_fold s (Algebraic.f State.Signature) x =
     Some (generate_body x s).
   Proof.
     induction x as [| u₀ x₀ IHx₀].
@@ -545,9 +545,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     pose (Relational_Path_Signature_L_S :=
       Algebraic.to_Relational_Path_Signature State.Signature).
     specialize (Relational.Path.executable_Initial
-      Label.Signature
-      Relational_Signature_L_S
-      Relational_Path_Signature_L_S
+      (Label_Signature_L := Label.Signature)
       cards
       State.initial_state) as (t & Path_init_t & Ok_cards_t).
         constructor.
@@ -559,7 +557,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now apply Ok_cards_t.(State.Ok.sorted) with owner.
       intros offset.
       now apply Ok_cards_t.(State.Ok.positions).
-    enough (H : Setoid.eqoptionA State.t State.eq
+    enough (H : Setoid.eqoptionA State.eq
       (Some (generate_body cards State.initial_state))
       (Some t)).
       inversion_clear H as [? ? H'|]; apply H'.

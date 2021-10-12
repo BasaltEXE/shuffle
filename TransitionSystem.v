@@ -1,3 +1,5 @@
+Set Implicit Arguments.
+
 Require Import
   Coq.Arith.Arith
   Coq.Lists.List
@@ -19,9 +21,9 @@ Module Setoid.
   Section Instances.
     Context
       (A : Type)
-      {Eq_A : relation A}
+      (Eq_A : relation A)
       (B : Type)
-      {Eq_B : relation B}.
+      (Eq_B : relation B).
 
     Definition eqprodAB :=
       RelProd Eq_A Eq_B.
@@ -68,18 +70,18 @@ Module Setoid.
           forall
           x y : A,
           R x y ->
-          eqsumAB A R B S (inl x) (inl y)
+          eqsumAB R S (inl x) (inl y)
       | Right_Right :
           forall
           x y : B,
           S x y ->
-          eqsumAB A R B S (inr x) (inr y).
+          eqsumAB R S (inr x) (inr y).
 
     #[local]
     Instance Sum_Reflexive
       {Reflexive_A : Reflexive Eq_A}
       {Reflexive_B : Reflexive Eq_B} :
-      Reflexive (eqsumAB A Eq_A B Eq_B).
+      Reflexive (eqsumAB Eq_A Eq_B).
     Proof.
       intros [x₁| x₂]; constructor; reflexivity.
     Qed.
@@ -88,7 +90,7 @@ Module Setoid.
     Instance Sum_PartialSetoid
       {PartialSetoid_A : PER Eq_A}
       {PartialSetoid_B : PER Eq_B} :
-      PER (eqsumAB A Eq_A B Eq_B).
+      PER (eqsumAB Eq_A Eq_B).
     Proof.
       split.
         intros [x₁| x₂] [y₁| y₂] x_eq_y;
@@ -104,7 +106,7 @@ Module Setoid.
     Instance Sum_Setoid
       {Setoid_A : Equivalence Eq_A}
       {Setoid_B : Equivalence Eq_B} :
-      Equivalence (eqsumAB A Eq_A B Eq_B).
+      Equivalence (eqsumAB Eq_A Eq_B).
     Proof.
       split; [apply Sum_Reflexive| apply Sum_PartialSetoid..]; exact _.
     Qed.
@@ -119,14 +121,14 @@ Module Setoid.
           forall
           x y : A,
           R x y ->
-          eqoptionA A R (Some x) (Some y)
+          eqoptionA R (Some x) (Some y)
       | None_None :
-          eqoptionA A R None None.
+          eqoptionA R None None.
 
     #[local]
     Instance Option_Reflexive
       {Reflexive_A : Reflexive Eq_A} :
-      Reflexive (eqoptionA A Eq_A).
+      Reflexive (eqoptionA Eq_A).
     Proof.
       intros [x|]; now constructor.
     Qed.
@@ -134,7 +136,7 @@ Module Setoid.
     #[local]
     Instance Option_PartialSetoid
       {PartialSetoid_A : PER Eq_A} :
-      PER (eqoptionA A Eq_A).
+      PER (eqoptionA Eq_A).
     Proof.
       split.
         intros x y [x' y' x_eq_y|]; constructor.
@@ -146,7 +148,7 @@ Module Setoid.
     #[local]
     Instance Option_Setoid
       {Setoid_A : Equivalence Eq_A} :
-      Equivalence (eqoptionA A Eq_A).
+      Equivalence (eqoptionA Eq_A).
     Proof.
       split; [apply Option_Reflexive| apply Option_PartialSetoid..]; exact _.
     Qed.
@@ -196,13 +198,13 @@ Module Setoid.
   Section Misc.
     Context
       (A : Type)
-      {Eq_A : relation A}
+      (Eq_A : relation A)
       (B : Type)
-      {Eq_B : relation B}.
+      (Eq_B : relation B).
 
     #[local]
     Instance Morphism_Some :
-      Proper (Eq_A ==> eqoptionA A Eq_A) (@Some A).
+      Proper (Eq_A ==> eqoptionA Eq_A) (@Some A).
     Proof.
       intros x y x_eq_y.
       now constructor.
@@ -210,7 +212,7 @@ Module Setoid.
 
     #[local]
     Instance Morphism_option_map :
-      Proper ((Eq_A ==> Eq_B) ==> eqoptionA A Eq_A ==> eqoptionA B Eq_B) (@option_map A B).
+      Proper ((Eq_A ==> Eq_B) ==> eqoptionA Eq_A ==> eqoptionA Eq_B) (@option_map A B).
     Proof.
       intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x';
       constructor; now apply f_eq_g.
@@ -233,7 +235,7 @@ Module Setoid.
 
     #[local]
     Instance Morphism_try_fold :
-      Proper (Eq_B ==> (Eq_B ==> Eq_A ==> eqoptionA B Eq_B) ==> eqlistA Eq_A ==> eqoptionA B Eq_B) try_fold.
+      Proper (Eq_B ==> (Eq_B ==> Eq_A ==> eqoptionA Eq_B) ==> eqlistA Eq_A ==> eqoptionA Eq_B) try_fold.
     Proof.
       intros init init' init_eq_init' f f' f_eq_f' x x' x_eq_x'.
       induction x_eq_x' as [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'].
@@ -259,7 +261,7 @@ Import Setoid.
 Module Label.
   Class Signature
     (L : Type)
-    {Eq_L : relation L} :
+    (Eq_L : relation L) :
     Type :=
     {
       Ok :
@@ -271,8 +273,8 @@ Module Label.
   Arguments Ok {L} {Eq_L} _.
 
   Class Theory
-    {L : Type}
-    {Eq_L : relation L}
+    (L : Type)
+    (Eq_L : relation L)
     (Signature_L : @Signature L Eq_L) :
     Prop :=
     {
@@ -289,10 +291,10 @@ Module Relational.
   Section Relational.
     Class Signature
       (L : Type)
-      {Eq_L : relation L}
+      (Eq_L : relation L)
 
       (S : Type)
-      {Eq_S : relation S} :
+      (Eq_S : relation S) :
       Type :=
       {
         Initial :
@@ -322,13 +324,13 @@ Module Relational.
     Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
 
     Context
-      {L : Type}
-      {Eq_L : relation L}
+      (L : Type)
+      (Eq_L : relation L)
       (Signature_L : @Label.Signature L Eq_L).
 
     Class Theory
-      {S : Type}
-      {Eq_S : relation S}
+      (S : Type)
+      (Eq_S : relation S)
       (Signature_S : @Signature L Eq_L S Eq_S) :
       Prop :=
       {
@@ -350,12 +352,12 @@ Module Relational.
       }.
 
     Context
-      {S : Type}
-      {Eq_S : relation S}
+      (S : Type)
+      (Eq_S : relation S)
       (Signature_S : @Signature L Eq_L S Eq_S)
 
-      {S' : Type}
-      {Eq_S' : relation S'}
+      (S' : Type)
+      (Eq_S' : relation S')
       (Signature_S' : @Signature L Eq_L S' Eq_S')
 
       (h : S -> S').
@@ -405,7 +407,7 @@ Module Relational.
     #[program]
     Definition Signature_Image
       {Morphism_h : Proper (Eq_S ==> Eq_S') h} :
-      Signature L S :=
+      Signature Eq_L Eq_S :=
       {|
         Initial s :=
           Signature_S'.(Initial) (h s);
@@ -474,12 +476,12 @@ Module Relational.
       Arguments Path {L} {S} _.
 
       Context
-        {L : Type}
-        {Eq_L : relation L}
+        (L : Type)
+        (Eq_L : relation L)
         (Label_Signature_L : @Label.Signature L Eq_L)
 
-        {S : Type}
-        {Eq_S : relation S}
+        (S : Type)
+        (Eq_S : relation S)
         (Relational_Signature_L_S : @Relational.Signature L Eq_L S Eq_S).
 
       Class Theory
@@ -633,7 +635,7 @@ Module Relational.
           now exists s; split; [apply nil|].
         specialize IHx₀ as (t₁ & Path_s_t₁ & Ok_x₀_app_y_t₁).
           now apply Label.Ok_tl_morphism with u₀.
-        specialize (executable _ u₀ (x₀ ++ y) t₁) as
+        specialize (executable u₀ (x₀ ++ y) t₁) as
           (t₀ & Transition_t₁_t₀ & Ok_x_app_y_t₀); [assumption..|].
         now exists t₀; split; [apply cons with t₁|].
       Qed.
@@ -663,10 +665,10 @@ Module Algebraic.
   Section Algebraic.
     Class Signature
       (L : Type)
-      {Eq_L : relation L}
+      (Eq_L : relation L)
 
       (S : Type)
-      {Eq_S : relation S} :
+      (Eq_S : relation S) :
       Type :=
       {
         init :
@@ -676,7 +678,7 @@ Module Algebraic.
           L ->
           option S;
         Morphism_f :>
-          Proper (Eq_S ==> Eq_L ==> eqoptionA S Eq_S) f;
+          Proper (Eq_S ==> Eq_L ==> eqoptionA Eq_S) f;
         Ok :
           list L ->
           S ->
@@ -692,8 +694,8 @@ Module Algebraic.
     Arguments Ok {L} {Eq_L} {S} {Eq_S} _.
 
     Context
-      {L : Type}
-      {Eq_L : relation L}
+      (L : Type)
+      (Eq_L : relation L)
       (Signature_L : @Label.Signature L Eq_L).
 
 
@@ -703,8 +705,8 @@ Module Algebraic.
     Existing Instance Morphism_Some.
     #[program]
     Definition to_Relational_Signature
-      {S : Type}
-      {Eq_S : relation S}
+      (S : Type)
+      (Eq_S : relation S)
       (Signature_S : @Signature L Eq_L S Eq_S)
 
       {Setoid_S : Equivalence Eq_S} :
@@ -713,7 +715,7 @@ Module Algebraic.
         Relational.Initial x :=
           Eq_S x Signature_S.(init);
         Relational.Transition s u t :=
-          eqoptionA S Eq_S (Signature_S.(f) s u) (Some t);
+          eqoptionA Eq_S (Signature_S.(f) s u) (Some t);
         Relational.Ok :=
           Signature_S.(Ok);
       |}.
@@ -730,8 +732,8 @@ Module Algebraic.
     Qed.
 
     Class Theory
-      {S : Type}
-      {Eq_S : relation S}
+      (S : Type)
+      (Eq_S : relation S)
       (Signature_S : @Signature L Eq_L S Eq_S) :
       Prop :=
       {
@@ -745,17 +747,17 @@ Module Algebraic.
           Signature_L.(Label.Ok) (u₀ :: x₀) ->
           Signature_S.(Ok) x₀ s ->
           exists t : S,
-          eqoptionA S Eq_S (Signature_S.(f) s u₀) (Some t) /\
+          eqoptionA Eq_S (Signature_S.(f) s u₀) (Some t) /\
           Signature_S.(Ok) (u₀ :: x₀) t;
       }.
 
     Context
-      {S : Type}
-      {Eq_S : relation S}
+      (S : Type)
+      (Eq_S : relation S)
       (Signature_S : @Signature L Eq_L S Eq_S)
 
-      {S' : Type}
-      {Eq_S' : relation S'}
+      (S' : Type)
+      (Eq_S' : relation S')
       (Signature_S' : @Signature L Eq_L S' Eq_S')
 
       (h : S -> S').
@@ -771,7 +773,7 @@ Module Algebraic.
           forall
           (s : S)
           (u : L),
-          eqoptionA S' Eq_S' (Signature_S'.(f) (h s) u) (option_map h (Signature_S.(f) s u));
+          eqoptionA Eq_S' (Signature_S'.(f) (h s) u) (option_map h (Signature_S.(f) s u));
         Preserves_Ok :
           forall
           (x : list L)
@@ -825,7 +827,7 @@ Module Algebraic.
       apply Weakly_Ok in Ok'_x₀_h_s as (s' & h_s_eq_h_s' & Ok_x₀_s').
       specialize (executable u₀ x₀ s' Ok_x Ok_x₀_s') as
         (t' & f_s'_u₀_eq_t' & Ok_x_t').
-      assert (H : eqoptionA S' Eq_S' (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
+      assert (H : eqoptionA Eq_S' (option_map h (Signature_S.(f) s u₀)) (option_map h (Some t'))).
         now rewrite <- Preserves_f, h_s_eq_h_s', Preserves_f, f_s'_u₀_eq_t'.
       destruct (Signature_S.(f) s u₀) as [t|]; inversion_clear H.
       exists t; split; [reflexivity|].
@@ -877,7 +879,7 @@ Module Algebraic.
       Relational.Path.Signature L S :=
       {|
         Relational.Path.Path s x t :=
-          eqoptionA S Eq_S (try_fold L S s Signature_S.(f) x) (Some t);
+          eqoptionA Eq_S (try_fold s Signature_S.(f) x) (Some t);
       |}.
 
     #[local, program]
@@ -891,7 +893,7 @@ Module Algebraic.
       now split; intros s_eq_t; [inversion_clear s_eq_t| rewrite s_eq_t].
     Qed.
     Next Obligation.
-      destruct (try_fold L S s (Signature_S.(f)) x₀) as [t₁|].
+      destruct (try_fold s (Signature_S.(f)) x₀) as [t₁|].
         split.
           intros f_t₁_u₀_eq_t₀; exists t₁; now split.
         intros (t₁' & Some_t₁_eq_Some_t₁' & f_t₁'_u₀_eq_t₀);
