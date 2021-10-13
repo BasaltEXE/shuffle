@@ -986,6 +986,31 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               rewrite Equal_Positions by assumption.
               now apply Intersecting_Positions.
             Qed.
+
+            Lemma case_eq :
+              forall
+              index index' : nat,
+              Last index indices /\ Last index' indices' \/
+              Head index indices /\ Head index' indices' ->
+              Owner.eq p p' <-> index = index'.
+            Proof.
+              intros index index' H.
+              split.
+                intros p_eq_p'; rewrite <- p_eq_p' in MapsTo_p'_indices'.
+                enough (indices = indices') as <-.
+                  destruct H as [
+                    (Last_index_indices & Last_index'_indices)|
+                    (Head_index_indices & Head_index'_indices)].
+                    now apply Functional_Last with indices.
+                  now apply Functional_Head with indices.
+                now apply Map_Facts.MapsTo_fun with owner_to_indices p.
+              intros <-.
+              apply Intersecting_Positions; exists index.
+              destruct H as [
+                (Last_index_indices & Last_index_indices')|
+                (Head_index_indices & Head_index_indices')];
+              now split; (apply In_Last + apply In_Head).
+            Qed.
           End Positions.
 
           Lemma S_n_gt_m :
