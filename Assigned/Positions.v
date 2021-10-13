@@ -121,7 +121,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module EqA := List.FromEqListA Card.
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
-  Module Label.
+  Module Label <:
+    EqualityType.
     Definition t :
       Type :=
       Card.t.
@@ -131,7 +132,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Card.eq.
 
     #[program]
-    Instance Setoid :
+    Instance eq_equiv :
       Equivalence eq.
 
     #[program]
@@ -150,13 +151,18 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Label.Theory Signature.
   End Label.
 
-  Module State.
-    Record t :
+  Module State <:
+    EqualityType.
+    Record State :
       Type :=
       new {
         index : nat;
         owner_to_indices : Map.t (list nat);
       }.
+
+    Definition t :
+      Type :=
+      State.
 
     Definition eq :
       relation t :=
@@ -164,7 +170,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         s.(State.index) = s'.(State.index) /\
         Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
 
-    Instance Setoid :
+    Instance eq_equiv :
       Equivalence eq.
     Proof.
       split.
