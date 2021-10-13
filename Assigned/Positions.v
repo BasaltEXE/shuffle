@@ -1140,6 +1140,23 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               now apply In_Last.
             now apply In_Head.
           Qed.
+
+          Variables
+            (Ok_x : (Label.Signature cards).(Label.Ok) (Card.Assigned p₀ :: x₀)).
+
+          Lemma assigned_assumptions :
+            exists indices₀ : list nat,
+            Map.MapsTo p₀ indices₀ owner_to_indices /\
+            List.In s₁.(State.index) indices₀.
+          Proof.
+            specialize (index₁_to_u₀ Ok_x) as index₁_to_p₀.
+            enough (exists indices₀ : list nat,
+              Map.MapsTo p₀ indices₀ owner_to_indices) as
+              (indices₀ & MapsTo_p₀_indices₀).
+              now exists indices₀; split;
+              [| apply positions with (1 := MapsTo_p₀_indices₀)].
+            now apply contains, RNthA_Facts.InA_iff; exists s₁.(State.index).
+          Qed.
         End Ok.
       End Ok.
     End State.
