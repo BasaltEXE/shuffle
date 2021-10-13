@@ -128,20 +128,23 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
   Module Indices.
-    Module Label.
+    Module Label <:
+      EqualityType.
       Definition t :
         Type :=
         Card.t.
 
-      Instance Eq :
-        Setoid.Eq t :=
+      Definition eq :
+        relation Label.t :=
         Card.eq.
 
-      Program Instance Setoid :
-        Setoid.Setoid t.
+      #[program]
+      Instance eq_equiv :
+        Equivalence Label.eq.
 
-      Program Definition Signature :
-        Label.Signature Label.t :=
+      #[program]
+      Definition Signature :
+        Label.Signature Label.eq :=
         {|
           Label.Ok x :=
             True;
@@ -150,26 +153,32 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         intros x x' x_eq_x'; reflexivity.
       Qed.
 
-      Program Instance Theory :
+      #[local, program]
+      Instance Theory :
         Label.Theory Signature.
     End Label.
 
-    Module State.
-      Record t :
+    Module State <:
+      EqualityType.
+      Record State :
         Type :=
         new {
           index : nat;
           owner_to_indices : Map.t (list nat);
         }.
 
-      Instance Eq :
-        Setoid.Eq State.t :=
+      Definition t :
+        Type :=
+        State.
+
+      Definition eq :
+        relation State.t :=
         fun s s' : State.t =>
           s.(State.index) = s'.(State.index) /\
           Map.Equal s.(State.owner_to_indices) s'.(State.owner_to_indices).
 
-      Instance Setoid :
-        Setoid.Setoid State.t.
+      Instance eq_equiv :
+        Equivalence State.eq.
       Proof.
         split.
             intros x; split; reflexivity.
@@ -184,7 +193,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Qed.
 
       Instance Morphism_new :
-        Proper (Logic.eq ==> Map.Equal ==> Setoid.eq) State.new.
+        Proper (Logic.eq ==> Map.Equal ==> State.eq) State.new.
       Proof.
         intros index index' index_eq_index'
           positions positions' positions_eq_positions'; split.
@@ -193,14 +202,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Qed.
 
       Instance Morphism_index :
-        Proper (Setoid.eq ==> Logic.eq) State.index.
+        Proper (State.eq ==> Logic.eq) State.index.
       Proof.
         intros s s' s_eq_s'.
         apply s_eq_s'.
       Qed.
 
       Instance Morphism_owner_to_indices :
-        Proper (Setoid.eq ==> Map.Equal) State.owner_to_indices.
+        Proper (State.eq ==> Map.Equal) State.owner_to_indices.
       Proof.
         intros s s' s_eq_s'.
         apply s_eq_s'.
@@ -435,7 +444,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Unset Program Cases.
       #[program]
       Definition Signature :
-        Algebraic.Signature Label.t State.t :=
+        Algebraic.Signature Label.eq State.eq :=
         {|
           Algebraic.init :=
             State.initial_state;
@@ -469,6 +478,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         setoid_rewrite positions_eq_positions'.
       Qed.
 
+      #[local]
+      Existing Instance Setoid.Option_Setoid.
+      #[local]
       Instance Theory :
         Algebraic.Theory Label.Signature Signature.
       Proof.
@@ -507,7 +519,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       forall
       (x : list Card.t)
       (s : State.t),
-      Setoid.try_fold Label.t State.t s (Algebraic.f State.Signature) x =
+      Setoid.try_fold s (Algebraic.f State.Signature) x =
       Some (generate_body x s).
     Proof.
       induction x as [| u₀ x₀ IHx₀].
@@ -521,10 +533,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       (generate_body cards State.initial_state).(State.owner_to_indices).
 
     #[local]
-    Existing Instance Algebraic.to_Relational_Theory.
+    Existing Instances
+      Label.Theory
+      State.Theory.
     #[local]
-    Existing Instance Algebraic.to_Relational_Path_Theory.
-
+    Existing Instances
+      Algebraic.to_Relational_Theory
+      Algebraic.to_Relational_Path_Theory.
     Lemma generate_spec :
       forall
       cards : list Card.t,
@@ -548,9 +563,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       pose (Relational_Path_Signature_L_S :=
         Algebraic.to_Relational_Path_Signature State.Signature).
       specialize (Relational.Path.executable_Initial
-        Label.Signature
-        Relational_Signature_L_S
-        Relational_Path_Signature_L_S
+        (Label_Signature_L := Label.Signature)
         cards
         State.initial_state) as (t & Path_init_t & Ok_cards_t).
           constructor.
@@ -562,7 +575,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           now apply Ok_cards_t.(State.Ok.sorted) with owner.
         intros offset.
         now apply Ok_cards_t.(State.Ok.positions).
-      enough (H : Setoid.eq
+      enough (H : Setoid.eqoptionA State.eq
         (Some (generate_body cards State.initial_state))
         (Some t)).
         inversion_clear H as [? ? H'|]; apply H'.
@@ -722,28 +735,29 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now transitivity u₁.
     Qed.
 
-    Module Label.
+    Module Label <:
+      EqualityType.
       Definition t :
         Type :=
         Card.t.
 
-      Instance Eq :
-        Setoid.Eq t :=
+      Definition eq :
+        relation Label.t :=
         Card.eq.
 
       #[program]
-      Instance Setoid :
-        Setoid.Setoid t.
+      Instance eq_equiv :
+        Equivalence Label.eq.
 
       #[program]
       Definition Signature
         (cards : list Card.t) :
-        Label.Signature Label.t :=
+        Label.Signature Label.eq :=
         {|
           Label.Ok x :=
             exists
             y : list Card.t,
-            Setoid.eq cards (y ++ x);
+            eqlistA Label.eq cards (y ++ x);
         |}.
       Next Obligation.
         intros x x' x_eq_x'.
@@ -759,22 +773,27 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Qed.
     End Label.
 
-    Module State.
-      Record t :
+    Module State <:
+      EqualityType.
+      Record State :
         Type :=
         new {
           index : nat;
           instructions : Instructions.t;
         }.
 
-      Instance Eq :
-        Setoid.Eq State.t :=
+      Definition t :
+        Type :=
+        State.
+
+      Definition eq :
+        relation State.t :=
         fun s s' : State.t =>
           s.(State.index) = s'.(State.index) /\
           eqlistA Instruction.eq s.(State.instructions) s'.(State.instructions).
 
-      Instance Setoid :
-        Setoid.Setoid State.t.
+      Instance eq_equiv :
+        Equivalence State.eq.
       Proof.
         split.
             intros x; split; reflexivity.
@@ -785,7 +804,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Qed.
 
       Instance Morphism_new :
-        Proper (Logic.eq ==> eqlistA Instruction.eq ==> Setoid.eq) State.new.
+        Proper (Logic.eq ==> eqlistA Instruction.eq ==> State.eq) State.new.
       Proof.
         intros
           index index' index_eq_index'
@@ -796,14 +815,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Qed.
 
       Instance Morphism_index :
-        Proper (Setoid.eq ==> Logic.eq) State.index.
+        Proper (State.eq ==> Logic.eq) State.index.
       Proof.
         intros s s' s_eq_s'.
         apply s_eq_s'.
       Qed.
 
       Instance Morphism_instructions :
-        Proper (Setoid.eq ==> eqlistA Instruction.eq) State.instructions.
+        Proper (State.eq ==> eqlistA Instruction.eq) State.instructions.
       Proof.
         intros s s' s_eq_s'.
         apply s_eq_s'.

@@ -229,6 +229,8 @@ Module Skip.
         now exists (u₀ :: y₀); rewrite IHx₀_z.
       Qed.
 
+      #[local]
+      Existing Instance ReflexiveTransitive.reflexive.
       Lemma iff :
         Skip x z <->
         (exists
@@ -264,7 +266,9 @@ Module Skip.
       now rewrite <- app_assoc, <- H.
     Qed.
 
-    #[global]
+    #[local]
+    Existing Instance ReflexiveTransitive.preorder.
+    #[local]
     Instance partial_order :
       PartialOrder eq Skip.
     Proof.
@@ -275,6 +279,8 @@ Module Skip.
       now apply antisymmetric.
     Qed.
 
+    #[local]
+    Existing Instance ReflexiveTransitive.subrelation.
     Lemma not_flip_Tail :
       forall
       x y : list A,
@@ -339,6 +345,8 @@ Module Skip.
         (v₀ : A)
         (y₀ y : list A).
 
+      #[local]
+      Existing Instance ReflexiveTransitive.reflexive.
       Lemma refl :
         P y ->
         Exists P y.
