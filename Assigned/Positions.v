@@ -1068,6 +1068,21 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             rewrite Instruction.eq_opcode by reflexivity.
             firstorder.
           Qed.
+
+          Ltac Contains_Down Ok_s₁ P :=
+            intros owner indices index
+              MapsTo_owner_indices Last_index_indices;
+            simpl; rewrite
+              1 ? cons_Up_iff,
+              1 ? cons_Down_iff,
+              S_n_gt_m;
+            let H := fresh "H" in
+            enough (H : P owner index) by
+              (rewrite Ok_s₁.(contains_down) with
+                (1 := MapsTo_owner_indices)
+                (2 := Last_index_indices);
+              simpl in H;
+              lia || intuition).
         End Ok.
       End Ok.
     End State.
