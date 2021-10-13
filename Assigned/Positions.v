@@ -1246,6 +1246,23 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Owner.eq owner p₀ <-> index = s₁.(State.index)).
             apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
           Qed.
+
+          Lemma assigned_middle :
+            ~ Last s₁.(State.index) indices₀ ->
+            ~ Head s₁.(State.index) indices₀ ->
+            t (Card.Assigned p₀ :: x₀) (State.assigned_middle s₁).
+          Proof with auto.
+            intros not_Last_index₁_indices₀ not_Head_index₁_indices₀.
+            constructor.
+                  apply eq_S, Ok_s₁.(length).
+                apply Ok_s₁.(instructions).
+              Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+                s₁.(State.index) <> index).
+              apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+            Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+              s₁.(State.index) <> index).
+            apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+          Qed.
         End Ok.
       End Ok.
     End State.
