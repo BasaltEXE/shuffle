@@ -1083,6 +1083,21 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 (2 := Last_index_indices);
               simpl in H;
               lia || intuition).
+
+          Ltac Contains_Up Ok_s₁ P :=
+            intros owner indices index
+              MapsTo_owner_indices Head_index_indices;
+            simpl; rewrite
+              1 ? Instructions.Ahead.cons_Up_iff,
+              1 ? Instructions.Ahead.cons_Down_iff,
+              S_n_gt_m;
+            let H := fresh "H" in
+            enough (H : P owner index) by
+              (rewrite Ok_s₁.(contains_up) with
+                (1 := MapsTo_owner_indices)
+                (2 := Head_index_indices);
+              simpl in H;
+              lia || intuition).
         End Ok.
       End Ok.
     End State.
