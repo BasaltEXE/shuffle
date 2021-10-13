@@ -1208,6 +1208,44 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Owner.eq owner p₀ <-> index = s₁.(State.index)).
             apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
           Qed.
+
+          Lemma assigned_last :
+            ~ Last s₁.(State.index) indices₀ ->
+            Head s₁.(State.index) indices₀ ->
+            t (Card.Assigned p₀ :: x₀) (State.assigned_last s₁ p₀).
+          Proof with auto.
+            intros not_Last_index_indices₀ Head_index_indices₀.
+            constructor.
+                  apply eq_S, Ok_s₁.(length).
+                constructor; [| apply Ok_s₁.(instructions)].
+                split.
+                  rewrite Ok_s₁.(contains_up) with
+                    (1 := MapsTo_p₀_indices₀)
+                    (2 := Head_index_indices₀).
+                  lia.
+                assert (exists n : nat,
+                  Last n indices₀ /\
+                  n <> s₁.(State.index)) as
+                  (n & Last_n_indices₀ & n_neq_index₁).
+                  destruct indices₀ as [| v₀ y₀].
+                    inversion Head_index_indices₀.
+                  exists (last y₀ v₀); split; [reflexivity|].
+                  contradict not_Last_index_indices₀; simpl; now f_equal.
+                apply Ok_s₁.(contains_down) with
+                  (1 := MapsTo_p₀_indices₀)
+                  (2 := Last_n_indices₀).
+                specialize Sorted_Head_Last with
+                  (1 := sorted MapsTo_p₀_indices₀)
+                  (2 := Head_index_indices₀)
+                  (3 := Last_n_indices₀).
+                lia.
+              Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+                s₁.(State.index) <> index).
+              apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+            Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+              Owner.eq owner p₀ <-> index = s₁.(State.index)).
+            apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+          Qed.
         End Ok.
       End Ok.
     End State.
