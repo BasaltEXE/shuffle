@@ -145,7 +145,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       intros x x' x_eq_x'; reflexivity.
     Qed.
 
-    #[program]
+    #[local, program]
     Instance Theory :
       Label.Theory Signature.
   End Label.
@@ -467,6 +467,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
     #[local]
     Existing Instance Setoid.Option_Setoid.
+    #[local]
     Instance Theory :
       Algebraic.Theory Label.Signature Signature.
     Proof.
@@ -519,9 +520,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     (generate_body cards State.initial_state).(State.owner_to_indices).
 
   #[local]
-  Existing Instance Algebraic.to_Relational_Theory.
+  Existing Instances
+    Label.Theory
+    State.Theory.
   #[local]
-  Existing Instance Algebraic.to_Relational_Path_Theory.
+  Existing Instances
+    Algebraic.to_Relational_Theory
+    Algebraic.to_Relational_Path_Theory.
   Lemma generate_spec :
     forall
     cards : list Card.t,
