@@ -1098,6 +1098,24 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 (2 := Head_index_indices);
               simpl in H;
               lia || intuition).
+
+          Variables
+            (k₀ : Key.t)
+            (p₀ : Owner.t)
+            (x₀ : list Card.t)
+            (s₁ : State.t)
+            (Ok_s₁ : t x₀ s₁).
+
+          Lemma index₁_to_u₀ :
+            forall u₀ : Card.t,
+            (Label.Signature cards).(Label.Ok) (u₀ :: x₀) ->
+            RNthA.t u₀ cards s₁.(State.index).
+          Proof.
+            intros u₀ Ok_x.
+            destruct Ok_x as (y & ->).
+            rewrite Ok_s₁.(length), RNthA_Facts.middle_iff.
+            now destruct u₀.
+          Qed.
         End Ok.
       End Ok.
     End State.
