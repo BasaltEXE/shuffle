@@ -1011,6 +1011,28 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 (Head_index_indices & Head_index_indices')];
               now split; (apply In_Last + apply In_Head).
             Qed.
+
+            Lemma case_neq :
+              forall
+              index index' : nat,
+              List.In index indices ->
+              ~ Last index indices /\ Last index' indices' \/
+              ~ Head index indices /\ Head index' indices' ->
+              index <> index'.
+            Proof.
+              intros index index' In_index_indices
+                [(not_Last_index_indices & Last_index'_indices')|
+                (not_Head_index_indices & Head_index'_indices')].
+                contradict not_Last_index_indices;
+                destruct not_Last_index_indices.
+              2:
+              contradict not_Head_index_indices;
+              destruct not_Head_index_indices.
+              all:
+                enough (indices = indices') as -> by assumption;
+                apply Equal_Positions;
+                now exists index; split; [| apply In_Last + apply In_Head].
+            Qed.
           End Positions.
 
           Lemma S_n_gt_m :
