@@ -1116,6 +1116,30 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             rewrite Ok_s₁.(length), RNthA_Facts.middle_iff.
             now destruct u₀.
           Qed.
+
+          Lemma talon :
+            (Label.Signature cards).(Label.Ok) (Card.Talon k₀ :: x₀) ->
+            t (Card.Talon k₀ :: x₀) (State.talon s₁).
+          Proof.
+            intros Ok_x.
+            specialize (index₁_to_u₀ Ok_x) as index₁_to_k₀.
+            constructor.
+                  apply eq_S, Ok_s₁.(length).
+                apply Ok_s₁.(instructions).
+              Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+                index <> s₁.(State.index)).
+            2 :
+            Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+              index <> s₁.(State.index)).
+            all:
+              assert (H' : ~ Card.eq (Card.Assigned owner) (Card.Talon k₀)) by
+                auto;
+              contradict H'; destruct H'; apply
+                Functional_RNthA with (2 := index₁_to_k₀),
+                positions with (1 := MapsTo_owner_indices).
+              now apply In_Last.
+            now apply In_Head.
+          Qed.
         End Ok.
       End Ok.
     End State.
