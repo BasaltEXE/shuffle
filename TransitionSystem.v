@@ -259,6 +259,15 @@ Module Setoid.
     Qed.
 
     #[local]
+    Instance Morphism_option_map_pointwise :
+      Proper (pointwise_relation A Eq_B ==> eq ==> eqoptionA Eq_B) (@option_map A B).
+    Proof.
+      intros f f' f_eq_f' x x' <-.
+      destruct x as [x|]; constructor.
+      apply f_eq_f'.
+    Qed.
+
+    #[local]
     Instance Morphism_bind :
       Proper (eqoptionA Eq_A ==> (Eq_A ==> eqoptionA Eq_B) ==> eqoptionA Eq_B) (@bind A B).
     Proof.
