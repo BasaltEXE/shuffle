@@ -1369,6 +1369,81 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         setoid_rewrite index_eq_index'.
         now setoid_rewrite instructions_eq_instructions'.
       Qed.
+
+      #[local]
+      Instance Theory
+        (cards : list Card.t)
+        (owner_to_indices : Map.t (list nat))
+        (contains :
+          forall
+          owner : Owner.t,
+          Map.In owner owner_to_indices <->
+          InA Card.eq (Card.Assigned owner) cards)
+        (sorted :
+          forall
+          (owner : Owner.t)
+          (indices : list nat),
+          Map.MapsTo owner indices owner_to_indices ->
+          LocallySorted Peano.gt indices)
+        (positions :
+          forall
+          (owner : Owner.t)
+          (indices : list nat)
+          (offset : nat),
+          Map.MapsTo owner indices owner_to_indices ->
+          List.In offset indices <->
+          RNthA.t (Card.Assigned owner) cards offset) :
+        Algebraic.Theory
+          (Label.Signature cards)
+          (State.Signature owner_to_indices).
+      Proof.
+        split.
+          apply State.Ok.initial_state.
+        intros [k₀| p₀] x₀ s₁ Ok_x Ok_s₁.
+          exists (State.nop s₁); split; [reflexivity|].
+          now apply State.Ok.talon with (1 := positions).
+        specialize (Ok.assigned_assumptions contains positions Ok_s₁ Ok_x) as
+          (indices₀ & MapsTo_p₀_indices₀ & In_index₁_indices₀).
+        simpl; specialize Map.find_1 with (1 := MapsTo_p₀_indices₀) as ->; simpl.
+        assert (exists last : nat, Last last indices₀) as
+          (last & Last_last_indices₀) by
+          now destruct indices₀ as [| index₀ indices₀];
+          [| exists (List.last indices₀ index₀)].
+        assert (exists head : nat, Head head indices₀) as
+          (head & Head_head_indices₀) by
+          now destruct indices₀ as [| index₀ indices₀];
+          [| exists index₀].
+        rewrite Last_last_indices₀, Head_head_indices₀; simpl.
+        assert (reflect_Last : Bool.reflect
+          (Last s₁.(State.index) indices₀)
+          (Nat.eqb (s₁.(State.index)) last)).
+          destruct (Nat.eqb (s₁.(State.index)) last) eqn: eqb_index₁_last;
+          constructor.
+            now apply PeanoNat.Nat.eqb_eq in eqb_index₁_last as ->.
+          apply PeanoNat.Nat.eqb_neq in eqb_index₁_last;
+          contradict eqb_index₁_last.
+          now apply Functional_Last with indices₀.
+        assert (reflect_Head : Bool.reflect
+          (Head s₁.(State.index) indices₀)
+          (Nat.eqb (s₁.(State.index)) head)).
+          destruct (Nat.eqb (s₁.(State.index)) head) eqn: eqb_index₁_head; constructor.
+            now apply PeanoNat.Nat.eqb_eq in eqb_index₁_head as ->.
+          apply PeanoNat.Nat.eqb_neq in eqb_index₁_head;
+          contradict eqb_index₁_head.
+          now apply Functional_Head with indices₀.
+        destruct
+          reflect_Last as [Last_index₁_indices₀| not_Last_index₁_indices₀],
+          reflect_Head as [Head_index₁_indices₀| not_Head_index₁_indices₀];
+          simpl.
+              exists (assigned_both s₁ p₀); split; [reflexivity|].
+              now apply Ok.assigned_both with cards indices₀.
+            exists (State.assigned_first s₁ p₀); split; [reflexivity|].
+            now apply Ok.assigned_first with cards indices₀.
+          exists (State.assigned_last s₁ p₀); split; [reflexivity|].
+          now apply Ok.assigned_last with cards indices₀.
+        exists (State.nop s₁); split; [reflexivity|].
+        now apply Ok.assigned_middle with cards indices₀.
+      Qed.
     End State.
   End Compress.
 End Make.
