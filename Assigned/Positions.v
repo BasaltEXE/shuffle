@@ -155,7 +155,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
       #[local, program]
       Instance Theory :
-        Label.Theory Signature.
+        Label.Theory Label.Signature.
     End Label.
 
     Module State <:
@@ -482,7 +482,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Existing Instance Setoid.Option_Setoid.
       #[local]
       Instance Theory :
-        Algebraic.Theory Label.Signature Signature.
+        Algebraic.Theory Label.Signature State.Signature.
       Proof.
         split.
           apply State.Ok.initial_state.
