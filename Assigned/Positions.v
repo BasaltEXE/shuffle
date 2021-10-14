@@ -834,7 +834,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           instructions := [];
         |}.
 
-      Notation talon
+      Notation nop
         s :=
         {|
           index := S s.(index);
@@ -855,13 +855,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         {|
           index := S s.(index);
           instructions := Down owner :: s.(instructions);
-        |}.
-
-      Notation assigned_middle
-        s :=
-        {|
-          index := S s.(index);
-          instructions := s.(instructions);
         |}.
 
       Notation assigned_last
@@ -1146,7 +1139,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
 
           Lemma talon :
             (Label.Signature cards).(Label.Ok) (Card.Talon k₀ :: x₀) ->
-            t (Card.Talon k₀ :: x₀) (State.talon s₁).
+            t (Card.Talon k₀ :: x₀) (State.nop s₁).
           Proof.
             intros Ok_x.
             specialize (index₁_to_u₀ Ok_x) as index₁_to_k₀.
@@ -1275,7 +1268,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Lemma assigned_middle :
             ~ Last s₁.(State.index) indices₀ ->
             ~ Head s₁.(State.index) indices₀ ->
-            t (Card.Assigned p₀ :: x₀) (State.assigned_middle s₁).
+            t (Card.Assigned p₀ :: x₀) (State.nop s₁).
           Proof with auto.
             intros not_Last_index₁_indices₀ not_Head_index₁_indices₀.
             constructor.
