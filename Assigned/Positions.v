@@ -841,6 +841,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           instructions := s.(instructions);
         |}.
 
+      Notation assigned_both
+        s
+        owner :=
+        {|
+          index := S s.(index);
+          instructions := Up owner :: Down owner :: s.(instructions);
+        |}.
+
       Notation assigned_first
         s
         owner :=
@@ -1206,9 +1214,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Lemma assigned_both :
             Last s₁.(State.index) indices₀ ->
             Head s₁.(State.index) indices₀ ->
-            t (Card.Assigned p₀ :: x₀) ({|
-              State.index := S s₁.(State.index);
-              State.instructions := Up p₀ :: Down p₀ :: s₁.(State.instructions);|}).
+            t (Card.Assigned p₀ :: x₀) (State.assigned_both s₁ p₀).
           Proof with auto.
             intros Last_index_indices₀ Head_index_indices₀.
             constructor.
