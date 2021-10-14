@@ -218,6 +218,13 @@ Module Setoid.
     Qed.
 
     #[local]
+    Instance Morphism_inr :
+      Proper (Eq_B ==> eqsumAB Eq_A Eq_B) (@inr A B).
+    Proof.
+      intros y y' y_eq_y'; now constructor.
+    Qed.
+
+    #[local]
     Instance Morphism_Some :
       Proper (Eq_A ==> eqoptionA Eq_A) (@Some A).
     Proof.
