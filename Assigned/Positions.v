@@ -167,17 +167,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       setoid_rewrite m_eq_m'; try setoid_rewrite x_eq_x'.
     Qed.
 
-    Lemma initial_state :
-      t [] (Map.empty (list nat)).
-    Proof.
-      constructor; simpl.
-          now intros owner; rewrite Map_Facts.empty_in_iff, InA_nil.
-        intros owner indices owner_to_indices.
-        now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
-      intros owner indices subtrahend owner_to_indices.
-      now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
-    Qed.
-
     Lemma cons_iff :
       forall
       (v u₀ : Card.t)
@@ -194,93 +183,101 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       now apply PeanoNat.Nat.lt_neq, RNthA_Facts.lt_iff; exists v.
     Qed.
 
-    Lemma talon :
-      forall
-      (x₀ : list Card.t)
-      (owner_to_indices : Map.t (list nat))
-      (k₀ : Key.t),
-      t x₀ owner_to_indices ->
-      t (Card.Talon k₀ :: x₀) owner_to_indices.
+    Lemma initial_state :
+      t [] (Map.empty (list nat)).
     Proof.
-      intros x₀ owner_to_indices k₀ Ok_s₁.
-      constructor.
-          intros owner.
-          rewrite Ok_s₁.(contains), InA_cons; simpl; tauto.
-        intros owner indices owner_to_indices'.
-        now apply Ok_s₁.(sorted) with owner.
-      intros owner indices offset MapsTo_owner_indices.
-      rewrite cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); simpl; tauto.
-    Defined.
-
-    Lemma assigned_mapsto :
-      forall
-      (p₀ : Owner.t)
-      (x₀ : list Card.t)
-      (owner_to_indices : Map.t (list nat))
-      (indices₀ : list nat),
-      Map.MapsTo p₀ indices₀ owner_to_indices ->
-      t x₀ owner_to_indices ->
-      t
-        (Card.Assigned p₀ :: x₀)
-        (Map.add p₀ (length x₀ :: indices₀) owner_to_indices).
-    Proof with (simpl; firstorder).
-      intros p₀ x₀ owner_to_indices indices₀ MapsTo_p₀_indices₀ Ok_s₁.
-      constructor.
-          intros owner; simpl.
-          rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
-        intros owner indices MapsTo_owner_indices.
-        apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-          (_ & <-)|
-        (_ & MapsTo_owner_indices)].
-          destruct indices₀ as [| index₀ indices₀]; constructor.
-            now apply Ok_s₁.(sorted) with p₀.
-          apply RNthA_Facts.lt_iff; exists (Card.Assigned p₀).
-          now apply Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀); left.
-        now apply Ok_s₁.(sorted) with owner.
-      intros owner indices offset MapsTo_owner_indices;
-      rewrite cons_iff.
-      apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-        (<- & <-)|
-      (p₀_neq_owner & MapsTo_owner_indices)].
-        simpl; rewrite Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀)...
-      setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
-      rewrite Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+      constructor; simpl.
+          now intros owner; rewrite Map_Facts.empty_in_iff, InA_nil.
+        intros owner indices owner_to_indices.
+        now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
+      intros owner indices subtrahend owner_to_indices.
+      now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
     Qed.
 
-    Lemma assigned_not_in :
-      forall
-      (p₀ : Owner.t)
-      (x₀ : list Card.t)
-      (owner_to_indices : Map.t (list nat)),
-      ~ Map.In p₀ owner_to_indices ->
-      t x₀ owner_to_indices ->
-      t
-        (Card.Assigned p₀ :: x₀)
-        (Map.add p₀ [length x₀] owner_to_indices).
-    Proof with (simpl; firstorder).
-      intros p₀ x₀ owner_to_indices not_In_p₀ Ok_s₁.
-      constructor.
-          intros owner; simpl.
-          rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
-        intros owner indices MapsTo_owner_indices.
+    Section Indices.
+      Variables
+        (k₀ : Key.t)
+        (p₀ : Owner.t)
+        (x₀ : list Card.t)
+        (owner_to_indices : Map.t (list nat)).
+
+      Lemma talon :
+        t x₀ owner_to_indices ->
+        t (Card.Talon k₀ :: x₀) owner_to_indices.
+      Proof.
+        intros Ok_s₁.
+        constructor.
+            intros owner.
+            rewrite Ok_s₁.(contains), InA_cons; simpl; tauto.
+          intros owner indices owner_to_indices'.
+          now apply Ok_s₁.(sorted) with owner.
+        intros owner indices offset MapsTo_owner_indices.
+        rewrite cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); simpl; tauto.
+      Defined.
+
+      Lemma assigned_mapsto :
+        forall
+        indices₀ : list nat,
+        Map.MapsTo p₀ indices₀ owner_to_indices ->
+        t x₀ owner_to_indices ->
+        t
+          (Card.Assigned p₀ :: x₀)
+          (Map.add p₀ (length x₀ :: indices₀) owner_to_indices).
+      Proof with (simpl; firstorder).
+        intros indices₀ MapsTo_p₀_indices₀ Ok_s₁.
+        constructor.
+            intros owner; simpl.
+            rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
+          intros owner indices MapsTo_owner_indices.
+          apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+            (_ & <-)|
+          (_ & MapsTo_owner_indices)].
+            destruct indices₀ as [| index₀ indices₀]; constructor.
+              now apply Ok_s₁.(sorted) with p₀.
+            apply RNthA_Facts.lt_iff; exists (Card.Assigned p₀).
+            now apply Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀); left.
+          now apply Ok_s₁.(sorted) with owner.
+        intros owner indices offset MapsTo_owner_indices;
+        rewrite cons_iff.
         apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-          (_ & <-)|
-        (_ & MapsTo_owner_indices)].
-          constructor.
-        now apply Ok_s₁.(sorted) with owner.
-      intros owner indices offset MapsTo_owner_indices;
-      rewrite cons_iff.
-      apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-        (p₀_eq_owner & <-)|
-      (p₀_neq_owner & MapsTo_owner_indices)].
-        simpl;
-        enough (~ RNthA.t (Card.Assigned owner) x₀ offset) by firstorder.
-        contradict not_In_p₀.
-        apply Ok_s₁.(contains), RNthA_Facts.InA_iff.
-        now exists offset; rewrite p₀_eq_owner.
-      setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
-      rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
-    Qed.
+          (<- & <-)|
+        (p₀_neq_owner & MapsTo_owner_indices)].
+          simpl; rewrite Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀)...
+        setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
+        rewrite Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+      Qed.
+
+      Lemma assigned_not_in :
+        ~ Map.In p₀ owner_to_indices ->
+        t x₀ owner_to_indices ->
+        t
+          (Card.Assigned p₀ :: x₀)
+          (Map.add p₀ [length x₀] owner_to_indices).
+      Proof with (simpl; firstorder).
+        intros not_In_p₀ Ok_s₁.
+        constructor.
+            intros owner; simpl.
+            rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
+          intros owner indices MapsTo_owner_indices.
+          apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+            (_ & <-)|
+          (_ & MapsTo_owner_indices)].
+            constructor.
+          now apply Ok_s₁.(sorted) with owner.
+        intros owner indices offset MapsTo_owner_indices;
+        rewrite cons_iff.
+        apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+          (p₀_eq_owner & <-)|
+        (p₀_neq_owner & MapsTo_owner_indices)].
+          simpl;
+          enough (~ RNthA.t (Card.Assigned owner) x₀ offset) by firstorder.
+          contradict not_In_p₀.
+          apply Ok_s₁.(contains), RNthA_Facts.InA_iff.
+          now exists offset; rewrite p₀_eq_owner.
+        setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
+        rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+      Qed.
+    End Indices.
   End Indices.
   Import Indices(contains, sorted, positions).
 
