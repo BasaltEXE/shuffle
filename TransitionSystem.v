@@ -202,6 +202,12 @@ Module Setoid.
       (B : Type)
       (Eq_B : relation B).
 
+    Definition if_then_else
+      (b : bool)
+      (x y : A) :
+      A :=
+      if b then x else y.
+
     #[local]
     Instance Morphism_pair :
       Proper (Eq_A ==> Eq_B ==> eqprodAB Eq_A Eq_B) (@pair A B).
