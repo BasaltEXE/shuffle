@@ -278,6 +278,18 @@ Module Setoid.
     Qed.
 
     #[local]
+    Instance Morphism_InA
+      {Setoid_A : Equivalence Eq_A} :
+      Proper (Eq_A ==> eqlistA Eq_A ==> iff) (@InA A Eq_A).
+    Proof.
+      intros v v' v_eq_v' x x' x_eq_x'.
+      induction x_eq_x' as
+        [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'].
+        now rewrite 2 ! InA_nil.
+      now rewrite 2 ! InA_cons, IHx₀_eq_x₀', v_eq_v', u₀_eq_u₀'.
+    Qed.
+
+    #[local]
     Instance Morphism_eq
       {PartialSetoid_A : PER Eq_A} :
       Proper (Eq_A ==> Eq_A ==> iff) Eq_A.
