@@ -128,6 +128,196 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module EqA_Facts := List.EqAFactsOn Card EqA.
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
+  Import Instructions.Notations.
+
+  Lemma Functional_RNthA :
+    forall
+    (v v' : Card.t)
+    (x : list Card.t)
+    (n : nat),
+    RNthA.t v x n ->
+    RNthA.t v' x n ->
+    Card.eq v v'.
+  Proof.
+    intros v v' x n.
+    rewrite <- 2!RNthA_Facts.split_iff.
+    intros (y & z & e & f) (y' & z' & e' & f').
+    enough (EqA.eq (v :: z) (v' :: z')).
+      now apply EqA.eq_cons_cons_iff with z z'.
+    apply EqA_Facts.eq_app_app_iff with y y'.
+      right; simpl; now rewrite f, f'.
+    now rewrite <- e, <- e'.
+  Qed.
+
+  Lemma last_cons :
+    forall
+    (A : Type)
+    (v u₀ : A)
+    (x₀ : list A),
+    last (u₀ :: x₀) v = last x₀ u₀.
+  Proof.
+    intros A v u₀ x₀; move x₀ after v; revert v u₀.
+    induction x₀ as [| u₁ x₁ IHx₁]; intros v u₀.
+      reflexivity.
+    change (last (u₁ :: x₁) v = last (u₁ :: x₁) u₀).
+    now rewrite 2!IHx₁.
+  Qed.
+
+  Definition last_error
+    (A : Type)
+    (x : list A) :
+    option A :=
+    match x with
+    | [] =>
+        None
+    | u₀ :: x₀ =>
+        Some (last x₀ u₀)
+    end.
+
+  Lemma last_error_cons :
+    forall
+    (A : Type)
+    (u₀ u₁ : A)
+    (x₁ : list A),
+    last_error (u₀ :: u₁ :: x₁) = last_error (u₁ :: x₁).
+  Proof.
+    intros A u₀ u₁ x₁.
+    change (Some (last (u₁ :: x₁) u₀) = last_error (u₁ :: x₁)).
+    now rewrite last_cons.
+  Qed.
+
+  Notation Last
+    v
+    x :=
+    (last_error x = Some v).
+
+  Lemma In_Last :
+    forall
+    (A : Type)
+    (v : A)
+    (x : list A),
+    Last v x ->
+    List.In v x.
+  Proof.
+    intros A v x.
+    induction x as [| u₀ [| u₁ x₁] IHx₀]; intros [=Last_v_x].
+      now left.
+    right; change (last (u₁ :: x₁) u₀ = v) in Last_v_x.
+    apply IHx₀; change (Some (last x₁ u₁) = Some v); f_equal.
+    now rewrite <- last_cons with (v := u₀).
+  Qed.
+
+  Lemma Functional_Last :
+    forall
+    (A : Type)
+    (v w : A)
+    (x : list A),
+    Last v x ->
+    Last w x ->
+    v = w.
+  Proof.
+    intros A v w x.
+    induction x as [| u₀ [| u₁ x₁] IHx₀]; intros Last_v_x Last_w_x.
+        inversion Last_v_x.
+      inversion Last_v_x.
+      inversion Last_w_x.
+      now transitivity u₀.
+    rewrite last_error_cons in Last_v_x, Last_w_x.
+    now apply IHx₀.
+  Qed.
+
+  Notation Head
+    v
+    x :=
+    (hd_error x = Some v).
+
+  Lemma In_Head :
+    forall
+    (A : Type)
+    (v : A)
+    (x : list A),
+    Head v x ->
+    List.In v x.
+  Proof.
+    intros A v [| u₀ x₀] [=->]; now left.
+  Qed.
+
+  Lemma Functional_Head :
+    forall
+    (A : Type)
+    (v w : A)
+    (x : list A),
+    Head v x ->
+    Head w x ->
+    v = w.
+  Proof.
+    intros A v w x Head_v_x Head_w_x.
+    enough (Some v = Some w) as [=] by assumption.
+    now transitivity (hd_error x).
+  Qed.
+
+  Lemma Sorted_Head_Last :
+    forall
+    x : list nat,
+    LocallySorted Peano.gt x ->
+    forall
+    head last : nat,
+    Head head x ->
+    Last last x ->
+    head = last \/
+    head > last.
+  Proof.
+    induction 1 as [| u₀| u₀ u₁ x₁ Sorted_x₀ IHx₀ u₀_gt_u₁];
+    intros head last [=<-] Last_last_x.
+      left; enough (Some u₀ = Some last) as [=] by assumption.
+      now transitivity (Some u₀).
+    right; unfold gt.
+    specialize IHx₀ with u₁ last as [<-|].
+          reflexivity.
+        now rewrite last_error_cons in Last_last_x.
+      assumption.
+    now transitivity u₁.
+  Qed.
+
+  Lemma cons_Up_iff :
+    forall
+    (v p₀ : Owner.t)
+    (x₀ : Instructions.t),
+    In (Down v) (Up p₀ :: x₀) <->
+    In (Down v) x₀.
+  Proof.
+    intros v p₀ x₀; rewrite InA_cons.
+    enough (~ Instruction.eq (Down v) (Up p₀)) by tauto.
+    now apply Instruction.neq_opcode.
+  Qed.
+
+  Lemma cons_Down_iff :
+    forall
+    (v p₀ : Owner.t)
+    (x₀ : Instructions.t),
+    In (Down v) (Down p₀ :: x₀) <->
+    Owner.eq p₀ v \/ In (Down v) x₀.
+  Proof.
+    intros v p₀ x₀; rewrite InA_cons.
+    rewrite Instruction.eq_opcode by reflexivity.
+    firstorder.
+  Qed.
+
+  Instance Morphism_Instructions_Ok :
+    Proper (eqlistA Instruction.eq ==> iff) Instructions.Ok.
+  Proof.
+    intros x x' x_eq_x'.
+    induction x_eq_x' as
+      [| ([|] & p₀) ([|] & p₀') x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'];
+      [reflexivity|..];
+    destruct u₀_eq_u₀' as ([=] & p₀_eq_p₀');
+    change (Owner.eq p₀ p₀') in p₀_eq_p₀';
+    rewrite
+      2 ? Instructions.Ok.cons_Up_iff,
+      2 ? Instructions.Ok.cons_Down_iff;
+    now rewrite IHx₀_eq_x₀', p₀_eq_p₀', x₀_eq_x₀'.
+  Qed.
+
   Module Indices.
     Record t
       (cards : list Card.t)
@@ -152,7 +342,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           (indices : list nat)
           (offset : nat),
           Map.MapsTo owner indices owner_to_indices ->
-          In offset indices <->
+          List.In offset indices <->
           RNthA.t (Card.Assigned owner) cards offset;
       }.
 
@@ -451,7 +641,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           (indices : list nat)
           (offset : nat),
           State.MapsTo s owner indices ->
-          In offset indices <->
+          List.In offset indices <->
           RNthA.t (Card.Assigned owner) x offset).
         Proof.
           intros x s; split.
@@ -642,157 +832,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   End Generate.
 
   Module Compress.
-    Import Instructions.Notations.
-
-    Lemma Functional_RNthA :
-      forall
-      (v v' : Card.t)
-      (x : list Card.t)
-      (n : nat),
-      RNthA.t v x n ->
-      RNthA.t v' x n ->
-      Card.eq v v'.
-    Proof.
-      intros v v' x n.
-      rewrite <- 2!RNthA_Facts.split_iff.
-      intros (y & z & e & f) (y' & z' & e' & f').
-      enough (EqA.eq (v :: z) (v' :: z')).
-        now apply EqA.eq_cons_cons_iff with z z'.
-      apply EqA_Facts.eq_app_app_iff with y y'.
-        right; simpl; now rewrite f, f'.
-      now rewrite <- e, <- e'.
-    Qed.
-
-    Lemma last_cons :
-      forall
-      (A : Type)
-      (v u₀ : A)
-      (x₀ : list A),
-      last (u₀ :: x₀) v = last x₀ u₀.
-    Proof.
-      intros A v u₀ x₀; move x₀ after v; revert v u₀.
-      induction x₀ as [| u₁ x₁ IHx₁]; intros v u₀.
-        reflexivity.
-      change (last (u₁ :: x₁) v = last (u₁ :: x₁) u₀).
-      now rewrite 2!IHx₁.
-    Qed.
-
-    Definition last_error
-      (A : Type)
-      (x : list A) :
-      option A :=
-      match x with
-      | [] =>
-          None
-      | u₀ :: x₀ =>
-          Some (last x₀ u₀)
-      end.
-
-    Lemma last_error_cons :
-      forall
-      (A : Type)
-      (u₀ u₁ : A)
-      (x₁ : list A),
-      last_error (u₀ :: u₁ :: x₁) = last_error (u₁ :: x₁).
-    Proof.
-      intros A u₀ u₁ x₁.
-      change (Some (last (u₁ :: x₁) u₀) = last_error (u₁ :: x₁)).
-      now rewrite last_cons.
-    Qed.
-
-    Notation Last
-      v
-      x :=
-      (last_error x = Some v).
-
-    Lemma In_Last :
-      forall
-      (A : Type)
-      (v : A)
-      (x : list A),
-      Last v x ->
-      List.In v x.
-    Proof.
-      intros A v x.
-      induction x as [| u₀ [| u₁ x₁] IHx₀]; intros [=Last_v_x].
-        now left.
-      right; change (last (u₁ :: x₁) u₀ = v) in Last_v_x.
-      apply IHx₀; change (Some (last x₁ u₁) = Some v); f_equal.
-      now rewrite <- last_cons with (v := u₀).
-    Qed.
-
-    Lemma Functional_Last :
-      forall
-      (A : Type)
-      (v w : A)
-      (x : list A),
-      Last v x ->
-      Last w x ->
-      v = w.
-    Proof.
-      intros A v w x.
-      induction x as [| u₀ [| u₁ x₁] IHx₀]; intros Last_v_x Last_w_x.
-          inversion Last_v_x.
-        inversion Last_v_x.
-        inversion Last_w_x.
-        now transitivity u₀.
-      rewrite last_error_cons in Last_v_x, Last_w_x.
-      now apply IHx₀.
-    Qed.
-
-    Notation Head
-      v
-      x :=
-      (hd_error x = Some v).
-
-    Lemma In_Head :
-      forall
-      (A : Type)
-      (v : A)
-      (x : list A),
-      Head v x ->
-      List.In v x.
-    Proof.
-      intros A v [| u₀ x₀] [=->]; now left.
-    Qed.
-
-    Lemma Functional_Head :
-      forall
-      (A : Type)
-      (v w : A)
-      (x : list A),
-      Head v x ->
-      Head w x ->
-      v = w.
-    Proof.
-      intros A v w x Head_v_x Head_w_x.
-      enough (Some v = Some w) as [=] by assumption.
-      now transitivity (hd_error x).
-    Qed.
-
-    Lemma Sorted_Head_Last :
-      forall
-      x : list nat,
-      LocallySorted Peano.gt x ->
-      forall
-      head last : nat,
-      Head head x ->
-      Last last x ->
-      head = last \/
-      head > last.
-    Proof.
-      induction 1 as [| u₀| u₀ u₁ x₁ Sorted_x₀ IHx₀ u₀_gt_u₁];
-      intros head last [=<-] Last_last_x.
-        left; enough (Some u₀ = Some last) as [=] by assumption.
-        now transitivity (Some u₀).
-      right; unfold gt.
-      specialize IHx₀ with u₁ last as [<-|].
-            reflexivity.
-          now rewrite last_error_cons in Last_last_x.
-        assumption.
-      now transitivity u₁.
-    Qed.
-
     Module Label <:
       EqualityType.
       Definition t :
@@ -1105,30 +1144,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             intros m n; lia.
           Qed.
 
-          Lemma cons_Up_iff :
-            forall
-            (v p₀ : Owner.t)
-            (x₀ : Instructions.t),
-            In (Down v) (Up p₀ :: x₀) <->
-            In (Down v) x₀.
-          Proof.
-            intros v p₀ x₀; rewrite InA_cons.
-            enough (~ Instruction.eq (Down v) (Up p₀)) by tauto.
-            now apply Instruction.neq_opcode.
-          Qed.
-
-          Lemma cons_Down_iff :
-            forall
-            (v p₀ : Owner.t)
-            (x₀ : Instructions.t),
-            In (Down v) (Down p₀ :: x₀) <->
-            Owner.eq p₀ v \/ In (Down v) x₀.
-          Proof.
-            intros v p₀ x₀; rewrite InA_cons.
-            rewrite Instruction.eq_opcode by reflexivity.
-            firstorder.
-          Qed.
-
           Ltac Contains_Down Ok_s₁ P :=
             intros owner indices index
               MapsTo_owner_indices Last_index_indices;
@@ -1325,22 +1340,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       End Ok.
 
       #[local]
-      Instance Morphism_Instructions_Ok :
-        Proper (eqlistA Instruction.eq ==> iff) Instructions.Ok.
-      Proof.
-        intros x x' x_eq_x'.
-        induction x_eq_x' as
-          [| ([|] & p₀) ([|] & p₀') x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'];
-          [reflexivity|..];
-        destruct u₀_eq_u₀' as ([=] & p₀_eq_p₀');
-        change (Owner.eq p₀ p₀') in p₀_eq_p₀';
-        rewrite
-          2 ? Instructions.Ok.cons_Up_iff,
-          2 ? Instructions.Ok.cons_Down_iff;
-        now rewrite IHx₀_eq_x₀', p₀_eq_p₀', x₀_eq_x₀'.
-      Qed.
-
-      #[local]
       Existing Instance
         Setoid.Option_Setoid.
       #[local]
@@ -1478,9 +1477,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           (Algebraic.f (State.Signature owner_to_indices))
           cards).
 
-    #[local]
-    Existing Instance
-      State.Morphism_Instructions_Ok.
     #[local]
     Existing Instances
       Label.Theory
