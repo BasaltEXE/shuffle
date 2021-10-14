@@ -22,7 +22,8 @@ Require Import
   Shuffle.TransitionSystem.
 
 Import
-  Misc(bind, ret).
+  Misc(bind, ret)
+  Setoid(if_then_else).
 
 Module Card (Key Owner : DecidableTypeBoth) <: DecidableType.
   Inductive Card :
@@ -1298,6 +1299,75 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           2 ? Instructions.Ok.cons_Up_iff,
           2 ? Instructions.Ok.cons_Down_iff;
         now rewrite IHx₀_eq_x₀', p₀_eq_p₀', x₀_eq_x₀'.
+      Qed.
+
+      #[local]
+      Existing Instance
+        Setoid.Option_Setoid.
+      #[local]
+      Existing Instances
+        Setoid.Morphism_Some
+        Setoid.Morphism_pair
+        Setoid.Morphism_cons.
+      #[local]
+      Existing Instances
+        Setoid.Morphism_if_then_else
+        Setoid.Morphism_bind_pointwise.
+      Unset Program Cases.
+      #[program]
+      Definition Signature
+        (owner_to_indices : Map.t (list nat)) :
+        Algebraic.Signature Label.eq State.eq :=
+        {|
+        Algebraic.init :=
+          State.initial_state;
+        Algebraic.f s₁ u₀ :=
+          match u₀ with
+          | Card.Talon k₀ =>
+              Some (State.nop s₁)
+          | Card.Assigned p₀ =>
+              bind (Map.find p₀ owner_to_indices) (fun indices =>
+              bind (last_error indices) (fun last =>
+              bind (hd_error indices) (fun head =>
+              let index := s₁.(State.index) in
+              let instructions :=
+              if_then_else
+                (Nat.eqb index last)
+                (if_then_else
+                  (Nat.eqb index head)
+                  (Up p₀ :: Down p₀ :: instructions s₁)
+                  (Down p₀ :: instructions s₁))
+                (if_then_else
+                   (Nat.eqb index head)
+                   (Up p₀ :: instructions s₁)
+                   (instructions s₁)) in
+              Some {|
+                State.index :=
+                  S s₁.(State.index);
+                State.instructions :=
+                  instructions;
+              |})))
+          end;
+          Algebraic.Ok :=
+            State.Ok.t owner_to_indices;
+      |}.
+      Next Obligation.
+        intros s₁ s₁' s₁_eq_s₁' u₀ u₀' u₀_eq_u₀'.
+        destruct u₀ as [k₀| p₀], u₀' as [k₀'| p₀'].
+              simpl.
+              now rewrite s₁_eq_s₁'.
+            contradiction.
+          contradiction.
+        change (Owner.eq p₀ p₀') in u₀_eq_u₀'.
+        now setoid_rewrite u₀_eq_u₀';
+        setoid_rewrite s₁_eq_s₁'.
+      Qed.
+      Next Obligation.
+        intros x x' x_eq_x' s s' (index_eq_index' & instructions_eq_instructions').
+        rewrite 2!State.Ok.Raw;
+        setoid_rewrite x_eq_x'.
+        setoid_rewrite index_eq_index'.
+        now setoid_rewrite instructions_eq_instructions'.
       Qed.
     End State.
   End Compress.
