@@ -209,6 +209,14 @@ Module Setoid.
       if b then x else y.
 
     #[local]
+    Instance Morphism_if_then_else :
+      Proper (Logic.eq ==> Eq_A ==> Eq_A ==> Eq_A) if_then_else.
+    Proof.
+      intros b b' <- x x' x_eq_x' y y' y_eq_y'.
+      now destruct b.
+    Qed.
+
+    #[local]
     Instance Morphism_pair :
       Proper (Eq_A ==> Eq_B ==> eqprodAB Eq_A Eq_B) (@pair A B).
     Proof.
