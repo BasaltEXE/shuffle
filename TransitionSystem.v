@@ -9,7 +9,11 @@ Require Import
 Import ListNotations.
 
 Require Import
+  Shuffle.Misc
   Shuffle.List.
+
+Import
+  Misc(bind).
 
 Require Import
   Coq.Classes.RelationPairs
@@ -252,6 +256,16 @@ Module Setoid.
     Proof.
       intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x';
       constructor; now apply f_eq_g.
+    Qed.
+
+    #[local]
+    Instance Morphism_bind :
+      Proper (eqoptionA Eq_A ==> (Eq_A ==> eqoptionA Eq_B) ==> eqoptionA Eq_B) (@bind A B).
+    Proof.
+      intros x x' x_eq_x' f f' f_eq_f'.
+       destruct x_eq_x' as [x x' x_eq_x'|].
+        now apply f_eq_f'.
+      constructor.
     Qed.
 
     Fixpoint try_fold
