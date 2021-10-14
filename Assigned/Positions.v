@@ -468,6 +468,104 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
       Qed.
     End Indices.
+
+    Section Properties.
+      Variables
+        (cards : list Card.t)
+        (owner_to_indices : Map.t (list nat))
+        (Ok_indices : Indices.t cards owner_to_indices)
+        (p p' : Owner.t)
+        (indices indices' : list nat)
+        (MapsTo_p_indices : Map.MapsTo p indices owner_to_indices)
+        (MapsTo_p'_indices' : Map.MapsTo p' indices' owner_to_indices).
+
+      Lemma Intersecting_Positions :
+        (exists
+        index : nat,
+        List.In index indices /\
+        List.In index indices') ->
+        Owner.eq p p'.
+      Proof.
+        intros (index & In_index_indices & In_index_indices').
+        change (Card.eq (Card.Assigned p) (Card.Assigned p')).
+        now apply Functional_RNthA with cards index;
+        [apply Ok_indices.(positions) with indices| apply Ok_indices.(positions) with indices'].
+      Qed.
+
+      Lemma Equal_Positions :
+        indices = indices' <->
+        (exists
+        index : nat,
+        List.In index indices /\
+        List.In index indices').
+      Proof.
+        split.
+          intros <-.
+          assert (InA Card.eq (Card.Assigned p) cards) as
+            (index & RNthA_p_cards_index)%RNthA_Facts.InA_iff.
+            now apply Ok_indices.(contains); exists indices.
+          exists index; split; now apply Ok_indices.(positions) with p.
+        intros intersecting; enough (p_eq_p' : Owner.eq p p').
+          now apply Map_Facts.MapsTo_fun with owner_to_indices p;
+          [| rewrite p_eq_p'].
+        now apply Intersecting_Positions.
+      Qed.
+
+      Lemma Injective_Positions :
+        indices = indices' ->
+        Owner.eq p p'.
+      Proof.
+        rewrite Equal_Positions by assumption.
+        now apply Intersecting_Positions.
+      Qed.
+
+      Lemma case_eq :
+        forall
+        index index' : nat,
+        Last index indices /\ Last index' indices' \/
+        Head index indices /\ Head index' indices' ->
+        Owner.eq p p' <-> index = index'.
+      Proof.
+        intros index index' H.
+        split.
+          intros p_eq_p'; rewrite <- p_eq_p' in MapsTo_p'_indices'.
+          enough (indices = indices') as <-.
+            destruct H as [
+              (Last_index_indices & Last_index'_indices)|
+              (Head_index_indices & Head_index'_indices)].
+              now apply Functional_Last with indices.
+            now apply Functional_Head with indices.
+          now apply Map_Facts.MapsTo_fun with owner_to_indices p.
+        intros <-.
+        apply Intersecting_Positions; exists index.
+        destruct H as [
+          (Last_index_indices & Last_index_indices')|
+          (Head_index_indices & Head_index_indices')];
+        now split; (apply In_Last + apply In_Head).
+      Qed.
+
+      Lemma case_neq :
+        forall
+        index index' : nat,
+        List.In index indices ->
+        ~ Last index indices /\ Last index' indices' \/
+        ~ Head index indices /\ Head index' indices' ->
+        index <> index'.
+      Proof.
+        intros index index' In_index_indices
+          [(not_Last_index_indices & Last_index'_indices')|
+          (not_Head_index_indices & Head_index'_indices')].
+          contradict not_Last_index_indices;
+          destruct not_Last_index_indices.
+        2:
+        contradict not_Head_index_indices;
+        destruct not_Head_index_indices.
+        all:
+          enough (indices = indices') as -> by assumption;
+          apply Equal_Positions;
+          now exists index; split; [| apply In_Last + apply In_Head].
+      Qed.
+    End Properties.
   End Indices.
   Import Indices(contains, sorted, positions).
 
@@ -1039,101 +1137,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               rewrite InA_nil; enough (~ 0 > index); [tauto| auto with arith].
           Qed.
 
-          Section Positions.
-            Variables
-              (p p' : Owner.t)
-              (indices indices' : list nat)
-              (MapsTo_p_indices : Map.MapsTo p indices owner_to_indices)
-              (MapsTo_p'_indices' : Map.MapsTo p' indices' owner_to_indices).
-
-            Lemma Intersecting_Positions :
-              (exists
-              index : nat,
-              List.In index indices /\
-              List.In index indices') ->
-              Owner.eq p p'.
-            Proof.
-              intros (index & In_index_indices & In_index_indices').
-              change (Card.eq (Card.Assigned p) (Card.Assigned p')).
-              now apply Functional_RNthA with cards index;
-              [apply Ok_indices.(positions) with indices| apply Ok_indices.(positions) with indices'].
-            Qed.
-
-            Lemma Equal_Positions :
-              indices = indices' <->
-              (exists
-              index : nat,
-              List.In index indices /\
-              List.In index indices').
-            Proof.
-              split.
-                intros <-.
-                assert (InA Card.eq (Card.Assigned p) cards) as
-                  (index & RNthA_p_cards_index)%RNthA_Facts.InA_iff.
-                  now apply Ok_indices.(contains); exists indices.
-                exists index; split; now apply Ok_indices.(positions) with p.
-              intros intersecting; enough (p_eq_p' : Owner.eq p p').
-                now apply Map_Facts.MapsTo_fun with owner_to_indices p;
-                [| rewrite p_eq_p'].
-              now apply Intersecting_Positions.
-            Qed.
-
-            Lemma Injective_Positions :
-              indices = indices' ->
-              Owner.eq p p'.
-            Proof.
-              rewrite Equal_Positions by assumption.
-              now apply Intersecting_Positions.
-            Qed.
-
-            Lemma case_eq :
-              forall
-              index index' : nat,
-              Last index indices /\ Last index' indices' \/
-              Head index indices /\ Head index' indices' ->
-              Owner.eq p p' <-> index = index'.
-            Proof.
-              intros index index' H.
-              split.
-                intros p_eq_p'; rewrite <- p_eq_p' in MapsTo_p'_indices'.
-                enough (indices = indices') as <-.
-                  destruct H as [
-                    (Last_index_indices & Last_index'_indices)|
-                    (Head_index_indices & Head_index'_indices)].
-                    now apply Functional_Last with indices.
-                  now apply Functional_Head with indices.
-                now apply Map_Facts.MapsTo_fun with owner_to_indices p.
-              intros <-.
-              apply Intersecting_Positions; exists index.
-              destruct H as [
-                (Last_index_indices & Last_index_indices')|
-                (Head_index_indices & Head_index_indices')];
-              now split; (apply In_Last + apply In_Head).
-            Qed.
-
-            Lemma case_neq :
-              forall
-              index index' : nat,
-              List.In index indices ->
-              ~ Last index indices /\ Last index' indices' \/
-              ~ Head index indices /\ Head index' indices' ->
-              index <> index'.
-            Proof.
-              intros index index' In_index_indices
-                [(not_Last_index_indices & Last_index'_indices')|
-                (not_Head_index_indices & Head_index'_indices')].
-                contradict not_Last_index_indices;
-                destruct not_Last_index_indices.
-              2:
-              contradict not_Head_index_indices;
-              destruct not_Head_index_indices.
-              all:
-                enough (indices = indices') as -> by assumption;
-                apply Equal_Positions;
-                now exists index; split; [| apply In_Last + apply In_Head].
-            Qed.
-          End Positions.
-
           Lemma S_n_gt_m :
             forall
             m n : nat,
@@ -1255,10 +1258,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 lia.
               Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
                 Owner.eq owner p₀ <-> index = s₁.(State.index)).
-              apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+              apply (Indices.case_eq Ok_indices MapsTo_owner_indices MapsTo_p₀_indices₀)...
             Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
               Owner.eq owner p₀ <-> index = s₁.(State.index)).
-            apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+            apply (Indices.case_eq Ok_indices MapsTo_owner_indices MapsTo_p₀_indices₀)...
           Qed.
 
           Lemma assigned_first :
@@ -1276,10 +1279,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 lia.
               Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
                 Owner.eq owner p₀ <-> index = s₁.(State.index)).
-              apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+              apply (Indices.case_eq Ok_indices MapsTo_owner_indices MapsTo_p₀_indices₀)...
             Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
               s₁.(State.index) <> index).
-            apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+            apply (Indices.case_neq Ok_indices MapsTo_p₀_indices₀ MapsTo_owner_indices)...
           Qed.
 
           Lemma assigned_last :
@@ -1314,10 +1317,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 lia.
               Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
                 s₁.(State.index) <> index).
-              apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+              apply (Indices.case_neq Ok_indices MapsTo_p₀_indices₀ MapsTo_owner_indices)...
             Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
               Owner.eq owner p₀ <-> index = s₁.(State.index)).
-            apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+            apply (Indices.case_eq Ok_indices MapsTo_owner_indices MapsTo_p₀_indices₀)...
           Qed.
 
           Lemma assigned_middle :
@@ -1331,10 +1334,10 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 apply Ok_s₁.(instructions).
               Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
                 s₁.(State.index) <> index).
-              apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+              apply (Indices.case_neq Ok_indices MapsTo_p₀_indices₀ MapsTo_owner_indices)...
             Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
               s₁.(State.index) <> index).
-            apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
+            apply (Indices.case_neq Ok_indices MapsTo_p₀_indices₀ MapsTo_owner_indices)...
           Qed.
         End Ok.
       End Ok.
