@@ -1445,5 +1445,16 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         now apply Ok.assigned_middle with cards indices₀.
       Qed.
     End State.
+
+    Definition compress
+      (cards : list Card.t)
+      (owner_to_indices : Map.t (list nat)) :
+      option Instructions.t :=
+      option_map
+        State.instructions
+        (Setoid.try_fold
+          State.initial_state
+          (Algebraic.f (State.Signature owner_to_indices))
+          cards).
   End Compress.
 End Make.
