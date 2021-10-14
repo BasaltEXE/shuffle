@@ -719,33 +719,15 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Indices.t x s.(State.owner_to_indices);
           }.
 
-        Lemma Raw :
-          forall
-          (x : list Card.t)
-          (s : State.t),
-          t x s <->
-          s.(State.index) = List.length x /\
-          (forall
-          owner : Owner.t,
-          State.Contains s owner <->
-          InA Card.eq (Card.Assigned owner) x) /\
-          (forall
-          (owner : Owner.t)
-          (indices : list nat),
-          State.MapsTo s owner indices ->
-          LocallySorted Peano.gt indices) /\
-          (forall
-          (owner : Owner.t)
-          (indices : list nat)
-          (offset : nat),
-          State.MapsTo s owner indices ->
-          List.In offset indices <->
-          RNthA.t (Card.Assigned owner) x offset).
+        Instance Morphism :
+          Proper (eqlistA Card.eq ==> State.eq ==> iff) t.
         Proof.
-          intros x s; split.
-            now intros (length_x & [contains_s sorted_s positions_s]).
-          intros (length_x & contains_s & sorted_s & positions_s).
-          now constructor.
+          intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
+          split; intros [length positions].
+            now constructor;
+            rewrite <- x_eq_x', <- ? index_eq_index', <- ? positions_eq_positions'.
+          now constructor;
+          rewrite x_eq_x', ? index_eq_index', ? positions_eq_positions'.
         Qed.
 
         Lemma initial_state :
@@ -832,13 +814,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         rewrite u_eq_u', s_eq_s'.
         destruct (Map.find p' (State.owner_to_indices s')) as [indices'|];
         now rewrite u_eq_u', s_eq_s'.
-      Qed.
-      Next Obligation.
-        intros x x' x_eq_x' s s' (index_eq_index' & positions_eq_positions').
-        now rewrite 2!State.Ok.Raw;
-        setoid_rewrite x_eq_x';
-        setoid_rewrite index_eq_index';
-        setoid_rewrite positions_eq_positions'.
       Qed.
 
       #[local]
@@ -1096,34 +1071,17 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 s.(State.index) > index;
             }.
 
-          Lemma Raw :
-            forall
-            (x : list Card.t)
-            (s : State.t),
-            t x s <->
-            s.(State.index) = List.length x /\
-            Instructions.Ok s.(State.instructions) /\
-            (forall
-            (owner : Owner.t)
-            (indices : list nat)
-            (index : nat),
-            Map.MapsTo owner indices owner_to_indices ->
-            Last index indices ->
-            In (Down owner) s.(State.instructions) <->
-            s.(State.index) > index) /\
-            (forall
-            (owner : Owner.t)
-            (indices : list nat)
-            (index : nat),
-            Map.MapsTo owner indices owner_to_indices ->
-            Head index indices ->
-            In (Up owner) s.(State.instructions) <->
-            s.(State.index) > index).
+          Instance Morphism :
+            Proper (eqlistA Card.eq ==> State.eq ==> iff) t.
           Proof.
-            intros x s; split.
-              now intros [length_x instructions_s contains_down_s contains_up_s].
-            intros (length_x & instructions_s & contains_down_s & contains_up_s).
-            now constructor.
+            intros
+              x x' x_eq_x'
+              s s' (index_eq_index' & instructions_eq_instructions');
+            split; intros [length instructions contains_down contains_up].
+              now constructor; rewrite <- ? index_eq_index', <- ? x_eq_x';
+              try setoid_rewrite <- instructions_eq_instructions'.
+            now constructor; rewrite ? index_eq_index', ? x_eq_x';
+            try setoid_rewrite instructions_eq_instructions'.
           Qed.
 
           Lemma initial_state :
@@ -1404,11 +1362,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         setoid_rewrite s₁_eq_s₁'.
       Qed.
       Next Obligation.
-        intros x x' x_eq_x' s s' (index_eq_index' & instructions_eq_instructions').
-        rewrite 2!State.Ok.Raw;
-        setoid_rewrite x_eq_x'.
-        setoid_rewrite index_eq_index'.
-        now setoid_rewrite instructions_eq_instructions'.
+        apply Ok.Morphism.
       Qed.
 
       #[local]
