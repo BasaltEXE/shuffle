@@ -203,6 +203,14 @@ Module Setoid.
       (Eq_B : relation B).
 
     #[local]
+    Instance Morphism_pair :
+      Proper (Eq_A ==> Eq_B ==> eqprodAB Eq_A Eq_B) (@pair A B).
+    Proof.
+      intros x x' x_eq_x' y y' y_eq_y'.
+      now split.
+    Qed.
+
+    #[local]
     Instance Morphism_Some :
       Proper (Eq_A ==> eqoptionA Eq_A) (@Some A).
     Proof.
