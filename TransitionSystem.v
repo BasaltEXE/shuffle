@@ -270,6 +270,14 @@ Module Setoid.
     Qed.
 
     #[local]
+    Instance Morphism_cons :
+      Proper (Eq_A ==> eqlistA Eq_A ==> eqlistA Eq_A) (@cons A).
+    Proof.
+      intros u u' u_eq_u' x x' x_eq_x'.
+      now constructor.
+    Qed.
+
+    #[local]
     Instance Morphism_eq
       {PartialSetoid_A : PER Eq_A} :
       Proper (Eq_A ==> Eq_A ==> iff) Eq_A.
