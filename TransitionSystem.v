@@ -268,6 +268,16 @@ Module Setoid.
       constructor.
     Qed.
 
+    #[local]
+    Instance Morphism_bind_pointwise :
+      Proper (eq ==> pointwise_relation A (eqoptionA Eq_B) ==> eqoptionA Eq_B) (@bind A B).
+    Proof.
+      intros x x' <- f f' f_eq_f'.
+      destruct x as [x|].
+        now apply f_eq_f'.
+      constructor.
+    Qed.
+
     Fixpoint try_fold
       (init : B)
       (f : B -> A -> option B)
