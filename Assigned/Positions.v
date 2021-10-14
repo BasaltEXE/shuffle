@@ -1456,5 +1456,71 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           State.initial_state
           (Algebraic.f (State.Signature owner_to_indices))
           cards).
+
+    #[local]
+    Existing Instance
+      State.Morphism_Instructions_Ok.
+    #[local]
+    Existing Instances
+      Label.Theory
+      State.Theory.
+    #[local]
+    Existing Instances
+      Algebraic.to_Relational_Theory
+      Algebraic.to_Relational_Path_Theory.
+    Lemma compress_spec :
+      forall
+      (cards : list Card.t)
+      (owner_to_indices : Map.t (list nat)),
+      (forall
+      owner : Owner.t,
+      Map.In owner owner_to_indices <->
+      InA Card.eq (Card.Assigned owner) cards) ->
+      (forall
+      (owner : Owner.t)
+      (indices : list nat),
+      Map.MapsTo owner indices owner_to_indices ->
+      LocallySorted Peano.gt indices) ->
+      (forall
+      (owner : Owner.t)
+      (indices : list nat)
+      (offset : nat),
+      Map.MapsTo owner indices owner_to_indices ->
+      List.In offset indices <->
+      RNthA.t (Card.Assigned owner) cards offset) ->
+      exists
+      instructions : Instructions.t,
+      compress cards owner_to_indices = Some instructions /\
+      Instructions.Ok instructions.
+    Proof.
+      intros cards owner_to_indices contains sorted positions.
+      pose (Relational_Signature_L_S :=
+        Algebraic.to_Relational_Signature (State.Signature owner_to_indices)).
+      pose (Relational_Path_Signature_L_S :=
+        Algebraic.to_Relational_Path_Signature (State.Signature owner_to_indices)).
+      assert (Theory_L_S : Algebraic.Theory
+        (Label.Signature cards)
+        (State.Signature owner_to_indices)) by
+        now apply State.Theory.
+      specialize (Relational.Path.executable_Initial
+        (Label_Signature_L := Label.Signature cards)
+        cards
+        State.initial_state) as (t & Path_init_t & Ok_cards_t).
+          now exists [].
+        simpl; reflexivity.
+      change (Setoid.eqoptionA State.eq (
+        Setoid.try_fold
+        State.initial_state
+        (Algebraic.f (State.Signature owner_to_indices))
+        cards) (Some t)) in Path_init_t;
+      unfold compress;
+      destruct (Setoid.try_fold
+        State.initial_state
+        (Algebraic.f (State.Signature owner_to_indices))
+        cards) as [t'|];
+        inversion_clear Path_init_t as [? ? t'_eq_t|].
+      exists t'.(State.instructions); split; [reflexivity|].
+      rewrite t'_eq_t; apply Ok_cards_t.
+    Qed.
   End Compress.
 End Make.
