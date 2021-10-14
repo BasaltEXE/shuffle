@@ -1283,6 +1283,22 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Qed.
         End Ok.
       End Ok.
+
+      #[local]
+      Instance Morphism_Instructions_Ok :
+        Proper (eqlistA Instruction.eq ==> iff) Instructions.Ok.
+      Proof.
+        intros x x' x_eq_x'.
+        induction x_eq_x' as
+          [| ([|] & p₀) ([|] & p₀') x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'];
+          [reflexivity|..];
+        destruct u₀_eq_u₀' as ([=] & p₀_eq_p₀');
+        change (Owner.eq p₀ p₀') in p₀_eq_p₀';
+        rewrite
+          2 ? Instructions.Ok.cons_Up_iff,
+          2 ? Instructions.Ok.cons_Down_iff;
+        now rewrite IHx₀_eq_x₀', p₀_eq_p₀', x₀_eq_x₀'.
+      Qed.
     End State.
   End Compress.
 End Make.
