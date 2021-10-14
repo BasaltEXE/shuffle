@@ -9,7 +9,11 @@ Require Import
 Import ListNotations.
 
 Require Import
+  Shuffle.Misc
   Shuffle.List.
+
+Import
+  Misc(bind).
 
 Require Import
   Coq.Classes.RelationPairs
@@ -202,6 +206,42 @@ Module Setoid.
       (B : Type)
       (Eq_B : relation B).
 
+    Definition if_then_else
+      (b : bool)
+      (x y : A) :
+      A :=
+      if b then x else y.
+
+    #[local]
+    Instance Morphism_if_then_else :
+      Proper (Logic.eq ==> Eq_A ==> Eq_A ==> Eq_A) if_then_else.
+    Proof.
+      intros b b' <- x x' x_eq_x' y y' y_eq_y'.
+      now destruct b.
+    Qed.
+
+    #[local]
+    Instance Morphism_pair :
+      Proper (Eq_A ==> Eq_B ==> eqprodAB Eq_A Eq_B) (@pair A B).
+    Proof.
+      intros x x' x_eq_x' y y' y_eq_y'.
+      now split.
+    Qed.
+
+    #[local]
+    Instance Morphism_inl :
+      Proper (Eq_A ==> eqsumAB Eq_A Eq_B) (@inl A B).
+    Proof.
+      intros x x' x_eq_x'; now constructor.
+    Qed.
+
+    #[local]
+    Instance Morphism_inr :
+      Proper (Eq_B ==> eqsumAB Eq_A Eq_B) (@inr A B).
+    Proof.
+      intros y y' y_eq_y'; now constructor.
+    Qed.
+
     #[local]
     Instance Morphism_Some :
       Proper (Eq_A ==> eqoptionA Eq_A) (@Some A).
@@ -216,6 +256,35 @@ Module Setoid.
     Proof.
       intros f g f_eq_g [x|] [x'|] x_eq_x'; inversion_clear x_eq_x';
       constructor; now apply f_eq_g.
+    Qed.
+
+    #[local]
+    Instance Morphism_option_map_pointwise :
+      Proper (pointwise_relation A Eq_B ==> eq ==> eqoptionA Eq_B) (@option_map A B).
+    Proof.
+      intros f f' f_eq_f' x x' <-.
+      destruct x as [x|]; constructor.
+      apply f_eq_f'.
+    Qed.
+
+    #[local]
+    Instance Morphism_bind :
+      Proper (eqoptionA Eq_A ==> (Eq_A ==> eqoptionA Eq_B) ==> eqoptionA Eq_B) (@bind A B).
+    Proof.
+      intros x x' x_eq_x' f f' f_eq_f'.
+       destruct x_eq_x' as [x x' x_eq_x'|].
+        now apply f_eq_f'.
+      constructor.
+    Qed.
+
+    #[local]
+    Instance Morphism_bind_pointwise :
+      Proper (eq ==> pointwise_relation A (eqoptionA Eq_B) ==> eqoptionA Eq_B) (@bind A B).
+    Proof.
+      intros x x' <- f f' f_eq_f'.
+      destruct x as [x|].
+        now apply f_eq_f'.
+      constructor.
     Qed.
 
     Fixpoint try_fold
@@ -245,6 +314,26 @@ Module Setoid.
       inversion_clear IHx₀_eq_x₀' as [? ? t₁_eq_t₁'|].
         now apply f_eq_f'.
       constructor.
+    Qed.
+
+    #[local]
+    Instance Morphism_cons :
+      Proper (Eq_A ==> eqlistA Eq_A ==> eqlistA Eq_A) (@cons A).
+    Proof.
+      intros u u' u_eq_u' x x' x_eq_x'.
+      now constructor.
+    Qed.
+
+    #[local]
+    Instance Morphism_InA
+      {Setoid_A : Equivalence Eq_A} :
+      Proper (Eq_A ==> eqlistA Eq_A ==> iff) (@InA A Eq_A).
+    Proof.
+      intros v v' v_eq_v' x x' x_eq_x'.
+      induction x_eq_x' as
+        [| u₀ u₀' x₀ x₀' u₀_eq_u₀' x₀_eq_x₀' IHx₀_eq_x₀'].
+        now rewrite 2 ! InA_nil.
+      now rewrite 2 ! InA_cons, IHx₀_eq_x₀', v_eq_v', u₀_eq_u₀'.
     Qed.
 
     #[local]
