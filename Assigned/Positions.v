@@ -1183,27 +1183,6 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             (MapsTo_p₀_indices₀ : Map.MapsTo p₀ indices₀ owner_to_indices)
             (In_index₁_indices₀ : List.In s₁.(State.index) indices₀).
 
-          Lemma assigned_first :
-            Last s₁.(State.index) indices₀ ->
-            ~ Head s₁.(State.index) indices₀ ->
-            t (Card.Assigned p₀ :: x₀) (State.assigned_first s₁ p₀).
-          Proof with auto.
-            intros Last_index_indices₀ not_Head_index_indices₀.
-            constructor.
-                  apply eq_S, Ok_s₁.(length).
-                constructor; [| apply Ok_s₁.(instructions)].
-                rewrite Ok_s₁.(contains_down) with
-                  (1 := MapsTo_p₀_indices₀)
-                  (2 := Last_index_indices₀).
-                lia.
-              Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
-                Owner.eq owner p₀ <-> index = s₁.(State.index)).
-              apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
-            Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
-              s₁.(State.index) <> index).
-            apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
-          Qed.
-
           Lemma assigned_both :
             Last s₁.(State.index) indices₀ ->
             Head s₁.(State.index) indices₀ ->
@@ -1225,6 +1204,27 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
             Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
               Owner.eq owner p₀ <-> index = s₁.(State.index)).
             apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+          Qed.
+
+          Lemma assigned_first :
+            Last s₁.(State.index) indices₀ ->
+            ~ Head s₁.(State.index) indices₀ ->
+            t (Card.Assigned p₀ :: x₀) (State.assigned_first s₁ p₀).
+          Proof with auto.
+            intros Last_index_indices₀ not_Head_index_indices₀.
+            constructor.
+                  apply eq_S, Ok_s₁.(length).
+                constructor; [| apply Ok_s₁.(instructions)].
+                rewrite Ok_s₁.(contains_down) with
+                  (1 := MapsTo_p₀_indices₀)
+                  (2 := Last_index_indices₀).
+                lia.
+              Contains_Down Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+                Owner.eq owner p₀ <-> index = s₁.(State.index)).
+              apply (case_eq MapsTo_owner_indices MapsTo_p₀_indices₀)...
+            Contains_Up Ok_s₁ (fun (owner : Owner.t) (index : nat) =>
+              s₁.(State.index) <> index).
+            apply (case_neq MapsTo_p₀_indices₀ MapsTo_owner_indices)...
           Qed.
 
           Lemma assigned_last :
