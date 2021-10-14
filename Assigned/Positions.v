@@ -129,6 +129,162 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
   Module RNthA_Facts := List.RNthAFactsOn Card EqA RNthA.
 
   Module Indices.
+    Record t
+      (cards : list Card.t)
+      (owner_to_indices : Map.t (list nat)) :
+      Prop :=
+      new
+      {
+        contains :
+          forall
+          owner : Owner.t,
+          Map.In owner owner_to_indices <->
+          InA Card.eq (Card.Assigned owner) cards;
+        sorted :
+          forall
+          (owner : Owner.t)
+          (indices : list nat),
+          Map.MapsTo owner indices owner_to_indices ->
+          LocallySorted Peano.gt indices;
+        positions :
+          forall
+          (owner : Owner.t)
+          (indices : list nat)
+          (offset : nat),
+          Map.MapsTo owner indices owner_to_indices ->
+          In offset indices <->
+          RNthA.t (Card.Assigned owner) cards offset;
+      }.
+
+    Instance Morphism :
+      Proper (eqlistA Card.eq ==> Map.Equal ==> iff) t.
+    Proof.
+      intros x x' x_eq_x' m m' m_eq_m'; split;
+      intros [contains sorted positions].
+        now constructor;
+        setoid_rewrite <- m_eq_m'; try setoid_rewrite <- x_eq_x'.
+      now constructor;
+      setoid_rewrite m_eq_m'; try setoid_rewrite x_eq_x'.
+    Qed.
+
+    Lemma initial_state :
+      t [] (Map.empty (list nat)).
+    Proof.
+      constructor; simpl.
+          now intros owner; rewrite Map_Facts.empty_in_iff, InA_nil.
+        intros owner indices owner_to_indices.
+        now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
+      intros owner indices subtrahend owner_to_indices.
+      now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
+    Qed.
+
+    Lemma cons_iff :
+      forall
+      (v u₀ : Card.t)
+      (x₀ : list Card.t)
+      (n : nat),
+      RNthA.t v (u₀ :: x₀) n <->
+      n = Datatypes.length x₀ /\ Card.eq v u₀ \/
+      RNthA.t v x₀ n.
+    Proof.
+      intros v u₀ x₀ n.
+      enough (RNthA.t v x₀ n -> n <> Datatypes.length x₀)
+        by (rewrite RNthA_Facts.cons_iff; tauto).
+      intros n_to_v.
+      now apply PeanoNat.Nat.lt_neq, RNthA_Facts.lt_iff; exists v.
+    Qed.
+
+    Lemma talon :
+      forall
+      (x₀ : list Card.t)
+      (owner_to_indices : Map.t (list nat))
+      (k₀ : Key.t),
+      t x₀ owner_to_indices ->
+      t (Card.Talon k₀ :: x₀) owner_to_indices.
+    Proof.
+      intros x₀ owner_to_indices k₀ Ok_s₁.
+      constructor.
+          intros owner.
+          rewrite Ok_s₁.(contains), InA_cons; simpl; tauto.
+        intros owner indices owner_to_indices'.
+        now apply Ok_s₁.(sorted) with owner.
+      intros owner indices offset MapsTo_owner_indices.
+      rewrite cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); simpl; tauto.
+    Defined.
+
+    Lemma assigned_mapsto :
+      forall
+      (p₀ : Owner.t)
+      (x₀ : list Card.t)
+      (owner_to_indices : Map.t (list nat))
+      (indices₀ : list nat),
+      Map.MapsTo p₀ indices₀ owner_to_indices ->
+      t x₀ owner_to_indices ->
+      t
+        (Card.Assigned p₀ :: x₀)
+        (Map.add p₀ (length x₀ :: indices₀) owner_to_indices).
+    Proof with (simpl; firstorder).
+      intros p₀ x₀ owner_to_indices indices₀ MapsTo_p₀_indices₀ Ok_s₁.
+      constructor.
+          intros owner; simpl.
+          rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
+        intros owner indices MapsTo_owner_indices.
+        apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+          (_ & <-)|
+        (_ & MapsTo_owner_indices)].
+          destruct indices₀ as [| index₀ indices₀]; constructor.
+            now apply Ok_s₁.(sorted) with p₀.
+          apply RNthA_Facts.lt_iff; exists (Card.Assigned p₀).
+          now apply Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀); left.
+        now apply Ok_s₁.(sorted) with owner.
+      intros owner indices offset MapsTo_owner_indices;
+      rewrite cons_iff.
+      apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+        (<- & <-)|
+      (p₀_neq_owner & MapsTo_owner_indices)].
+        simpl; rewrite Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀)...
+      setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
+      rewrite Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+    Qed.
+
+    Lemma assigned_not_in :
+      forall
+      (p₀ : Owner.t)
+      (x₀ : list Card.t)
+      (owner_to_indices : Map.t (list nat)),
+      ~ Map.In p₀ owner_to_indices ->
+      t x₀ owner_to_indices ->
+      t
+        (Card.Assigned p₀ :: x₀)
+        (Map.add p₀ [length x₀] owner_to_indices).
+    Proof with (simpl; firstorder).
+      intros p₀ x₀ owner_to_indices not_In_p₀ Ok_s₁.
+      constructor.
+          intros owner; simpl.
+          rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
+        intros owner indices MapsTo_owner_indices.
+        apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+          (_ & <-)|
+        (_ & MapsTo_owner_indices)].
+          constructor.
+        now apply Ok_s₁.(sorted) with owner.
+      intros owner indices offset MapsTo_owner_indices;
+      rewrite cons_iff.
+      apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
+        (p₀_eq_owner & <-)|
+      (p₀_neq_owner & MapsTo_owner_indices)].
+        simpl;
+        enough (~ RNthA.t (Card.Assigned owner) x₀ offset) by firstorder.
+        contradict not_In_p₀.
+        apply Ok_s₁.(contains), RNthA_Facts.InA_iff.
+        now exists offset; rewrite p₀_eq_owner.
+      setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
+      rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+    Qed.
+  End Indices.
+  Import Indices(contains, sorted, positions).
+
+  Module Generate.
     Module Label <:
       EqualityType.
       Definition t :
@@ -274,25 +430,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           new {
             length :
               s.(State.index) = length x;
-            contains :
-              forall
-              owner : Owner.t,
-              State.Contains s owner <->
-              InA Card.eq (Card.Assigned owner) x;
-            sorted :
-              forall
-              (owner : Owner.t)
-              (indices : list nat),
-              State.MapsTo s owner indices ->
-              LocallySorted Peano.gt indices;
-            positions :
-              forall
-              (owner : Owner.t)
-              (indices : list nat)
-              (offset : nat),
-              State.MapsTo s owner indices ->
-              In offset indices <->
-              RNthA.t (Card.Assigned owner) x offset;
+            indices :
+              Indices.t x s.(State.owner_to_indices);
           }.
 
         Lemma Raw :
@@ -319,7 +458,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           RNthA.t (Card.Assigned owner) x offset).
         Proof.
           intros x s; split.
-            now intros [length_x contains_s sorted_s positions_s].
+            now intros (length_x & [contains_s sorted_s positions_s]).
           intros (length_x & contains_s & sorted_s & positions_s).
           now constructor.
         Qed.
@@ -328,28 +467,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           t [] State.initial_state.
         Proof.
           constructor; simpl.
-                reflexivity.
-              now intros owner; rewrite Map_Facts.empty_in_iff, InA_nil.
-            intros owner indices owner_to_indices.
-            now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
-          intros owner indices subtrahend owner_to_indices.
-          now apply Map_Facts.empty_mapsto_iff in owner_to_indices.
-        Qed.
-
-        Lemma cons_iff :
-          forall
-          (v u₀ : Card.t)
-          (x₀ : list Card.t)
-          (n : nat),
-          RNthA.t v (u₀ :: x₀) n <->
-          n = Datatypes.length x₀ /\ Card.eq v u₀ \/
-          RNthA.t v x₀ n.
-        Proof.
-          intros v u₀ x₀ n.
-          enough (RNthA.t v x₀ n -> n <> Datatypes.length x₀)
-            by (rewrite RNthA_Facts.cons_iff; tauto).
-          intros n_to_v.
-          now apply PeanoNat.Nat.lt_neq, RNthA_Facts.lt_iff; exists v.
+            reflexivity.
+          apply Indices.initial_state.
         Qed.
 
         Lemma talon :
@@ -362,13 +481,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Proof.
           intros x₀ (index & owner_to_indices) key Ok_s₁.
           constructor.
-                apply eq_S, Ok_s₁.(length).
-              intros owner.
-              rewrite Ok_s₁.(contains), InA_cons; simpl; tauto.
-            intros owner indices owner_to_indices'.
-            now apply Ok_s₁.(sorted) with owner.
-          intros owner indices offset MapsTo_owner_indices.
-          rewrite cons_iff, Ok_s₁.(positions) with (1 := MapsTo_owner_indices); simpl; tauto.
+            apply eq_S, Ok_s₁.(length).
+          apply Indices.talon, Ok_s₁.(indices).
         Defined.
 
         Lemma assigned_mapsto :
@@ -383,28 +497,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Proof with (simpl; firstorder).
           intros p₀ x₀ (index & owner_to_indices) indices₀ MapsTo_p₀_indices₀ Ok_s₁.
           constructor.
-                apply eq_S, Ok_s₁.(length).
-              intros owner; simpl.
-              rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
-            intros owner indices MapsTo_owner_indices.
-            apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-              (_ & <-)|
-            (_ & MapsTo_owner_indices)].
-              destruct indices₀ as [| index₀ indices₀]; constructor.
-                now apply Ok_s₁.(sorted) with p₀.
-              rewrite Ok_s₁.(length).
-              apply RNthA_Facts.lt_iff; exists (Card.Assigned p₀).
-              now apply Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀); left.
-            now apply Ok_s₁.(sorted) with owner.
-          intros owner indices offset MapsTo_owner_indices;
-          rewrite cons_iff.
-          apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-            (<- & <-)|
-          (p₀_neq_owner & MapsTo_owner_indices)].
-            simpl; rewrite Ok_s₁.(positions) with (1 := MapsTo_p₀_indices₀).
-            setoid_rewrite <- Ok_s₁.(length)...
-          setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
-          rewrite Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+            apply eq_S, Ok_s₁.(length).
+          now rewrite Ok_s₁.(length);
+          apply Indices.assigned_mapsto, Ok_s₁.(indices).
         Qed.
 
         Lemma assigned_not_in :
@@ -418,27 +513,9 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
         Proof with (simpl; firstorder).
           intros p₀ x₀ (index & owner_to_indices) not_In_p₀ Ok_s₁.
           constructor.
-                apply eq_S, Ok_s₁.(length).
-              intros owner; simpl.
-              rewrite Map_Facts.add_in_iff, Ok_s₁.(contains), InA_cons...
-            intros owner indices MapsTo_owner_indices.
-            apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-              (_ & <-)|
-            (_ & MapsTo_owner_indices)].
-              constructor.
-            now apply Ok_s₁.(sorted) with owner.
-          intros owner indices offset MapsTo_owner_indices;
-          rewrite cons_iff.
-          apply Map_Facts.add_mapsto_iff in MapsTo_owner_indices as [
-            (p₀_eq_owner & <-)|
-          (p₀_neq_owner & MapsTo_owner_indices)].
-            setoid_rewrite <- Ok_s₁.(length); simpl.
-            enough (~ RNthA.t (Card.Assigned owner) x₀ offset) by firstorder.
-            contradict not_In_p₀.
-            apply Ok_s₁.(contains),  RNthA_Facts.InA_iff.
-            now exists offset; rewrite p₀_eq_owner.
-          setoid_replace (Owner.eq owner p₀) with (Owner.eq p₀ owner) by firstorder.
-          rewrite <- Ok_s₁.(positions) with (1 := MapsTo_owner_indices); tauto.
+            apply eq_S, Ok_s₁.(length).
+          now rewrite Ok_s₁.(length);
+          apply Indices.assigned_not_in, Ok_s₁.(indices).
         Qed.
       End Ok.
 
@@ -544,19 +621,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
     Lemma generate_spec :
       forall
       cards : list Card.t,
-      (forall
-      owner : Owner.t,
-      Map.In owner (generate cards) <->
-      InA Card.eq (Card.Assigned owner) cards) /\
-      (forall
-      (owner : Owner.t)
-      (indices : list nat),
-      Map.MapsTo owner indices (generate cards) ->
-      LocallySorted Peano.gt indices /\
-      (forall
-      offset : nat,
-      In offset indices <->
-      RNthA.t (Card.Assigned owner) cards offset)).
+      Indices.t cards (generate cards).
     Proof.
       intros cards.
       pose (Relational_Signature_L_S :=
@@ -570,19 +635,14 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           constructor.
         simpl; reflexivity.
       setoid_replace (generate cards) with t.(State.owner_to_indices).
-        split.
-          apply Ok_cards_t.
-        intros owner indices owner_to_indices; split.
-          now apply Ok_cards_t.(State.Ok.sorted) with owner.
-        intros offset.
-        now apply Ok_cards_t.(State.Ok.positions).
+        apply Ok_cards_t.
       enough (H : Setoid.eqoptionA State.eq
         (Some (generate_body cards State.initial_state))
         (Some t)).
         inversion_clear H as [? ? H'|]; apply H'.
       now rewrite <- try_fold_eq_generate_body.
     Qed.
-  End Indices.
+  End Generate.
 
   Module Compress.
     Import Instructions.Notations.
@@ -871,25 +931,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           Variables
             (cards : list Card.t)
             (owner_to_indices : Map.t (list nat))
-            (contains :
-              forall
-              owner : Owner.t,
-              Map.In owner owner_to_indices <->
-              InA Card.eq (Card.Assigned owner) cards)
-            (sorted :
-              forall
-              (owner : Owner.t)
-              (indices : list nat),
-              Map.MapsTo owner indices owner_to_indices ->
-              LocallySorted Peano.gt indices)
-            (positions :
-              forall
-              (owner : Owner.t)
-              (indices : list nat)
-              (offset : nat),
-              Map.MapsTo owner indices owner_to_indices ->
-              List.In offset indices <->
-              RNthA.t (Card.Assigned owner) cards offset).
+            (Ok_indices : Indices.t cards owner_to_indices).
 
           Record t
             (x : list Card.t)
@@ -978,7 +1020,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               intros (index & In_index_indices & In_index_indices').
               change (Card.eq (Card.Assigned p) (Card.Assigned p')).
               now apply Functional_RNthA with cards index;
-              [apply positions with indices| apply positions with indices'].
+              [apply Ok_indices.(positions) with indices| apply Ok_indices.(positions) with indices'].
             Qed.
 
             Lemma Equal_Positions :
@@ -992,8 +1034,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 intros <-.
                 assert (InA Card.eq (Card.Assigned p) cards) as
                   (index & RNthA_p_cards_index)%RNthA_Facts.InA_iff.
-                  now apply contains; exists indices.
-                exists index; split; now apply positions with p.
+                  now apply Ok_indices.(contains); exists indices.
+                exists index; split; now apply Ok_indices.(positions) with p.
               intros intersecting; enough (p_eq_p' : Owner.eq p p').
                 now apply Map_Facts.MapsTo_fun with owner_to_indices p;
                 [| rewrite p_eq_p'].
@@ -1157,7 +1199,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                 auto;
               contradict H'; destruct H'; apply
                 Functional_RNthA with (2 := index₁_to_k₀),
-                positions with (1 := MapsTo_owner_indices).
+               Ok_indices.(positions) with (1 := MapsTo_owner_indices).
               now apply In_Last.
             now apply In_Head.
           Qed.
@@ -1175,8 +1217,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
               Map.MapsTo p₀ indices₀ owner_to_indices) as
               (indices₀ & MapsTo_p₀_indices₀).
               now exists indices₀; split;
-              [| apply positions with (1 := MapsTo_p₀_indices₀)].
-            now apply contains, RNthA_Facts.InA_iff; exists s₁.(State.index).
+              [| apply Ok_indices.(positions) with (1 := MapsTo_p₀_indices₀)].
+            now apply Ok_indices.(contains), RNthA_Facts.InA_iff; exists s₁.(State.index).
           Qed.
 
           Variables
@@ -1254,7 +1296,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
                   (1 := MapsTo_p₀_indices₀)
                   (2 := Last_n_indices₀).
                 specialize Sorted_Head_Last with
-                  (1 := sorted MapsTo_p₀_indices₀)
+                  (1 := Ok_indices.(sorted) MapsTo_p₀_indices₀)
                   (2 := Head_index_indices₀)
                   (3 := Last_n_indices₀).
                 lia.
@@ -1374,25 +1416,7 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       Instance Theory
         (cards : list Card.t)
         (owner_to_indices : Map.t (list nat))
-        (contains :
-          forall
-          owner : Owner.t,
-          Map.In owner owner_to_indices <->
-          InA Card.eq (Card.Assigned owner) cards)
-        (sorted :
-          forall
-          (owner : Owner.t)
-          (indices : list nat),
-          Map.MapsTo owner indices owner_to_indices ->
-          LocallySorted Peano.gt indices)
-        (positions :
-          forall
-          (owner : Owner.t)
-          (indices : list nat)
-          (offset : nat),
-          Map.MapsTo owner indices owner_to_indices ->
-          List.In offset indices <->
-          RNthA.t (Card.Assigned owner) cards offset) :
+        (Ok_indices : Indices.t cards owner_to_indices) :
         Algebraic.Theory
           (Label.Signature cards)
           (State.Signature owner_to_indices).
@@ -1401,8 +1425,8 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
           apply State.Ok.initial_state.
         intros [k₀| p₀] x₀ s₁ Ok_x Ok_s₁.
           exists (State.nop s₁); split; [reflexivity|].
-          now apply State.Ok.talon with (1 := positions).
-        specialize (Ok.assigned_assumptions contains positions Ok_s₁ Ok_x) as
+          now apply State.Ok.talon with (1 := Ok_indices).
+        specialize (Ok.assigned_assumptions Ok_indices Ok_s₁ Ok_x) as
           (indices₀ & MapsTo_p₀_indices₀ & In_index₁_indices₀).
         simpl; specialize Map.find_1 with (1 := MapsTo_p₀_indices₀) as ->; simpl.
         assert (exists last : nat, Last last indices₀) as
@@ -1472,28 +1496,13 @@ Module Make (Key Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       forall
       (cards : list Card.t)
       (owner_to_indices : Map.t (list nat)),
-      (forall
-      owner : Owner.t,
-      Map.In owner owner_to_indices <->
-      InA Card.eq (Card.Assigned owner) cards) ->
-      (forall
-      (owner : Owner.t)
-      (indices : list nat),
-      Map.MapsTo owner indices owner_to_indices ->
-      LocallySorted Peano.gt indices) ->
-      (forall
-      (owner : Owner.t)
-      (indices : list nat)
-      (offset : nat),
-      Map.MapsTo owner indices owner_to_indices ->
-      List.In offset indices <->
-      RNthA.t (Card.Assigned owner) cards offset) ->
+      Indices.t cards owner_to_indices ->
       exists
       instructions : Instructions.t,
       compress cards owner_to_indices = Some instructions /\
       Instructions.Ok instructions.
     Proof.
-      intros cards owner_to_indices contains sorted positions.
+      intros cards owner_to_indices Ok_indices.
       pose (Relational_Signature_L_S :=
         Algebraic.to_Relational_Signature (State.Signature owner_to_indices)).
       pose (Relational_Path_Signature_L_S :=
