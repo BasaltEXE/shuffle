@@ -21,7 +21,8 @@ Require Import Setoid.
 Require Import Shuffle.Misc.
 Require Import Shuffle.List.
 
-Require Import Shuffle.Relations.
+Require Shuffle.Relations.
+Import Relations(Functional).
 
 Require Shuffle.Assigned.Instructions.
 Require Import Shuffle.Coloring.
@@ -1098,6 +1099,8 @@ Module Make (Owner : DecidableTypeBoth) (Map : FMapInterface.WSfun Owner).
       rewrite Graph.Active_MapsTo_iff with (2 := Graph_t_u).
     Qed.
 
+    #[local]
+    Existing Instance Relations.ReflexiveTransitive.reflexive.
     Lemma Graph_Exists :
       forall
       (x : Instructions.t)

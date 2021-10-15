@@ -11,7 +11,7 @@ Require Import
 Require Import
   Setoid.
 
-#[global]
+#[local]
 Add Parametric Relation : Prop impl
   reflexivity proved by impl_Reflexive
   transitivity proved by impl_Transitive
@@ -39,113 +39,131 @@ Section Classes.
     R x y' ->
     y = y'.
 
-  #[global]
-  Instance Asymmetric_Irreflexive (Asymmetric_R : Asymmetric R) : Irreflexive R.
+  #[local]
+  Instance Asymmetric_Irreflexive
+    (Asymmetric_R : Asymmetric R) :
+    Irreflexive R.
   Proof.
     intros x R_x_x.
     now apply asymmetry with x x.
   Qed.
 End Classes.
 
-Section Restriction.
-  Context
-    {A : Type}
-    (P : A -> Prop)
-    (R : relation A).
+Module Restriction.
+  Section Restriction.
+    Context
+      {A : Type}
+      (P : A -> Prop)
+      (R : relation A).
 
-  Definition Restriction :
-    relation (sig P) :=
-    fun x y => R (proj1_sig x) (proj1_sig y).
+    Definition Restriction :
+      relation (sig P) :=
+      fun x y => R (proj1_sig x) (proj1_sig y).
 
-  Let R' :
-    relation (sig P) :=
-    Restriction.
+    Let R' :
+      relation (sig P) :=
+      Restriction.
 
-  #[global]
-  Instance reflexive {Reflexive_R : Reflexive R} :
-    Reflexive R'.
-  Proof.
-    intros (x & P_x).
-    apply Reflexive_R.
-  Qed.
+    #[local]
+    Instance reflexive
+      {Reflexive_R : Reflexive R} :
+      Reflexive R'.
+    Proof.
+      intros (x & P_x).
+      apply Reflexive_R.
+    Qed.
 
-  #[global]
-  Instance irreflexive {Irreflexive_R : Irreflexive R} :
-    Irreflexive R'.
-  Proof.
-    intros (x & P_x).
-    apply Irreflexive_R.
-  Qed.
+    #[local]
+    Instance irreflexive
+      {Irreflexive_R : Irreflexive R} :
+      Irreflexive R'.
+    Proof.
+      intros (x & P_x).
+      apply Irreflexive_R.
+    Qed.
 
-  #[global]
-  Instance symmetric {Symmetric_R : Symmetric R} :
-    Symmetric R'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Symmetric_R.
-  Qed.
+    #[local]
+    Instance symmetric
+      {Symmetric_R : Symmetric R} :
+      Symmetric R'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Symmetric_R.
+    Qed.
 
-  #[global]
-  Instance asymmetric {Asymmetric_R : Asymmetric R} :
-    Asymmetric R'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Asymmetric_R.
-  Qed.
+    #[local]
+    Instance asymmetric
+      {Asymmetric_R : Asymmetric R} :
+      Asymmetric R'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Asymmetric_R.
+    Qed.
 
-  #[global]
-  Instance transitive {Transitive_R : Transitive R} :
-    Transitive R'.
-  Proof.
-    intros (x & P_x) (y & P_y) (z & P_z).
-    apply Transitive_R.
-  Qed.
+    #[local]
+    Instance transitive
+      {Transitive_R : Transitive R} :
+      Transitive R'.
+    Proof.
+      intros (x & P_x) (y & P_y) (z & P_z).
+      apply Transitive_R.
+    Qed.
 
-  #[global]
-  Instance preorder {PreOrder_R : PreOrder R} :
-    PreOrder R'.
-  Proof.
-    constructor; eauto with typeclass_instances.
-  Qed.
+    #[local]
+    Instance preorder
+      {PreOrder_R : PreOrder R} :
+      PreOrder R'.
+    Proof.
+      constructor; eauto with typeclass_instances.
+    Qed.
 
-  #[global]
-  Instance equivalence {Equivalence_R : Equivalence R} :
-    Equivalence R'.
-  Proof.
-    constructor; eauto with typeclass_instances.
-  Qed.
+    #[local]
+    Instance equivalence
+      {Equivalence_R : Equivalence R} :
+      Equivalence R'.
+    Proof.
+      constructor; eauto with typeclass_instances.
+    Qed.
+  End Restriction.
+
+  Section PartialOrder.
+    Context
+      {A : Type}
+      (P : A -> Prop)
+      (R Eq : relation A).
+
+    Let R' :
+      relation (sig P) :=
+      Restriction.Restriction P R.
+
+    Let Eq' :
+      relation (sig P) :=
+      Restriction.Restriction P Eq.
+
+    #[local]
+    Existing Instance Restriction.equivalence.
+    #[local]
+    Instance antisymmetric
+      `{Antisymmetric_R : Antisymmetric A R Eq} :
+      Antisymmetric (sig P) R' Eq'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply Antisymmetric_R.
+    Qed.
+
+    #[local]
+    Existing Instance Restriction.preorder.
+    #[local]
+    Instance partial_order
+      `{PartialOrder_R : PartialOrder A R Eq} :
+      PartialOrder R' Eq'.
+    Proof.
+      intros (x & P_x) (y & P_y).
+      apply PartialOrder_R.
+    Qed.
+  End PartialOrder.
 End Restriction.
-
-Section PartialOrder.
-  Context
-    {A : Type}
-    (P : A -> Prop)
-    (R Eq : relation A).
-
-  Let R' :
-    relation (sig P) :=
-    Restriction P R.
-
-  Let Eq' :
-    relation (sig P) :=
-    Restriction P Eq.
-
-  #[global]
-  Instance antisymmetric `{Antisymmetric_R : Antisymmetric A R Eq} :
-    Antisymmetric (sig P) R' Eq'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply Antisymmetric_R.
-  Qed.
-
-  #[global]
-  Instance partial_order `{PartialOrder_R : PartialOrder A R Eq} :
-    PartialOrder R' Eq'.
-  Proof.
-    intros (x & P_x) (y & P_y).
-    apply PartialOrder_R.
-  Qed.
-End PartialOrder.
+Import Restriction(Restriction).
 
 Module ReflexiveTransitive.
   Section ReflexiveTransitive.
@@ -157,7 +175,7 @@ Module ReflexiveTransitive.
       relation A :=
       clos_refl_trans_1n _ R.
 
-    #[global]
+    #[local]
     Instance subrelation :
       subrelation R Closure.
     Proof.
@@ -165,7 +183,7 @@ Module ReflexiveTransitive.
       now apply clos_rt1n_step.
     Qed.
 
-    #[global]
+    #[local]
     Instance reflexive :
       Reflexive Closure.
     Proof.
@@ -173,7 +191,7 @@ Module ReflexiveTransitive.
       apply rt1n_refl.
     Qed.
 
-    #[global]
+    #[local]
     Instance transitive :
       Transitive Closure.
     Proof.
@@ -182,7 +200,7 @@ Module ReflexiveTransitive.
       now constructor 3 with y.
     Qed.
 
-    #[global]
+    #[local]
     Add Parametric Relation : A Closure
       reflexivity proved by reflexive
       transitivity proved by transitive
@@ -214,6 +232,8 @@ Module ReflexiveTransitive.
       (x y : A)
       (P_x : P x).
 
+    #[local]
+    Existing Instance ReflexiveTransitive.reflexive.
     Lemma Restriction :
       Closure R x y ->
       exists
